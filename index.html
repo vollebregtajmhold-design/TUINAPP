@@ -470,6 +470,56 @@ function Teelten({ gewassen, setGewassen }) {
                 <button style={gs.knopPrimair} onClick={()=>sAdd(ges.id)}>+ Toevoegen</button>
               </div>
             </div>
+
+            {ges.soorten.length>0&&(
+              <div style={{...gs.sectie,marginTop:12}}>
+                <div style={gs.sectieLabel}>💰 Inkoopprijzen per 1000 zaden</div>
+                <table style={{width:"100%"}}>
+                  <thead><tr>
+                    <th style={TH}>Soort</th>
+                    <th style={{...TH,textAlign:"right",width:120}}>Prijs/1000 (€)</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr style={{background:lichtGroen}}>
+                      <td style={{...TD,fontSize:11,color:subtekst,fontStyle:"italic"}}>Vul alle soorten:</td>
+                      <td style={{...TD,textAlign:"right"}}>
+                        <input
+                          style={{...gs.input,width:80,textAlign:"right",padding:"2px 6px",fontSize:12}}
+                          type="number" step="0.01" min="0" placeholder="Allen"
+                          onFocus={e=>e.target.select()}
+                          onChange={e=>{
+                            const v=e.target.value;
+                            const bijgewerkt=gewassen.map(g=>g.id===ges.id?{...g,inkoopPrijzen:Object.fromEntries(g.soorten.map(s=>[s,v]))}:g);
+                            setGewassen(bijgewerkt);setGes(bijgewerkt.find(g=>g.id===ges.id));
+                          }}
+                        />
+                      </td>
+                    </tr>
+                    {ges.soorten.map((s,i)=>{
+                      const prijs = (ges.inkoopPrijzen||{})[s]||"";
+                      return (
+                        <tr key={s} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                          <td style={{...TD,fontSize:12}}>{s}</td>
+                          <td style={{...TD,textAlign:"right"}}>
+                            <input
+                              style={{...gs.input,width:80,textAlign:"right",padding:"2px 6px",fontSize:12,background:prijs?"#f0fff8":wit}}
+                              type="number" step="0.01" min="0" placeholder="—"
+                              value={prijs}
+                              onFocus={e=>e.target.select()}
+                              onChange={e=>{
+                                const bijgewerkt=gewassen.map(g=>g.id===ges.id?{...g,inkoopPrijzen:{...(g.inkoopPrijzen||{}),[s]:e.target.value}}:g);
+                                setGewassen(bijgewerkt);setGes(bijgewerkt.find(g=>g.id===ges.id));
+                              }}
+                              onKeyDown={e=>{if(e.key==="Enter"||e.key==="Tab")e.target.blur();}}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         ):(
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",color:subtekst,gap:10}}>
@@ -1005,12 +1055,18 @@ function MatrixFilterPaneel({ klanten, gewassen, orders, verpDef, weken }) {
   const beginIdx = Math.max(0, weken.findIndex(w=>w.label===huidigeWeekLabel));
   const eindIdx  = Math.min(weken.length-1, beginIdx+7);
 
+  const jaar = String(getJaar(nu)).slice(-2);
+  const week1Label = `${jaar}01`;
+  const week42Label = `${jaar}42`;
+  const begin42Idx = weken.findIndex(w=>w.label===week42Label);
+  const begin1Idx  = weken.findIndex(w=>w.label===week1Label);
+
   const [filtKlant,   setFiltKlant]    = useState("TOTAAL");
   const [filtGewas,   setFiltGewas]    = useState("TOTAAL");
   const [filtSoort,   setFiltSoort]    = useState("TOTAAL");
   const [filtStatus,  setFiltStatus]   = useState("ORDER");
-  const [filtBegin,   setFiltBegin]    = useState(weken[beginIdx]?.label || "");
-  const [filtEind,    setFiltEind]     = useState(weken[eindIdx]?.label  || "");
+  const [filtBegin,   setFiltBegin]    = useState(begin1Idx>=0 ? week1Label : weken[0]?.label||"");
+  const [filtEind,    setFiltEind]     = useState(begin42Idx>=0 ? week42Label : weken[weken.length-1]?.label||"");
   const [filtWaarde,  setFiltWaarde]   = useState("planten");
   const [filtVerp,    setFiltVerp]     = useState("TOTAAL");
 
@@ -1174,14 +1230,20 @@ function MatrixFilterPaneel({ klanten, gewassen, orders, verpDef, weken }) {
             <label style={labelStijl}>Begindatum (week)</label>
             <select style={selectStijl} value={filtBegin} onChange={e=>setFiltBegin(e.target.value)}>
               <option value="">Alle weken</option>
-              {weken.map(w=><option key={w.label} value={w.label}>{w.label}</option>)}
+              {Array.from({length:52},(_,i)=>{
+                const lbl=`${jaar}${String(i+1).padStart(2,"0")}`;
+                return <option key={lbl} value={lbl}>{lbl}</option>;
+              })}
             </select>
           </div>
           <div>
             <label style={labelStijl}>Einddatum (week)</label>
             <select style={selectStijl} value={filtEind} onChange={e=>setFiltEind(e.target.value)}>
               <option value="">Alle weken</option>
-              {weken.map(w=><option key={w.label} value={w.label}>{w.label}</option>)}
+              {Array.from({length:52},(_,i)=>{
+                const lbl=`${jaar}${String(i+1).padStart(2,"0")}`;
+                return <option key={lbl} value={lbl}>{lbl}</option>;
+              })}
             </select>
           </div>
           <div>
@@ -1282,14 +1344,16 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef }) {
   const [zoek,setZoek]=useState("");
 
   const [alleWkenOpen,setAlleWkenOpen]=useState(null); // null=default, true=alle open, false=alle dicht
-  const [filtVanWeek,setFiltVanWeek]=useState(()=>laad("ta_filtVanWeek",""));
-  const [filtTotWeek,setFiltTotWeek]=useState(()=>laad("ta_filtTotWeek",""));
+  const nuWkLabel = `${String(getJaar(new Date())).slice(-2)}${String(getWeekNr(new Date())).padStart(2,"0")}`;
+  const tot42Label = `${String(getJaar(new Date())).slice(-2)}42`;
+  const [filtVanWeek,setFiltVanWeek]=useState(nuWkLabel);
+  const [filtTotWeek,setFiltTotWeek]=useState(tot42Label);
   useEffect(()=>bewaar("ta_filtVanWeek",filtVanWeek),[filtVanWeek]);
   useEffect(()=>bewaar("ta_filtTotWeek",filtTotWeek),[filtTotWeek]);
 
   function regelSoorten(){return gewassen.find(g=>g.naam===regel.gewas)?.soorten||[];}
   function setRegelV(k,v){
-    let r={...regel,[k]:v};
+    let r={...regel,[k]:k==="aantal"?Math.round(Number(v))||1:v};
     if(k==="gewas"){const s=gewassen.find(g=>g.naam===v)?.soorten||[];r.soort=s[0]||"";r.verpakking=regel.verpakking||"Tray 65";}
     const p=prijzen.find(x=>x.klantId===Number(data.klantId)&&x.gewas===(k==="gewas"?v:r.gewas)&&x.soort===(k==="soort"?v:r.soort)&&x.verpakking===(k==="verpakking"?v:r.verpakking));
     if(p)r.prijs=p.prijs; setRegel(r);
@@ -1339,7 +1403,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef }) {
     if(ges?.id===doel.id) setGes(b.find(o=>o.id===doel.id));
     setKopR(null);
   }
-  function totaal(r){return r.reduce((s,x)=>s+Number(x.prijs||0)*x.aantal,0);}
+  function totaal(r){return r.reduce((s,x)=>s+Number(x.prijs||0)*Math.round(x.aantal),0);}
   function plantenPerRegel(r){const v=vindVd(verpDef,r.verpakking);return(v?.aantal||0)*r.aantal;}
   function plantenTotaal(r){return r.reduce((s,x)=>s+plantenPerRegel(x),0);}
 
@@ -1562,9 +1626,19 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef }) {
                     return (
                       <>
                         <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                          <div style={{flex:1}}>
+                          <div style={{flex:1.2}}>
                             <div style={{fontSize:9,color:subtekst,marginBottom:1}}>Trays</div>
-                            <input style={{...gs.input,padding:"3px 6px",fontSize:12,width:"100%"}} type="number" min="1" value={regel.aantal} onChange={e=>setRegelV("aantal",Number(e.target.value))} />
+                            <div style={{display:"flex",alignItems:"center",border:`1px solid ${rand}`,borderRadius:4,overflow:"hidden",background:wit}}>
+                              <button type="button" style={{padding:"2px 7px",border:"none",background:"#f0f0f0",cursor:"pointer",fontSize:14,lineHeight:1}} onClick={()=>setRegelV("aantal",Math.max(1,Math.round(regel.aantal||1)-1))}>−</button>
+                              <input
+                                style={{...gs.input,border:"none",borderRadius:0,textAlign:"center",padding:"3px 2px",fontSize:12,width:"100%",minWidth:30}}
+                                type="number" min="1" step="1"
+                                value={Math.round(regel.aantal)||1}
+                                onChange={e=>setRegelV("aantal",Math.max(1,Math.round(Number(e.target.value)||1)))}
+                                onFocus={e=>e.target.select()}
+                              />
+                              <button type="button" style={{padding:"2px 7px",border:"none",background:"#f0f0f0",cursor:"pointer",fontSize:14,lineHeight:1}} onClick={()=>setRegelV("aantal",Math.round(regel.aantal||1)+1)}>+</button>
+                            </div>
                           </div>
                           <div style={{color:subtekst,fontSize:12,paddingTop:14}}>↔</div>
                           <div style={{flex:1}}>
@@ -1600,6 +1674,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef }) {
                   : <>
                     <table style={{fontSize:12,width:"100%"}}>
                       <thead>
+                        <tr>
             {[
                   ["Gewas",90],["Soort",160],["Fust",90],
                   ["Trays",55],["Planten",70],["€/st",60],["Vast",70],["Verschil",60],
@@ -1609,6 +1684,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef }) {
                     textAlign:i>=3&&i<=7?"right":"left",
                     minWidth:w,width:w}}>{h}</th>
                 ))}
+                        </tr>
                       </thead>
                       <tbody>{data.regels.map(r=>(
                         <RegelRij key={r.id} r={r} verpDef={verpDef} gewassen={gewassen} bewerkbaar={true} status={data.status||"reservering"}
@@ -1624,7 +1700,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef }) {
                             const bS={padding:"4px 5px",fontSize:12,fontWeight:700,borderTop:`2px solid ${groen}`};
                             return <tr style={{background:"#e8f5ee"}}>
                               <td style={{...bS,color:groen,fontSize:11}} colSpan={3}>Totaal</td>
-                              <td style={{...bS,color:groen,textAlign:"right"}}>{data.regels.reduce((s,x)=>s+x.aantal,0)}</td>
+                              <td style={{...bS,color:groen,textAlign:"right"}}>{data.regels.reduce((s,x)=>s+Math.round(x.aantal),0)}</td>
                               <td style={{...bS,color:groen,textAlign:"right"}}>{plantenTotaal(data.regels).toLocaleString()}</td>
                               <td style={bS}></td>
                               <td style={bS}></td>
@@ -1915,10 +1991,16 @@ function Teeltduur({ gewassen, verpDef, teeltduur, setTeeltduur }) {
 // MODULE — TEELTPLANNING
 // ════════════════════════════════════════════════════════
 function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkracht, bedrijf }) {
+  const nuWk = getWeekNr(new Date());
+  const nuJr = getJaar(new Date());
+  let volgWk = nuWk + 1; let volgJr = nuJr;
+  if(volgWk > 52) { volgWk = 1; volgJr++; }
+  const volgLabel = `${String(volgJr).slice(-2)}${String(volgWk).padStart(2,"0")}`;
+
   const [filtStatus, setFiltStatus] = useState("alle");
   const [filtKlant,  setFiltKlant]  = useState(0);
-  const [filtVan, setFiltVan] = useState("");
-  const [filtTot, setFiltTot] = useState("");
+  const [filtVan, setFiltVan] = useState(volgLabel);
+  const [filtTot, setFiltTot] = useState(volgLabel);
   const [aantalWeken, setAantalWeken] = useState(5);
   const [matrixFust, setMatrixFust] = useState("");
   const [weergave,   setWeergave]   = useState("beide");
@@ -3484,9 +3566,244 @@ function ZaadVoorraad({ zaadinkoop, orders, gewassen, kiemkracht, teeltduur }) {
 }
 
 // ════════════════════════════════════════════════════════
+// TRAY VOORRAAD COMPONENT
+// ════════════════════════════════════════════════════════
+function TrayVoorraad({ trayinkoop, setTrayinkoop, orders, teeltduur, kiemkracht, gewassen }) {
+  const TRAYS = ["Zaaitray 264", "Zaaitray 180"];
+  const [nieuwInkoop, setNieuwInkoop] = useState({datum: new Date().toISOString().split("T")[0], type:"Zaaitray 264", aantal:3600});
+  const [toonInkoop, setToonInkoop] = useState(false);
+  const [toonBestel, setToonBestel] = useState(false);
+
+  const nu = new Date();
+  const huidigWk = getWeekNr(nu);
+  const huidigJaar = getJaar(nu);
+  const eindeSeizoensWk = 40;
+  const eindeSeizoensJaar = huidigWk < 40 ? huidigJaar : huidigJaar + 1;
+  const eindeLabel = `${String(eindeSeizoensJaar).slice(-2)}${String(eindeSeizoensWk).padStart(2,"0")}`;
+
+  function wkLabel(offset) {
+    let wk = huidigWk + offset;
+    let jaar = huidigJaar;
+    while(wk > 52) { wk -= 52; jaar++; }
+    return `${String(jaar).slice(-2)}${String(wk).padStart(2,"0")}`;
+  }
+  const nu3w = wkLabel(0);
+  const grens3w = wkLabel(3);
+
+  function getKiem(gewas, soort) {
+    const k = (kiemkracht||[]).find(x=>x.gewas?.toLowerCase()===gewas?.toLowerCase()&&x.soort?.toLowerCase()===soort?.toLowerCase());
+    return k ? k.waarde/100 : 1;
+  }
+  function getDuur(gewas, soort, fust, veld) {
+    return (teeltduur||[]).find(t=>t.gewas?.toLowerCase()===gewas?.toLowerCase()&&t.soort?.toLowerCase()===soort?.toLowerCase()&&t.fust?.toLowerCase()===fust?.toLowerCase())?.[veld]??null;
+  }
+
+  // Bereken traygebruik per type uit orders
+  const gebruik3w = {"Zaaitray 264":0, "Zaaitray 180":0};
+  const gebruikSzn = {"Zaaitray 264":0, "Zaaitray 180":0};
+
+  (orders||[]).filter(o=>o.status==="bevestigd"||o.status==="reservering").forEach(o=>{
+    (o.regels||[]).forEach(r=>{
+      const kiem = getKiem(r.gewas, r.soort);
+      const uitzaaiWeken = getDuur(r.gewas, r.soort, r.verpakking, "uitzaai");
+      if(uitzaaiWeken===null) return;
+      let zaaiWk = getWeekNr(o.leverdatum) - uitzaaiWeken;
+      let zaaiJaar = getJaar(o.leverdatum);
+      if(zaaiWk<=0){zaaiWk+=52;zaaiJaar--;}
+      const zaaiLbl = `${String(zaaiJaar).slice(-2)}${String(zaaiWk).padStart(2,"0")}`;
+      const fustL = r.verpakking?.toLowerCase()||"";
+      const is65 = fustL.includes("65")||fustL.includes("66");
+      const zaaiTrays = is65?Math.ceil(Math.ceil(r.aantal/kiem)/4):(kiem>0?Math.ceil(r.aantal/kiem):r.aantal);
+      const trayType = fustL.includes("179")||fustL.includes("180")?"Zaaitray 180":"Zaaitray 264";
+      if(zaaiLbl >= nu3w && zaaiLbl <= eindeLabel) {
+        gebruikSzn[trayType] = (gebruikSzn[trayType]||0) + zaaiTrays;
+        if(zaaiLbl <= grens3w) gebruik3w[trayType] = (gebruik3w[trayType]||0) + zaaiTrays;
+      }
+    });
+  });
+
+  // Voorraad = beginvoorraad + inkopen − seizoengebruik tot nu
+  const begin = trayinkoop.beginvoorraad||{};
+  const inkopen = trayinkoop.inkopen||[];
+
+  function voorraad(type) {
+    const b = Number(begin[type])||0;
+    const ing = inkopen.filter(x=>x.type===type).reduce((s,x)=>s+Number(x.aantal),0);
+    // gebruik tot nu = seizoengebruik − nog te doen
+    const totaalNodig = gebruikSzn[type]||0;
+    const nogNodig3w = gebruik3w[type]||0;
+    return b + ing; // huidige voorraad (nog niet gebruikt)
+  }
+
+  function bestelAdvies(type) {
+    const vrd = voorraad(type);
+    const nodig3w = gebruik3w[type]||0;
+    const tekort = nodig3w - vrd;
+    if(tekort <= 0) return null;
+    const batches = Math.ceil(tekort / 3600);
+    return { tekort, batches, totaal: batches * 3600 };
+  }
+
+  const bestellingen = TRAYS.map(t=>({type:t, adv:bestelAdvies(t)})).filter(x=>x.adv);
+
+  return (
+    <div style={{flex:1, overflowY:"auto", padding:16}}>
+
+      {/* Besteladvies knop */}
+      <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:14,flexWrap:"wrap"}}>
+        <button style={{...gs.knopPrimair,background:bestellingen.length>0?"#dc2626":"#9ca3af"}}
+          onClick={()=>setToonBestel(true)} disabled={bestellingen.length===0}>
+          🛒 Besteladvies {bestellingen.length>0?`(${bestellingen.length})`:"— niets nodig"}
+        </button>
+        <button style={gs.knopPrimair} onClick={()=>setToonInkoop(true)}>+ Inkoop registreren</button>
+        <span style={{fontSize:11,color:subtekst}}>Seizoen t/m week {eindeSeizoensWk} · 3-weken horizon</span>
+      </div>
+
+      {/* Beginvoorraad + overzicht per type */}
+      <div style={{display:"flex",gap:16,marginBottom:20,flexWrap:"wrap"}}>
+        {TRAYS.map(type=>{
+          const vrd = voorraad(type);
+          const nodig3w = gebruik3w[type]||0;
+          const nogSzn = gebruikSzn[type]||0;
+          const saldo = vrd - nodig3w;
+          const adv = bestelAdvies(type);
+          return (
+            <div key={type} style={{flex:1,minWidth:220,border:`1px solid ${adv?"#fca5a5":rand}`,borderRadius:8,padding:12,background:adv?"#fff5f5":wit}}>
+              <div style={{fontWeight:700,fontSize:14,marginBottom:10,color:groen}}>{type}</div>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                <span style={{fontSize:12,color:subtekst}}>Beginvoorraad</span>
+                <input style={{...gs.input,width:80,textAlign:"right",padding:"2px 6px",fontSize:12}}
+                  type="number" min="0" step="1"
+                  value={Number(begin[type])||0}
+                  onChange={e=>setTrayinkoop({...trayinkoop,beginvoorraad:{...begin,[type]:Number(e.target.value)}})}
+                  onFocus={e=>e.target.select()}
+                />
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                <span style={{fontSize:12,color:subtekst}}>Inkopen (totaal)</span>
+                <span style={{fontSize:12,fontWeight:600}}>{inkopen.filter(x=>x.type===type).reduce((s,x)=>s+x.aantal,0).toLocaleString("nl-NL")}</span>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                <span style={{fontSize:12,color:subtekst}}>Huidige voorraad</span>
+                <span style={{fontSize:13,fontWeight:700,color:groen}}>{vrd.toLocaleString("nl-NL")}</span>
+              </div>
+              <div style={{borderTop:`1px solid ${rand}`,marginTop:8,paddingTop:8}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                  <span style={{fontSize:11,color:subtekst}}>Nodig 3 weken</span>
+                  <span style={{fontSize:11}}>{nodig3w.toLocaleString("nl-NL")}</span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                  <span style={{fontSize:11,color:subtekst}}>Saldo 3w</span>
+                  <span style={{fontSize:12,fontWeight:700,color:saldo<0?"#dc2626":saldo<500?"#f59e0b":groen}}>
+                    {saldo>=0?saldo.toLocaleString("nl-NL"):`⚠️ −${Math.abs(saldo).toLocaleString("nl-NL")}`}
+                  </span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between"}}>
+                  <span style={{fontSize:11,color:subtekst}}>Seizoen nog nodig</span>
+                  <span style={{fontSize:11,color:"#6b7280"}}>{nogSzn.toLocaleString("nl-NL")}</span>
+                </div>
+                {adv&&<div style={{marginTop:8,background:"#fee2e2",borderRadius:4,padding:"4px 8px",fontSize:11,fontWeight:700,color:"#dc2626",textAlign:"center"}}>
+                  Bestellen: {adv.batches}× batch ({adv.totaal.toLocaleString("nl-NL")} trays)
+                </div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Inkoophistorie */}
+      {inkopen.length>0&&(
+        <div>
+          <div style={{fontSize:12,fontWeight:700,color:groen,marginBottom:6}}>📦 Inkoophistorie</div>
+          <table style={{width:"100%",maxWidth:500}}>
+            <thead><tr>
+              <th style={TH}>Datum</th>
+              <th style={TH}>Type</th>
+              <th style={{...TH,textAlign:"right"}}>Aantal</th>
+              <th style={TH}></th>
+            </tr></thead>
+            <tbody>
+              {[...inkopen].reverse().map((ink,i)=>(
+                <tr key={ink.id||i} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                  <td style={TD}>{ink.datum}</td>
+                  <td style={TD}>{ink.type}</td>
+                  <td style={{...TD,textAlign:"right",fontWeight:600,color:groen}}>{Number(ink.aantal).toLocaleString("nl-NL")}</td>
+                  <td style={{...TD,textAlign:"right"}}>
+                    <button style={gs.knopVerwijder} onClick={()=>setTrayinkoop({...trayinkoop,inkopen:inkopen.filter((_,j)=>inkopen.length-1-j!==i)})}>🗑️</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Inkoop registreren modal */}
+      {toonInkoop&&(
+        <div style={gs.overlay}><div style={{...gs.modal,width:320}}>
+          <div style={gs.modalTitel}>📦 Inkoop registreren</div>
+          <div style={gs.veldGroep}>
+            <label style={gs.label}>Datum</label>
+            <input style={gs.input} type="date" value={nieuwInkoop.datum} onChange={e=>setNieuwInkoop({...nieuwInkoop,datum:e.target.value})} />
+          </div>
+          <div style={gs.veldGroep}>
+            <label style={gs.label}>Traytype</label>
+            <select style={gs.input} value={nieuwInkoop.type} onChange={e=>setNieuwInkoop({...nieuwInkoop,type:e.target.value})}>
+              {TRAYS.map(t=><option key={t}>{t}</option>)}
+            </select>
+          </div>
+          <div style={gs.veldGroep}>
+            <label style={gs.label}>Aantal (max 3600 per batch)</label>
+            <input style={gs.input} type="number" min="1" max="3600" step="1"
+              value={nieuwInkoop.aantal}
+              onChange={e=>setNieuwInkoop({...nieuwInkoop,aantal:Math.min(3600,Math.max(1,parseInt(e.target.value)||1))})}
+              onFocus={e=>e.target.select()}
+            />
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button style={gs.knopPrimair} onClick={()=>{
+              setTrayinkoop({...trayinkoop,inkopen:[...inkopen,{...nieuwInkoop,id:Date.now()}]});
+              setToonInkoop(false);
+            }}>💾 Opslaan</button>
+            <button style={gs.knopSecundair} onClick={()=>setToonInkoop(false)}>Annuleren</button>
+          </div>
+        </div></div>
+      )}
+
+      {/* Besteladvies modal */}
+      {toonBestel&&(
+        <div style={gs.overlay}><div style={{...gs.modal,width:400}}>
+          <div style={{...gs.modalTitel,color:"#dc2626"}}>🛒 Tray besteladvies</div>
+          <div style={{fontSize:11,color:subtekst,marginBottom:12}}>Tekort binnen 3 weken · batches van max 3600</div>
+          <table style={{width:"100%",marginBottom:16}}>
+            <thead><tr>
+              <th style={TH}>Traytype</th>
+              <th style={{...TH,textAlign:"right"}}>Tekort</th>
+              <th style={{...TH,textAlign:"right"}}>Batches</th>
+              <th style={{...TH,textAlign:"right"}}>Totaal</th>
+            </tr></thead>
+            <tbody>
+              {bestellingen.map(({type,adv})=>(
+                <tr key={type} style={{borderBottom:`1px solid ${rand}`}}>
+                  <td style={TD}>{type}</td>
+                  <td style={{...TD,textAlign:"right",color:"#dc2626"}}>−{adv.tekort.toLocaleString("nl-NL")}</td>
+                  <td style={{...TD,textAlign:"right",fontWeight:700}}>{adv.batches}×</td>
+                  <td style={{...TD,textAlign:"right",color:groen,fontWeight:700}}>{adv.totaal.toLocaleString("nl-NL")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <button style={gs.knopSecundair} onClick={()=>setToonBestel(false)}>Sluiten</button>
+        </div></div>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════
 // MODULE — ZAADINKOOP
 // ════════════════════════════════════════════════════════
-function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, kiemkracht, verpDef }) {
+function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, kiemkracht, verpDef, trayinkoop, setTrayinkoop }) {
   const [tab, setTab] = useState("inkoop");
   const [laasteGewas, setLaatsteGewas] = useState("");
   const [laastePrijs, setLaastePrijs] = useState("");
@@ -3502,13 +3819,25 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
   const soorten = gewassen.find(g=>g.naam===data.gewas)?.soorten||[];
 
   function setV(k,v) {
-    if(k==="gewas") setData({...data,gewas:v,soort:gewassen.find(g=>g.naam===v)?.soorten[0]||""});
-    else setData({...data,[k]:v});
+    if(k==="gewas") {
+      const gw = gewassen.find(g=>g.naam===v);
+      const soort = gw?.soorten[0]||"";
+      const prijs = soort&&gw?.inkoopPrijzen?.[soort]||laastePrijs;
+      setData({...data,gewas:v,soort,prijs});
+    } else if(k==="soort") {
+      const gw = gewassen.find(g=>g.naam===data.gewas);
+      const prijs = gw?.inkoopPrijzen?.[v]||laastePrijs;
+      setData({...data,soort:v,prijs});
+    } else {
+      setData({...data,[k]:v});
+    }
   }
 
   function openNieuw() {
-    const nieuw = leeg();
-    setData(nieuw);
+    const gw = gewassen.find(g=>g.naam===laasteGewas);
+    const soort = gw?.soorten[0]||"";
+    const prijsUitGewas = soort&&gw?.inkoopPrijzen?.[soort]||laastePrijs;
+    setData({...leeg(), prijs:prijsUitGewas});
     setAantalDisplay("");
     setForm(true);
   }
@@ -3516,14 +3845,16 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
   function opslaan(enNieuw=false) {
     const aantalWerkelijk = Number(aantalDisplay) * 1000;
     if(!data.datum||!data.gewas||!aantalWerkelijk) return;
-    const r = {...data, aantal:aantalWerkelijk, prijs:data.prijs?Number(data.prijs):null, kiemkracht:data.kiemkracht!==""?Number(data.kiemkracht):null};
+    const gw = gewassen.find(g=>g.naam===data.gewas);
+    const prijsUitGewas = gw?.inkoopPrijzen?.[data.soort]||null;
+    const leverancierUitGewas = gw?.leverancier||"";
+    const r = {...data, aantal:aantalWerkelijk, prijs:prijsUitGewas?Number(prijsUitGewas):null, leverancier:leverancierUitGewas, kiemkracht:data.kiemkracht!==""?Number(data.kiemkracht):null};
     if(r.id) setZaadinkoop(zaadinkoop.map(x=>x.id===r.id?r:x));
     else setZaadinkoop(prev=>[...prev, {...r, id:Date.now()}]);
     setLaatsteGewas(data.gewas);
-    setLaastePrijs(data.prijs||"");
-    setLaasteLeverancier(data.leverancier||"");
+    setLaasteLeverancier(leverancierUitGewas);
     if(enNieuw) {
-      const nieuw = {id:null, datum:new Date().toISOString().split("T")[0], gewas:data.gewas, soort:data.soort, leverancier:data.leverancier||"", code:"", kiemkracht:90, aantal:"", prijs:data.prijs||""};
+      const nieuw = {id:null, datum:new Date().toISOString().split("T")[0], gewas:data.gewas, soort:data.soort, leverancier:leverancierUitGewas, code:"", kiemkracht:90, aantal:"", prijs:prijsUitGewas||""};
       setData(nieuw);
       setAantalDisplay("");
     } else {
@@ -3595,7 +3926,7 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
 
       {/* Tabs */}
       <div style={{display:"flex",gap:2,padding:"8px 12px",background:wit,borderBottom:`1px solid ${rand}`}}>
-        {[["inkoop","📋 Inkoop"],["voorraad","📦 Zaadvoorraad"]].map(([v,l])=>(
+        {[["inkoop","📋 Inkoop"],["voorraad","📦 Zaadvoorraad"],["trays","🪴 Trayvoorraad"]].map(([v,l])=>(
           <button key={v} onClick={()=>setTab(v)}
             style={{padding:"5px 16px",border:"none",borderRadius:6,cursor:"pointer",fontSize:13,
               fontWeight:tab===v?700:400,
@@ -3676,17 +4007,9 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
             <label style={gs.label}>Code <span style={{color:subtekst}}>(opt.)</span></label>
             <input tabIndex={6} style={gs.input} type="text" placeholder="L2024-001" value={data.code} onChange={e=>setV("code",e.target.value)} />
           </div>
-          <div style={gs.veldGroep}>
-            <label style={gs.label}>Prijs/1000 (€) <span style={{color:subtekst}}>(opt.)</span></label>
-            <input tabIndex={7} style={gs.input} type="number" min="0" step="0.01" placeholder="—" value={data.prijs} onChange={e=>setV("prijs",e.target.value)} />
-          </div>
-          <div style={gs.veldGroep}>
-            <label style={gs.label}>Leverancier <span style={{color:subtekst}}>(opt.)</span></label>
-            <input tabIndex={8} style={gs.input} type="text" placeholder="Bijv. Floranova" value={data.leverancier} onChange={e=>setV("leverancier",e.target.value)} />
-          </div>
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            <button tabIndex={9} style={{...gs.knopPrimair,width:"100%"}} onClick={()=>opslaan(true)}>＋ Opslaan & Nieuw</button>
-            <button tabIndex={10} style={{...gs.knopSecundair,width:"100%"}} onClick={()=>opslaan(false)}>💾 Opslaan</button>
+            <button tabIndex={7} style={{...gs.knopPrimair,width:"100%"}} onClick={()=>opslaan(true)}>＋ Opslaan & Nieuw</button>
+            <button tabIndex={8} style={{...gs.knopSecundair,width:"100%"}} onClick={()=>opslaan(false)}>💾 Opslaan</button>
             {data.id&&<button style={{...gs.knopSecundair,width:"100%",fontSize:11}} onClick={()=>{setData(leeg());setAantalDisplay("");}}>✕ Annuleren</button>}
           </div>
         </div>
@@ -3756,6 +4079,17 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
           teeltduur={teeltduur||[]}
         />
       )}
+
+      {tab==="trays" && (
+        <TrayVoorraad
+          trayinkoop={trayinkoop||{beginvoorraad:{"Zaaitray 264":0,"Zaaitray 180":0},inkopen:[]}}
+          setTrayinkoop={setTrayinkoop}
+          orders={orders||[]}
+          teeltduur={teeltduur||[]}
+          kiemkracht={kiemkracht||[]}
+          gewassen={gewassen||[]}
+        />
+      )}
     </div>
   );
 }
@@ -3769,6 +4103,10 @@ function App() {
   const [kiemkracht,setKiemkracht] = useState(()=>laad("ta_kiemkracht", []));
   const [teeltduur,setTeeltduur]   = useState(()=>laad("ta_teeltduur", []));
   const [zaadinkoop,setZaadinkoop] = useState(()=>laad("ta_zaadinkoop", []));
+  const [trayinkoop,setTrayinkoop] = useState(()=>laad("ta_trayinkoop", {
+    beginvoorraad: {"Zaaitray 264": 0, "Zaaitray 180": 0},
+    inkopen: []
+  }));
   const [bedrijf,setBedrijf]   = useState(()=>laad("ta_bedrijf", {
     naam:"Uw Bedrijfsnaam BV", adres:"Straatnaam 1", postcode:"1234 AB", plaats:"Plaats",
     telefoon:"010-1234567", email:"info@uwbedrijf.nl", website:"", iban:"NL00 BANK 0000 0000 00",
@@ -3794,7 +4132,7 @@ function App() {
         if(k) setKlanten(k);
         if(g) setGewassen(g);
         if(p) { console.log("Prijzen geladen:", p.length); setPrijzen(p); }
-        if(o) setOrders(o);
+        if(o) setOrders(o.map(ord=>({...ord,regels:(ord.regels||[]).map(r=>({...r,aantal:Math.round(Number(r.aantal)||1)}))})));
         if(v) setVerpDef(zorgVerpDef(v));
         if(km) setKiemkracht(km);
         if(td) setTeeltduur(td);
@@ -3815,7 +4153,7 @@ function App() {
   useEffect(()=>{ if(!geladen) return; bewaar("ta_prijzen",prijzen); fbSaveAll("prijzen",prijzen).then(()=>setSyncStatus("☁️ Opgeslagen")); },[prijzen]);
   useEffect(()=>{ if(!geladen) return; bewaar("ta_orders",orders); fbSaveAll("orders",orders).then(()=>setSyncStatus("☁️ Opgeslagen")); },[orders]);
   useEffect(()=>{ if(!geladen) return; bewaar("ta_verp",verpDef); fbSaveAll("verpakkingen",verpDef).then(()=>setSyncStatus("☁️ Opgeslagen")); },[verpDef]);
-  useEffect(()=>{ if(!geladen) return; bewaar("ta_zaadinkoop",zaadinkoop); fbSaveAll("zaadinkoop",zaadinkoop).then(()=>setSyncStatus("☁️ Opgeslagen")); },[zaadinkoop]);
+  useEffect(()=>{ if(!geladen) return; bewaar("ta_trayinkoop",trayinkoop); fbSaveAll("trayinkoop",[trayinkoop]).then(()=>setSyncStatus("☁️ Opgeslagen")); },[trayinkoop]);
   useEffect(()=>{ bewaar("ta_bedrijf",bedrijf); },[bedrijf]);
   useEffect(()=>{ bewaar("ta_teeltduur",teeltduur); fbSaveAll("teeltduur",teeltduur).then(()=>setSyncStatus("☁️ Opgeslagen")); },[teeltduur]);
   useEffect(()=>{ bewaar("ta_kiemkracht",kiemkracht); fbSaveAll("kiemkracht",kiemkracht).then(()=>setSyncStatus("☁️ Opgeslagen")); },[kiemkracht]);
@@ -3873,7 +4211,7 @@ function App() {
       {pagina==="bevestiging"  && <Bevestiging klanten={klanten} gewassen={gewassen} orders={orders} setOrders={setOrders} verpDef={verpDef} bedrijf={bedrijf} />}
       {pagina==="teeltduur"    && <Teeltduur gewassen={gewassen} verpDef={verpDef} teeltduur={teeltduur} setTeeltduur={setTeeltduur} />}
       {pagina==="planning"      && <Teeltplanning klanten={klanten} gewassen={gewassen} verpDef={verpDef} orders={orders} teeltduur={teeltduur} kiemkracht={kiemkracht} bedrijf={bedrijf} />}
-      {pagina==="zaadinkoop"   && <Zaadinkoop gewassen={gewassen} zaadinkoop={zaadinkoop} setZaadinkoop={setZaadinkoop} orders={orders} teeltduur={teeltduur} kiemkracht={kiemkracht} verpDef={verpDef} />}
+      {pagina==="zaadinkoop"   && <Zaadinkoop gewassen={gewassen} zaadinkoop={zaadinkoop} setZaadinkoop={setZaadinkoop} orders={orders} teeltduur={teeltduur} kiemkracht={kiemkracht} verpDef={verpDef} trayinkoop={trayinkoop} setTrayinkoop={setTrayinkoop} />}
       {pagina==="kiemkracht"   && <Kiemkracht gewassen={gewassen} kiemkracht={kiemkracht} setKiemkracht={setKiemkracht} />}
       {pagina==="instellingen"  && <Instellingen bedrijf={bedrijf} setBedrijf={setBedrijf} gewassen={gewassen} setGewassen={setGewassen} orders={orders} setOrders={setOrders} prijzen={prijzen} setPrijzen={setPrijzen} kiemkracht={kiemkracht} setKiemkracht={setKiemkracht} teeltduur={teeltduur} setTeeltduur={setTeeltduur} klanten={klanten} setKlanten={setKlanten} zaadinkoop={zaadinkoop} setZaadinkoop={setZaadinkoop} verpDef={verpDef} setVerpDef={setVerpDef} />}
     </div>

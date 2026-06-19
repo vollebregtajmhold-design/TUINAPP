@@ -147,6 +147,8 @@ function bewaar(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catc
 // ─── FIREBASE SYNC ──────────────────────────────────────
 async function fbSaveAll(col, items) {
   if(!window._db || !window._firebase) return;
+  if(!items || items.length === 0) return;
+  if(window._fbQuotaVol) return; // Stop alle Firebase writes bij quota fout
   const { collection: fbCol, doc, setDoc, getDocs, deleteDoc } = window._firebase;
   const db = window._db;
   try {
@@ -164,7 +166,14 @@ async function fbSaveAll(col, items) {
     for(const oldId of bestaandeIds) {
       if(!nieuweIds.has(oldId)) await deleteDoc(doc(db, col, oldId));
     }
-  } catch(e) { console.error("Firebase save fout:", e); }
+  } catch(e) {
+    if(String(e).includes("exhausted")||String(e).includes("quota")) {
+      window._fbQuotaVol = true;
+      console.warn("Firebase quota vol - writes uitgeschakeld");
+    } else {
+      console.error("Firebase save fout:", e);
+    }
+  }
 }
 async function fbLoadAll(col) {
   if(!window._db || !window._firebase) return null;
@@ -457,15 +466,29 @@ function Teelten({ gewassen, setGewassen }) {
               {ges.soorten.length===0&&<div style={{color:subtekst,fontSize:12,marginBottom:10}}>Nog geen soorten</div>}
               <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
                 {ges.soorten.map((s,i)=>(
-                  <SoortItem key={i} soort={s}
-                    onDelete={()=>setDelS({id:ges.id,soort:s})}
-                    onRename={(nieuw)=>{
-                      if(!nieuw.trim()||nieuw===s) return;
-                      const bijgewerkt=gewassen.map(g=>g.id===ges.id?{...g,soorten:g.soorten.map(x=>x===s?nieuw.trim():x)}:g);
-                      setGewassen(bijgewerkt);
-                      setGes(bijgewerkt.find(g=>g.id===ges.id));
-                    }}
-                  />
+                  <div key={i} style={{display:"flex",gap:6,alignItems:"center",marginBottom:4}}>
+                    <div style={{flex:1}}>
+                      <SoortItem soort={s}
+                        onDelete={()=>setDelS({id:ges.id,soort:s})}
+                        onRename={(nieuw)=>{
+                          if(!nieuw.trim()||nieuw===s) return;
+                          const bijgewerkt=gewassen.map(g=>g.id===ges.id?{...g,soorten:g.soorten.map(x=>x===s?nieuw.trim():x)}:g);
+                          setGewassen(bijgewerkt);
+                          setGes(bijgewerkt.find(g=>g.id===ges.id));
+                        }}
+                      />
+                    </div>
+                    <input
+                      style={{...gs.input,width:80,fontSize:11,padding:"2px 6px"}}
+                      placeholder="Intern nr."
+                      value={(ges.internNrs||{})[s]||""}
+                      onChange={e=>{
+                        const bijgewerkt=gewassen.map(g=>g.id===ges.id?{...g,internNrs:{...(g.internNrs||{}),[s]:e.target.value}}:g);
+                        setGewassen(bijgewerkt);
+                        setGes(bijgewerkt.find(g=>g.id===ges.id));
+                      }}
+                    />
+                  </div>
                 ))}
               </div>
               <div style={{display:"flex",gap:8}}>
@@ -717,7 +740,7 @@ function Prijzen({ klanten, gewassen, prijzen, setPrijzen, verpDef }) {
                             <td style={{...mTD,padding:"3px 8px",fontSize:10,color:subtekst,fontStyle:"italic"}}>Vul alle soorten:</td>
                             {verpDef.map(v=>(
                               <td key={v.naam} style={{...mTD,padding:"2px 4px"}}>
-                                <input style={{...iS,width:68,textAlign:"left",background:"#d4edda"}}
+                                <input style={{...iS,width:68,textAlign:"left",background:"#c8e6c9"}}
                                   type="number" step="0.001" min="0" placeholder="Allen"
                                   value={vulGewas[gw.naam+"_"+v.naam]||""}
                                   onChange={e=>setVulGewas({...vulGewas,[gw.naam+"_"+v.naam]:e.target.value})}
@@ -1354,6 +1377,8 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef }) {
   const [kopO,setKopO]=useState(null); const [kopODat,setKopODat]=useState(defWeek.datum);
   const [kopR,setKopR]=useState(null); const [kopRDoel,setKopRDoel]=useState("");
   const [tab,setTab]=useState("lijst");
+  const nuWkLbl = `${String(getJaar(new Date())).slice(-2)}${String(getWeekNr(new Date())+1).padStart(2,"0")}`;
+  const [transportWeek, setTransportWeek] = useState(nuWkLbl);
   const [zoek,setZoek]=useState("");
 
   const [alleWkenOpen,setAlleWkenOpen]=useState(null); // null=default, true=alle open, false=alle dicht
@@ -1497,7 +1522,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef }) {
 
       <div style={{flex:1,overflowY:"auto",padding:16}}>
         <div style={{display:"flex",gap:6,marginBottom:14,borderBottom:`1px solid ${rand}`,paddingBottom:8}}>
-          {[["lijst","📋 Orders"],["matrix","📊 Matrix"],["status","🗓️ Statusoverzicht"]].map(([id,lbl])=>(
+          {[["lijst","📋 Orders"],["matrix","📊 Matrix"],["status","🗓️ Statusoverzicht"],["transport","🚛 Transport"],["pakbonnen","📦 Pakbonnen"]].map(([id,lbl])=>(
             <button key={id} onClick={()=>setTab(id)}
               style={{padding:"5px 14px",borderRadius:6,border:"none",cursor:"pointer",fontSize:13,fontWeight:tab===id?700:400,
                 background:tab===id?groen:"transparent",color:tab===id?wit:subtekst}}>
@@ -1558,6 +1583,114 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef }) {
             </div>
           );
         })()}
+
+        {tab==="transport"&&(()=>{
+          const alleWeken=[...new Set(orders.filter(o=>o.status!=="geleverd").map(o=>weekLabel(o.leverdatum)))].sort();
+          const transportOrders=orders.filter(o=>weekLabel(o.leverdatum)===transportWeek&&o.status!=="geleverd")
+            .sort((a,b)=>(klanten.find(k=>k.id===a.klantId)?.naam||"").localeCompare(klanten.find(k=>k.id===b.klantId)?.naam||""));
+
+          function printTransport(){
+            const bd=bedrijf||{};
+            const logo=bd.logo?"<img src='"+bd.logo+"' style='max-height:50px;max-width:120px;object-fit:contain'/>":"";
+            const datum=new Date().toLocaleDateString("nl-NL");
+            const rijen=transportOrders.map((o,i)=>{
+              const kl=klanten.find(k=>k.id===o.klantId)||{};
+              const cp=(kl.contactpersonen||[])[0]||{};
+              const totTrays=o.regels.reduce((s,r)=>s+r.aantal,0);
+              const totPl=o.regels.reduce((s,r)=>{const vd=verpDef.find(v=>v.naam===r.verpakking);return s+(vd?.aantal||0)*r.aantal;},0);
+              const perFust={};
+              o.regels.forEach(r=>{perFust[r.verpakking]=(perFust[r.verpakking]||0)+r.aantal;});
+              const fustStr=Object.entries(perFust).map(([f,n])=>n+"× "+f).join(", ");
+              const bg=i%2===0?"#fff":"#f9fcfb";
+              return "<tr style='background:"+bg+"'>"
+                +"<td style='padding:5px 8px;border:1px solid #eee;font-weight:700'>"+kl.naam+"</td>"
+                +"<td style='padding:5px 8px;border:1px solid #eee'>"+kl.adres+"<br/><span style='font-size:10px;color:#666'>"+kl.postcode+" "+kl.plaats+"</span></td>"
+                +"<td style='padding:5px 8px;border:1px solid #eee'>"+cp.naam+"<br/><span style='font-size:10px;color:#666'>"+cp.telefoon+"</span></td>"
+                +"<td style='padding:5px 8px;border:1px solid #eee;font-size:10px'>"+fustStr+"</td>"
+                +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right;font-weight:700'>"+totTrays+"</td>"
+                +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right'>"+totPl.toLocaleString("nl-NL")+"</td>"
+                +"<td style='padding:5px 8px;border:1px solid #eee;width:70px'></td>"
+                +"</tr>";
+            }).join("");
+            const totaalTrays=transportOrders.reduce((s,o)=>s+o.regels.reduce((r,x)=>r+x.aantal,0),0);
+            const html="<!DOCTYPE html><html><head><meta charset='UTF-8'>"
+              +"<style>@page{size:A4 landscape;margin:12mm} body{font-family:Arial,sans-serif;font-size:11px;color:#222;margin:0}"
+              +"table{border-collapse:collapse;width:100%} @media print{button{display:none}}</style></head><body>"
+              +"<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #2d6a4f'>"
+                +"<div>"+logo+"</div>"
+                +"<div style='text-align:center'><div style='font-size:16px;font-weight:700'>TRANSPORTLIJST</div>"
+                +"<div style='font-size:12px;color:#555'>Week "+transportWeek+" &nbsp;·&nbsp; "+datum+"</div></div>"
+                +"<div style='font-size:11px;text-align:right'><strong>"+transportOrders.length+"</strong> orders<br/><strong>"+totaalTrays+"</strong> trays</div>"
+              +"</div>"
+              +"<table><thead><tr>"
+                +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Klant</th>"
+                +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Adres</th>"
+                +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Contact</th>"
+                +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Fust</th>"
+                +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Trays</th>"
+                +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Planten</th>"
+                +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9'>Afgetekend</th>"
+              +"</tr></thead><tbody>"+rijen+"</tbody>"
+              +"<tfoot><tr style='background:#e8f5ee;font-weight:700'>"
+                +"<td colspan='4' style='padding:5px 8px;border:1px solid #c8e6c9;color:#2d6a4f;border-top:2px solid #2d6a4f'>Totaal</td>"
+                +"<td style='padding:5px 8px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f;border-top:2px solid #2d6a4f'>"+totaalTrays+"</td>"
+                +"<td colspan='2' style='padding:5px 8px;border:1px solid #c8e6c9;border-top:2px solid #2d6a4f'></td>"
+              +"</tr></tfoot></table></body></html>";
+            const w=window.open("","_blank");
+            if(w){w.document.open();w.document.write(html);w.document.close();setTimeout(()=>w.print(),400);}
+          }
+
+          return (
+            <div style={{padding:10}}>
+              <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:12,flexWrap:"wrap"}}>
+                <div style={{fontSize:12,fontWeight:600}}>Leverweek:</div>
+                <select style={{...gs.input,fontSize:12,width:"auto"}} value={transportWeek} onChange={e=>setTransportWeek(e.target.value)}>
+                  {alleWeken.map(w=><option key={w}>{w}</option>)}
+                </select>
+                <span style={{fontSize:12,color:subtekst}}>{transportOrders.length} orders</span>
+                <button style={{...gs.knopPrimair,marginLeft:"auto"}} onClick={printTransport}>🖨️ Afdrukken</button>
+              </div>
+              {transportOrders.length===0
+                ? <div style={{textAlign:"center",color:subtekst,padding:40}}>Geen orders voor week {transportWeek}</div>
+                : <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                    <thead><tr>
+                      {["Klant","Adres","Contact","Fust","Trays","Planten"].map((h,i)=>(
+                        <th key={h} style={{...TH,textAlign:i>=4?"right":"left"}}>{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {transportOrders.map((o,i)=>{
+                        const kl=klanten.find(k=>k.id===o.klantId)||{};
+                        const cp=(kl.contactpersonen||[])[0]||{};
+                        const totTrays=o.regels.reduce((s,r)=>s+r.aantal,0);
+                        const totPl=o.regels.reduce((s,r)=>{const vd=verpDef.find(v=>v.naam===r.verpakking);return s+(vd?.aantal||0)*r.aantal;},0);
+                        const perFust={};
+                        o.regels.forEach(r=>{perFust[r.verpakking]=(perFust[r.verpakking]||0)+r.aantal;});
+                        return (
+                          <tr key={o.id} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                            <td style={{...TD,fontWeight:700,color:groen}}>{kl.naam}</td>
+                            <td style={{...TD,fontSize:11}}>{kl.adres}<br/><span style={{color:subtekst,fontSize:10}}>{kl.postcode} {kl.plaats}</span></td>
+                            <td style={{...TD,fontSize:11}}>{cp.naam||"—"}<br/><span style={{color:subtekst,fontSize:10}}>{cp.telefoon||""}</span></td>
+                            <td style={{...TD,fontSize:11}}>{Object.entries(perFust).map(([f,n])=><span key={f} style={{background:lichtGroen,color:groen,borderRadius:10,padding:"1px 5px",fontSize:10,marginRight:3,fontWeight:600}}>{n}× {f}</span>)}</td>
+                            <td style={{...TD,textAlign:"right",fontWeight:700}}>{totTrays}</td>
+                            <td style={{...TD,textAlign:"right",color:groen,fontWeight:600}}>{totPl.toLocaleString("nl-NL")}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+              }
+            </div>
+          );
+        })()}
+
+        {tab==="pakbonnen"&&(
+          <div style={{textAlign:"center",color:subtekst,padding:60}}>
+            <div style={{fontSize:36,marginBottom:10}}>📦</div>
+            <div style={{fontSize:14}}>Pakbonnen wachtrij</div>
+            <div style={{fontSize:12,marginTop:6}}>Zet pakbonnen klaar via een order → Pakbon &amp; Geleverd</div>
+          </div>
+        )}
 
         {tab==="matrix" && (
           <MatrixFilterPaneel
@@ -1626,18 +1759,98 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef }) {
                           }}>Afleverbon</button>
                         {data.afleverNr&&<span style={{background:"#dbeafe",color:"#1d4ed8",borderRadius:4,padding:"3px 6px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>#{data.afleverNr}</span>}
                       </div>
-                      {/* Pakbon + nr op 1 regel */}
-                      <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                        <button style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",flex:1}}
-                          onClick={()=>{
-                            if(!data.id&&!data.klantId) return;
-                            const bestaandeNrs=orders.filter(o=>o.pakbonNr).map(o=>Number(o.pakbonNr)||0);
-                            const volgendNr=bestaandeNrs.length>0?Math.max(...bestaandeNrs)+1:1;
-                            const bijgewerkt={...data,pakbonNr:String(volgendNr).padStart(4,"0")};
-                            if(data.id){setOrders(orders.map(o=>o.id===data.id?bijgewerkt:o));setData(bijgewerkt);}
-                          }}>Pakbon</button>
-                        {data.pakbonNr&&<span style={{background:"#cffafe",color:"#0891b2",borderRadius:4,padding:"3px 6px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>#{data.pakbonNr}</span>}
-                      </div>
+                      {/* Pakbon — afleverdatum invullen, printen, dan geleverd */}
+                      {data.bevestigingNr&&(
+                        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                          <div style={{fontSize:10,color:subtekst,fontWeight:600}}>Afleverdatum</div>
+                          <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                            <input type="date" style={{...gs.input,fontSize:11,flex:1}}
+                              value={data.afleverdatum||""}
+                              onChange={e=>{
+                                const bijgewerkt={...data,afleverdatum:e.target.value};
+                                setData(bijgewerkt);
+                                if(data.id) setOrders(orders.map(o=>o.id===data.id?bijgewerkt:o));
+                              }}
+                            />
+                            {data.afleverdatum&&(
+                              <span style={{fontSize:10,color:subtekst,whiteSpace:"nowrap"}}>
+                                wk {weekLabel(data.afleverdatum)}
+                              </span>
+                            )}
+                          </div>
+                          {data.afleverdatum&&(
+                            <button style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer"}}
+                              onClick={()=>{
+                                let pakbon=data.pakbonNr;
+                                if(!pakbon){
+                                  const nrs=orders.filter(o=>o.pakbonNr).map(o=>Number(o.pakbonNr)||0);
+                                  pakbon=String((nrs.length?Math.max(...nrs):0)+1).padStart(4,"0");
+                                }
+                                const bijgewerkt={...data,pakbonNr:pakbon,status:"geleverd"};
+                                setData(bijgewerkt);
+                                if(data.id) setOrders(orders.map(o=>o.id===data.id?bijgewerkt:o));
+                                // Print pakbon
+                                const kl=klanten.find(k=>k.id===data.klantId);
+                                const bd=bedrijf||{};
+                                const aflDatum=new Date(data.afleverdatum).toLocaleDateString("nl-NL");
+                                const regels=data.regels||[];
+                                const rijen=regels.map((r,i)=>{
+                                  const vd=verpDef.find(v=>v.naam===r.verpakking);
+                                  const pl=(vd?.aantal||0)*r.aantal;
+                                  const bg=i%2===0?"#fff":"#f9fcfb";
+                                  return "<tr style='background:"+bg+"'>"
+                                    +"<td style='padding:5px 8px;border:1px solid #eee'>"+r.gewas+"</td>"
+                                    +"<td style='padding:5px 8px;border:1px solid #eee'>"+r.soort+"</td>"
+                                    +"<td style='padding:5px 8px;border:1px solid #eee'>"+r.verpakking+"</td>"
+                                    +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right'>"+r.aantal+"</td>"
+                                    +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right;font-weight:700'>"+pl.toLocaleString("nl-NL")+"</td>"
+                                    +"</tr>";
+                                }).join("");
+                                const totPlanten=regels.reduce((s,r)=>{const vd=verpDef.find(v=>v.naam===r.verpakking);return s+(vd?.aantal||0)*r.aantal;},0);
+                                const totTrays=regels.reduce((s,r)=>s+r.aantal,0);
+                                const logoHtml=bd.logo?"<img src='"+bd.logo+"' style='max-height:60px;max-width:140px;object-fit:contain'/>":"";
+                                const html="<!DOCTYPE html><html><head><meta charset='UTF-8'>"
+                                  +"<style>@page{size:A4;margin:15mm} body{font-family:Arial,sans-serif;font-size:11px;color:#222;margin:0}"
+                                  +"table{border-collapse:collapse;width:100%} @media print{button{display:none}}"
+                                  +".sig{border-top:1px solid #999;margin-top:60px;padding-top:4px;font-size:10px;color:#666;width:200px;display:inline-block}"
+                                  +"</style></head><body>"
+                                  // Één regel: logo links, klant+pakbon+datum rechts
+                                  +"<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid #2d6a4f'>"
+                                    +"<div>"+logoHtml+"</div>"
+                                    +"<div style='text-align:right;font-size:11px;line-height:1.8'>"
+                                      +"<div style='font-size:14px;font-weight:700'>"+( kl?.naam||"")+"</div>"
+                                      +"<div>Pakbon <strong>#"+pakbon+"</strong> &nbsp;&nbsp; Afleverdatum: <strong>"+aflDatum+"</strong></div>"
+                                    +"</div>"
+                                  +"</div>"
+                                  // Tabel
+                                  +"<table><thead><tr>"
+                                    +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Gewas</th>"
+                                    +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Soort</th>"
+                                    +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Fust</th>"
+                                    +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Trays</th>"
+                                    +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Planten</th>"
+                                  +"</tr></thead><tbody>"+rijen+"</tbody>"
+                                  +"<tfoot><tr style='background:#e8f5ee;font-weight:700'>"
+                                    +"<td colspan='3' style='padding:5px 8px;border:1px solid #c8e6c9;color:#2d6a4f;border-top:2px solid #2d6a4f'>Totaal</td>"
+                                    +"<td style='padding:5px 8px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f;border-top:2px solid #2d6a4f'>"+totTrays+"</td>"
+                                    +"<td style='padding:5px 8px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f;border-top:2px solid #2d6a4f'>"+totPlanten.toLocaleString("nl-NL")+"</td>"
+                                  +"</tr></tfoot></table>"
+                                  // Handtekening
+                                  +"<div style='margin-top:40px;display:flex;gap:60px'>"
+                                    +"<div class='sig'>Ontvangen door</div>"
+                                    +"<div class='sig'>Handtekening</div>"
+                                    +"<div class='sig'>Datum</div>"
+                                  +"</div>"
+                                  +"</body></html>";
+                                const w=window.open("","_blank");
+                                if(w){w.document.open();w.document.write(html);w.document.close();setTimeout(()=>w.print(),400);}
+                              }}>
+                              🚚 Pakbon &amp; Geleverd
+                            </button>
+                          )}
+                          {data.pakbonNr&&<span style={{background:"#e8f5ee",color:groen,borderRadius:4,padding:"2px 6px",fontSize:11,fontWeight:700}}>Pakbon #{data.pakbonNr}</span>}
+                        </div>
+                      )}
                       {/* Factuur + nr op 1 regel */}
                       <div style={{display:"flex",gap:4,alignItems:"center"}}>
                         <button style={{background:"#b45309",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",flex:1}}
@@ -1650,19 +1863,6 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef }) {
                           }}>Factuur</button>
                         {data.factuurNr&&<span style={{background:"#fef3c7",color:"#b45309",borderRadius:4,padding:"3px 6px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>#{data.factuurNr}</span>}
                       </div>
-                      {/* Bijbestelling — wis bevestigingsnummer */}
-                      {data.bevestigingNr&&(
-                        <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                          <button style={{background:"#f59e0b",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",flex:1}}
-                            onClick={()=>{
-                              if(!window.confirm("Bijbestelling: bevestigingsnummer wissen zodat order opnieuw bevestigd kan worden?")) return;
-                              const klantId=data.klantId;
-                              const bijgewerkt=orders.map(o=>o.klantId===klantId&&o.bevestigingNr?{...o,bevestigingNr:null,bevestigdOp:null}:o);
-                              setOrders(bijgewerkt);
-                              setData({...data,bevestigingNr:null,bevestigdOp:null});
-                            }}>Bijbestelling</button>
-                        </div>
-                      )}
                       {/* Opslaan + Sluiten */}
                       <div style={{display:"flex",gap:4,marginTop:2}}>
                         <button style={{...gs.knopPrimair,flex:1,padding:"4px",fontSize:11}} onClick={opslaan}>💾 Opslaan</button>
@@ -1931,8 +2131,8 @@ function Teeltduur({ gewassen, verpDef, teeltduur, setTeeltduur }) {
         <div style={{fontSize:11, fontWeight:700, color:groen, marginBottom:8, textTransform:"uppercase", letterSpacing:1}}>Teeltduur</div>
         <div style={{fontSize:11, color:subtekst, lineHeight:1.7}}>
           Weken vóór levering:<br/>
-          <strong style={{color:"#1d4ed8"}}>Uitzaai</strong> = start teelt<br/>
-          <strong style={{color:"#0891b2"}}>Inboet</strong> = aanvullen<br/><br/>
+          <strong style={{color:"#2d6a4f"}}>Uitzaai</strong> = start teelt<br/>
+          <strong style={{color:"#2d6a4f"}}>Inboet</strong> = aanvullen<br/><br/>
           Bijv. levering week 25:<br/>
           Uitzaai 9 → week 16<br/>
           Inboet 2 → week 23
@@ -1984,19 +2184,20 @@ function Teeltduur({ gewassen, verpDef, teeltduur, setTeeltduur }) {
                   <thead>
                     <tr>
                       <th style={{...mTH, textAlign:"left"}} rowSpan={2}>Soort</th>
-                      <th style={{...mTH, textAlign:"center", color:"#1d4ed8", background:"#dbeafe"}} colSpan={verpDef.length}>Uitzaai (weken vóór)</th>
-                      <th style={{...mTH, textAlign:"center", color:"#0891b2", background:"#cffafe"}} colSpan={verpDef.length}>Inboet (weken vóór)</th>
+                      <th style={{...mTH, textAlign:"center", color:"#2d6a4f", background:"#c8e6c9"}} colSpan={verpDef.length}>Uitzaai (weken vóór)</th>
+                      <th style={{width:8,background:"#fff",border:"none"}} rowSpan={2}></th>
+                      <th style={{...mTH, textAlign:"center", color:"#2d6a4f", background:"#c8e6c9"}} colSpan={verpDef.length}>Inboet (weken vóór)</th>
                     </tr>
                     <tr>
-                      {verpDef.map(v=><th key={v.naam} style={{...mTH, textAlign:"right", fontSize:10, background:"#dbeafe", color:"#1d4ed8"}}>{v.naam}</th>)}
-                      {verpDef.map(v=><th key={v.naam+"i"} style={{...mTH, textAlign:"right", fontSize:10, background:"#cffafe", color:"#0891b2"}}>{v.naam}</th>)}
+                      {verpDef.map(v=><th key={v.naam} style={{...mTH, textAlign:"right", fontSize:10, background:"#c8e6c9", color:"#2d6a4f"}}>{v.naam}</th>)}
+                      {verpDef.map(v=><th key={v.naam+"i"} style={{...mTH, textAlign:"right", fontSize:10, background:"#c8e6c9", color:"#2d6a4f"}}>{v.naam}</th>)}
                     </tr>
                     {/* Bulk invulrij — per kolom */}
-                    <tr style={{background:"#f0f9ff"}}>
+                    <tr style={{background:"#f0fff4"}}>
                       <td style={{...mTD,fontSize:10,color:subtekst,fontStyle:"italic",padding:"2px 6px"}}>Alle soorten:</td>
                       {verpDef.map(v=>(
-                        <td key={v.naam} style={{...mTD,padding:"2px 3px",background:"#dbeafe"}}>
-                          <input style={{...iS,width:42,textAlign:"right",background:"#bfdbfe"}} type="number" min="0" max="52" placeholder="—"
+                        <td key={v.naam} style={{...mTD,padding:"2px 3px",background:"#c8e6c9"}}>
+                          <input style={{...iS,width:42,textAlign:"right",background:"#e8f5ee"}} type="number" min="0" max="52" placeholder="—"
                             onBlur={e=>{if(e.target.value){
                               setTeeltduur(huidig=>{
                                 const nieuw=[...huidig];
@@ -2013,9 +2214,10 @@ function Teeltduur({ gewassen, verpDef, teeltduur, setTeeltduur }) {
                           />
                         </td>
                       ))}
+                      <td style={{width:8,background:"#fff",border:"none"}}></td>
                       {verpDef.map(v=>(
-                        <td key={v.naam+"i"} style={{...mTD,padding:"2px 3px",background:"#cffafe"}}>
-                          <input style={{...iS,width:42,textAlign:"right",background:"#a5f3fc"}} type="number" min="0" max="52" placeholder="—"
+                        <td key={v.naam+"i"} style={{...mTD,padding:"2px 3px",background:"#c8e6c9"}}>
+                          <input style={{...iS,width:42,textAlign:"right",background:"#e8f5ee"}} type="number" min="0" max="52" placeholder="—"
                             onBlur={e=>{if(e.target.value){
                               setTeeltduur(huidig=>{
                                 const nieuw=[...huidig];
@@ -2044,6 +2246,7 @@ function Teeltduur({ gewassen, verpDef, teeltduur, setTeeltduur }) {
                               onSave={val=>setDuur(gw.naam,s,v.naam,"uitzaai",val)} />
                           </td>
                         ))}
+                        <td style={{width:8,background:"#fff",border:"none"}}></td>
                         {verpDef.map(v => (
                           <td key={v.naam+"i"} style={{...mTD, textAlign:"right", padding:"2px 4px"}}>
                             <TeeltduurInput waarde={getDuur(gw.naam,s,v.naam,"inboet")} style={iS}
@@ -2080,7 +2283,10 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
   const [aantalWeken, setAantalWeken] = useState(5);
   const [matrixFust, setMatrixFust] = useState("");
   const [weergave,   setWeergave]   = useState("beide");
+  const [planTab, setPlanTab] = useState("werklijst");
   const [printWerklijst, setPrintWerklijst] = useState(null);
+  const [pakbonWachtrij, setPakbonWachtrij] = useState([]);
+  const [transportWeek, setTransportWeek] = useState(volgLabel);
   const [realisatie, setRealisatie] = useState(()=>laad("ta_realisatie", {}));
   useEffect(()=>bewaar("ta_realisatie",realisatie),[realisatie]);
   // Sla realisatie op in Firebase ook
@@ -2256,10 +2462,18 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
 
       {/* Planning overzicht */}
       <div style={{flex:1, overflowY:"auto", padding:14}}>
-  
-  
-  
-      {gesorteerdeWeken.length===0 && (
+
+      {/* Tabs */}
+      <div style={{display:"flex",gap:4,marginBottom:12,borderBottom:`2px solid ${rand}`,paddingBottom:0}}>
+        {[["werklijst","📋 Werklijsten"]].map(([id,lbl])=>(
+          <button key={id} onClick={()=>setPlanTab(id)}
+            style={{padding:"5px 12px",border:"none",borderRadius:"4px 4px 0 0",cursor:"pointer",fontSize:12,fontWeight:planTab===id?700:400,
+              background:planTab===id?groen:"#f3f4f6",color:planTab===id?wit:subtekst}}>
+            {lbl}
+          </button>
+        ))}
+      </div>
+      {planTab==="werklijst"&&gesorteerdeWeken.length===0 && (
           <div style={{textAlign:"center",color:subtekst,padding:60}}>
             <div style={{fontSize:40,marginBottom:10}}>🌱</div>
             <div>Geen teeltplanning gevonden.<br/>Stel eerst teeltduur in bij 🕐 Teeltduur.</div>
@@ -2295,14 +2509,14 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                 if(!toonZaai && !toonInboet) return null;
 
                 function renderTabel(rijen, isZaai, veld, label) {
-                  const kleurBg = isZaai?"#dbeafe":"#cffafe";
-                  const kleurTxt = isZaai?"#1d4ed8":"#0891b2";
+                  const kleurBg = isZaai?"#c8e6c9":"#e8f5ee";
+                  const kleurTxt = isZaai?"#2d6a4f":"#2d6a4f";
                   const actieType = isZaai?"zaai":"inboet";
                   return (
                     <div style={{border:`1px solid ${rand}`,borderTop:"none",marginBottom:2}}>
                       <div style={{background:kleurBg,padding:"3px 10px",fontSize:11,fontWeight:700,color:kleurTxt,display:"flex",alignItems:"center",gap:8}}>
                         <span>{isZaai?"🌰 Uitzaai":"🪴 Inboet"}</span>
-                        <button style={{background:isZaai?"#1d4ed8":"#0891b2",color:"#fff",border:"none",borderRadius:4,padding:"1px 8px",cursor:"pointer",fontSize:10,fontWeight:600}}
+                        <button style={{background:isZaai?"#2d6a4f":"#2d6a4f",color:"#fff",border:"none",borderRadius:4,padding:"1px 8px",cursor:"pointer",fontSize:10,fontWeight:600}}
                           onClick={()=>setPrintWerklijst({wk,blok,type:isZaai?"zaai":"inboet"})}>🖨️ Werklijst</button>
                       </div>
                       <table style={{width:"auto"}}>
@@ -2435,7 +2649,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                 if(relevRijen.length===0) return null;
                 return (
                   <div key={actieType} style={{marginBottom:12}}>
-                    <div style={{fontSize:11,fontWeight:700,color:actieType==="zaai"?"#1d4ed8":"#0891b2",marginBottom:4}}>{label}</div>
+                    <div style={{fontSize:11,fontWeight:700,color:actieType==="zaai"?"#2d6a4f":"#2d6a4f",marginBottom:4}}>{label}</div>
                     <table style={{borderCollapse:"collapse",fontSize:11}}>
                       <thead>
                         <tr>
@@ -2475,9 +2689,15 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
           </div>
         );
       })()}
-      {printWerklijst&&<WerklijstPrint data={printWerklijst} bedrijf={bedrijf} onSluit={()=>setPrintWerklijst(null)} />}
+      </div>
     </div>
+    {printWerklijst&&<WerklijstPrint data={printWerklijst} bedrijf={bedrijf} gewassen={gewassen} onSluit={()=>setPrintWerklijst(null)} />}
   );
+}
+
+function getInternNr(gewassen, gewas, soort) {
+  const gw = (gewassen||[]).find(g=>g.naam===gewas);
+  return (gw?.internNrs||{})[soort]||"";
 }
 
 // MODULE — KIEMKRACHT
@@ -2594,7 +2814,7 @@ function Kiemkracht({ gewassen, kiemkracht, setKiemkracht }) {
                       <td style={{...mTD,fontSize:10,color:subtekst,fontStyle:"italic"}}>Vul alle soorten:</td>
                       <td style={{...mTD,textAlign:"right"}}>
                         <div style={{display:"flex",alignItems:"center",gap:3,justifyContent:"flex-end"}}>
-                          <input style={{...iS,width:56,textAlign:"right",background:"#d4edda"}} type="number" min="0" max="100" placeholder="—"
+                          <input style={{...iS,width:56,textAlign:"right",background:"#c8e6c9"}} type="number" min="0" max="100" placeholder="—"
                             value={vulAlles[gw.naam]||''}
                             onChange={e=>setVulAlles({...vulAlles,[gw.naam]:e.target.value})}
                             onBlur={e=>{if(e.target.value) vulGewas(gw.naam,gw.soorten,e.target.value);}}
@@ -2714,7 +2934,7 @@ function KlantMatrixPrint({ data, bedrijf, verpDef, onSluit }) {
                   <th style={{...TH,fontSize:10,textAlign:"left",minWidth:130}}>Soort</th>
                   <th style={{...TH,fontSize:10,textAlign:"left",minWidth:70}}>Fust</th>
                   {weken.map(wk=><th key={wk} style={{...TH,fontSize:10,textAlign:"right",minWidth:60}}>{wk}</th>)}
-                  <th style={{...TH,fontSize:10,textAlign:"right",minWidth:70,background:"#d4edda"}}>Totaal</th>
+                  <th style={{...TH,fontSize:10,textAlign:"right",minWidth:70,background:"#c8e6c9"}}>Totaal</th>
                 </tr>
               </thead>
               <tbody>
@@ -2748,7 +2968,7 @@ function KlantMatrixPrint({ data, bedrijf, verpDef, onSluit }) {
                     </td>;
                   })}
                   {(()=>{let tp=0,tt=0;weken.forEach(wk=>{const t=weekTotaal(wk);tp+=t.planten;tt+=t.trays;});
-                    return <td style={{...TD,fontSize:10,textAlign:"right",color:groen,background:"#d4edda",borderTop:"2px solid #2d6a4f",fontWeight:700}}>
+                    return <td style={{...TD,fontSize:10,textAlign:"right",color:groen,background:"#c8e6c9",borderTop:"2px solid #2d6a4f",fontWeight:700}}>
                       <div>{tp.toLocaleString("nl-NL")}</div><div style={{fontSize:9,color:subtekst}}>{tt} tr.</div>
                     </td>;
                   })()}
@@ -2966,7 +3186,7 @@ function Bevestiging({ klanten, gewassen, orders, setOrders, verpDef, bedrijf })
                   <th style={{...th,textAlign:"left",width:70}}>Fust</th>
                   <th style={{...th,width:50}}>€/st</th>
                   {matrixWeken.map(wk=><th key={wk} style={{...th,width:65}}>{wk}</th>)}
-                  <th style={{...th,width:65,background:"#d4edda"}}>Totaal</th>
+                  <th style={{...th,width:65,background:"#c8e6c9"}}>Totaal</th>
                 </tr>
               </thead>
               <tbody>
@@ -2990,7 +3210,7 @@ function Bevestiging({ klanten, gewassen, orders, setOrders, verpDef, bedrijf })
                     const t=selOrders.filter(o=>weekLabel(o.leverdatum)===wk).reduce((s,o)=>s+plantenTotaal(o.regels),0);
                     return <td key={wk} style={{...td,color:groen,fontWeight:700,borderTop:"2px solid #2d6a4f"}}>{t.toLocaleString("nl-NL")}</td>;
                   })}
-                  <td style={{...td,color:groen,fontWeight:700,background:"#d4edda",borderTop:"2px solid #2d6a4f"}}>{selOrders.reduce((s,o)=>s+plantenTotaal(o.regels),0).toLocaleString("nl-NL")}</td>
+                  <td style={{...td,color:groen,fontWeight:700,background:"#c8e6c9",borderTop:"2px solid #2d6a4f"}}>{selOrders.reduce((s,o)=>s+plantenTotaal(o.regels),0).toLocaleString("nl-NL")}</td>
                 </tr>
               </tfoot>
             </table>
@@ -3626,7 +3846,7 @@ function MultiBevestigingPrint({ data, bedrijf, verpDef, onSluit, onAkkoord }) {
 // ════════════════════════════════════════════════════════
 // WERKLIJST PRINT
 // ════════════════════════════════════════════════════════
-function WerklijstPrint({ data, bedrijf, onSluit }) {
+function WerklijstPrint({ data, bedrijf, gewassen, onSluit }) {
   const { wk, blok, type } = data;
   const isZaai = type === "zaai";
   const rijen = Object.values(isZaai ? blok.zaai : blok.inboet);
@@ -3645,15 +3865,15 @@ function WerklijstPrint({ data, bedrijf, onSluit }) {
   function printDoc() {
     const el = document.getElementById("wl-print-inhoud");
     const w = window.open("","_blank");
-    w.document.write(`<html><head><title>${titel} ${wk}</title><style>
-      body{font-family:Arial,sans-serif;font-size:11px;color:#1a1a1a;padding:20px;margin:0}
-      table{border-collapse:collapse;width:100%}
-      .titelbalk{background:#444!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;padding:9px 14px;display:flex;justify-content:space-between;align-items:center;border-radius:4px 4px 0 0;margin-bottom:0}
-      th{background:#e0e0e0!important;color:#000;padding:6px 8px;text-align:left;font-size:11px;border:1px solid #bbb;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-      td{padding:7px 8px;border:1px solid #ddd;font-size:11px;vertical-align:top}
-      .totaalrij td{background:#e8e8e8!important;font-weight:700;border-top:2px solid #444;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-      @media print{button{display:none}}
-    </style></head><body>${el.innerHTML}</body></html>`);
+    const css = "body{font-family:Arial,sans-serif;font-size:11px;color:#1a1a1a;padding:20px;margin:0}"
+      +"table{border-collapse:collapse;width:100%}"
+      +".titelbalk{background:#444!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;padding:9px 14px;display:flex;justify-content:space-between;align-items:center;border-radius:4px 4px 0 0;margin-bottom:0}"
+      +"th{background:#e0e0e0!important;color:#000;padding:6px 8px;text-align:left;font-size:11px;border:1px solid #bbb;-webkit-print-color-adjust:exact;print-color-adjust:exact}"
+      +"td{padding:7px 8px;border:1px solid #ddd;font-size:11px;vertical-align:top}"
+      +".totaalrij td{background:#e8e8e8!important;font-weight:700;border-top:2px solid #444;-webkit-print-color-adjust:exact;print-color-adjust:exact}"
+      +".pagina-einde{page-break-after:always;-webkit-column-break-after:always}"
+      +"@media print{button{display:none}}";
+    w.document.write("<html><head><title>"+titel+" "+wk+"</title><style>"+css+"</style></head><body>"+el.innerHTML+"</body></html>");
     w.document.close();
     w.print();
   }
@@ -3674,8 +3894,8 @@ function WerklijstPrint({ data, bedrijf, onSluit }) {
 
 
           {/* Per fust een blok — titelbalk bevat week + fust + totaal */}
-          {Object.entries(perFust).map(([fust, fustrijen])=>(
-            <div key={fust} style={{marginBottom:24}}>
+          {Object.entries(perFust).map(([fust, fustrijen], idx, arr)=>(
+            <div key={fust} style={{marginBottom:24,pageBreakInside:"avoid",breakInside:"avoid"}}>
               {/* Titelbalk: grijs voor zwart-wit print */}
               <div style={{background:"#444",color:"#fff",padding:"9px 14px",borderRadius:"4px 4px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:0}}>
                 <div style={{fontWeight:700,fontSize:14}}>{isZaai?"🌰":"🪴"} WERKLIJST NODIG — {fust}</div>
@@ -3687,6 +3907,7 @@ function WerklijstPrint({ data, bedrijf, onSluit }) {
                   <tr>
                     <th style={{padding:"6px 8px",background:"#e8f5ee",color:"#2d6a4f",border:"1px solid #c8e6c9",textAlign:"left",minWidth:120}}>Gewas</th>
                     <th style={{padding:"6px 8px",background:"#e8f5ee",color:"#2d6a4f",border:"1px solid #c8e6c9",textAlign:"left",minWidth:160}}>Soort</th>
+                    <th style={{padding:"6px 8px",background:"#e8f5ee",color:"#2d6a4f",border:"1px solid #c8e6c9",textAlign:"left",minWidth:80}}>Nr.</th>
                     <th style={{padding:"6px 8px",background:"#e8f5ee",color:"#2d6a4f",border:"1px solid #c8e6c9",textAlign:"right",minWidth:60}}>Nodig</th>
                     <th style={{padding:"6px 8px",background:"#fffbe6",color:"#854d0e",border:"1px solid #c8e6c9",textAlign:"right",minWidth:80}}>Gedaan</th>
                     <th style={{padding:"6px 8px",background:"#f9fafb",color:"#555",border:"1px solid #c8e6c9",textAlign:"left",minWidth:150}}>Opmerking</th>
@@ -3697,6 +3918,7 @@ function WerklijstPrint({ data, bedrijf, onSluit }) {
                     <tr key={i} style={{background:i%2===0?"#fff":"#f9fcfb"}}>
                       <td style={{padding:"7px 8px",border:"1px solid #ddd"}}><strong>{r.gewas}</strong></td>
                       <td style={{padding:"7px 8px",border:"1px solid #ddd"}}>{r.soort}</td>
+                      <td style={{padding:"7px 8px",border:"1px solid #ddd",color:subtekst,fontSize:10}}>{getInternNr(gewassen,r.gewas,r.soort)}</td>
                       <td style={{padding:"7px 8px",border:"1px solid #ddd",textAlign:"right",fontWeight:700,color:kleur,fontSize:13}}>{(isZaai?r.zaaiTrays:r.inboetTrays)||0}</td>
                       <td style={{padding:"7px 8px",border:"1px solid #ddd"}}></td>
                       <td style={{padding:"7px 8px",border:"1px solid #ddd"}}></td>
@@ -4642,45 +4864,89 @@ function App() {
   const [orders,setOrders]     = useState(()=>laad("ta_orders",   []));
   const [verpDef,setVerpDef]   = useState(()=>zorgVerpDef(laad("ta_verp", VERPAKKINGEN_DEF)));
   const [syncStatus,setSyncStatus] = useState("⏳ Verbinden met Firebase...");
-  const [geladen,setGeladen]   = useState(false);
+  const geladen = React.useRef(false);
 
-  // Laad data uit Firebase bij opstarten
+  // Laad data: localStorage is primair, Firebase alleen als localStorage leeg is
   useEffect(()=>{
     async function laadVanFirebase() {
-      setSyncStatus("⏳ Data laden...");
+      // Check of localStorage al data heeft
+      const heeftLokaal = (laad("ta_klanten",[]).length > 0) ||
+                          (laad("ta_orders",[]).length > 0) ||
+                          (laad("ta_teeltduur",[]).length > 0) ||
+                          (laad("ta_gewassen",[]).length > 0);
+
+      if(heeftLokaal) {
+        // localStorage heeft data — Firebase niet nodig
+        setSyncStatus("✅ Lokale data geladen");
+        geladen.current = true;
+        // Sync op achtergrond zonder te lezen
+        return;
+      }
+
+      // Geen lokale data — laad uit Firebase (eerste keer)
+      setSyncStatus("⏳ Data laden uit cloud...");
       try {
         const [k,g,p,o,v,km,td,zi] = await Promise.all([
           fbLoadAll("klanten"), fbLoadAll("gewassen"), fbLoadAll("prijzen"),
-          fbLoadAll("orders"),  fbLoadAll("verpakkingen"), fbLoadAll("kiemkracht"), fbLoadAll("teeltduur"), fbLoadAll("zaadinkoop")
+          fbLoadAll("orders"), fbLoadAll("verpakkingen"), fbLoadAll("kiemkracht"), fbLoadAll("teeltduur"), fbLoadAll("zaadinkoop")
         ]);
-        if(k) setKlanten(k);
-        if(g) setGewassen(g);
-        if(p) { console.log("Prijzen geladen:", p.length); setPrijzen(p); }
-        if(o) setOrders(o.map(ord=>({...ord,regels:(ord.regels||[]).map(r=>({...r,aantal:Math.round(Number(r.aantal)||1)}))}))); 
-        if(v) setVerpDef(zorgVerpDef(v));
-        if(km) setKiemkracht(km);
-        if(td) setTeeltduur(td);
-        if(zi) setZaadinkoop(zi);
-        setSyncStatus("✅ Firebase verbonden ("+(o?.length||0)+" orders, "+(zi?.length||0)+" inkopen)");
+        if(k&&k.length) setKlanten(k);
+        if(g&&g.length) setGewassen(g);
+        if(p&&p.length) setPrijzen(p);
+        if(o&&o.length) setOrders(o.map(ord=>({...ord,regels:(ord.regels||[]).map(r=>({...r,aantal:Math.round(Number(r.aantal)||1)}))})));
+        if(v&&v.length) setVerpDef(zorgVerpDef(v));
+        if(km&&km.length) setKiemkracht(km);
+        if(td&&td.length) setTeeltduur(td);
+        if(zi&&zi.length) setZaadinkoop(zi);
+        setSyncStatus("✅ Cloud data geladen");
       } catch(e) {
-        setSyncStatus("⚠️ Offline — lokale data");
+        window._fbQuotaVol = true;
+        const isQuota=String(e).includes("exhausted")||String(e).includes("quota");
+        setSyncStatus(isQuota?"⚠️ Firebase quota vol — lokale data actief":"⚠️ Offline — lokale data");
+        console.warn("Firebase fout bij laden:", e.code||e.message||e);
       }
-      setGeladen(true);
+      geladen.current = true;
     }
+    geladen.current = true; // Bescherm localStorage altijd
     if(window._firebaseReady) laadVanFirebase();
     else window.addEventListener("firebaseReady", laadVanFirebase, {once:true});
   }, []);
 
   // Sla op naar Firebase + localStorage bij elke wijziging (alleen na init)
-  useEffect(()=>{ if(!geladen) return; bewaar("ta_klanten",klanten); fbSaveAll("klanten",klanten).then(()=>setSyncStatus("☁️ Opgeslagen")); },[klanten]);
-  useEffect(()=>{ if(!geladen) return; bewaar("ta_gewassen",gewassen); fbSaveAll("gewassen",gewassen).then(()=>setSyncStatus("☁️ Opgeslagen")); },[gewassen]);
-  useEffect(()=>{ if(!geladen) return; bewaar("ta_prijzen",prijzen); fbSaveAll("prijzen",prijzen).then(()=>setSyncStatus("☁️ Opgeslagen")); },[prijzen]);
-  useEffect(()=>{ if(!geladen) return; bewaar("ta_orders",orders); fbSaveAll("orders",orders).then(()=>setSyncStatus("☁️ Opgeslagen")); },[orders]);
-  useEffect(()=>{ if(!geladen) return; bewaar("ta_verp",verpDef); fbSaveAll("verpakkingen",verpDef).then(()=>setSyncStatus("☁️ Opgeslagen")); },[verpDef]);
-  useEffect(()=>{ if(!geladen) return; bewaar("ta_trayinkoop",trayinkoop); fbSaveAll("trayinkoop",[trayinkoop]).then(()=>setSyncStatus("☁️ Opgeslagen")); },[trayinkoop]);
-  useEffect(()=>{ bewaar("ta_bedrijf",bedrijf); },[bedrijf]);
-  useEffect(()=>{ bewaar("ta_teeltduur",teeltduur); fbSaveAll("teeltduur",teeltduur).then(()=>setSyncStatus("☁️ Opgeslagen")); },[teeltduur]);
-  useEffect(()=>{ bewaar("ta_kiemkracht",kiemkracht); fbSaveAll("kiemkracht",kiemkracht).then(()=>setSyncStatus("☁️ Opgeslagen")); },[kiemkracht]);
+  useEffect(()=>{ if(!geladen.current) return; bewaar("ta_klanten",klanten); fbSaveAll("klanten",klanten).then(()=>setSyncStatus("☁️ Opgeslagen")); },[klanten]);
+  useEffect(()=>{ if(!geladen.current) return; bewaar("ta_gewassen",gewassen); fbSaveAll("gewassen",gewassen).then(()=>setSyncStatus("☁️ Opgeslagen")); },[gewassen]);
+  useEffect(()=>{ if(!geladen.current) return; bewaar("ta_prijzen",prijzen); fbSaveAll("prijzen",prijzen).then(()=>setSyncStatus("☁️ Opgeslagen")); },[prijzen]);
+  useEffect(()=>{ if(!geladen.current) return; bewaar("ta_orders",orders); fbSaveAll("orders",orders).then(()=>setSyncStatus("☁️ Opgeslagen")); },[orders]);
+  useEffect(()=>{ if(!geladen.current) return; bewaar("ta_verp",verpDef); fbSaveAll("verpakkingen",verpDef).then(()=>setSyncStatus("☁️ Opgeslagen")); },[verpDef]);
+  useEffect(()=>{ if(!geladen.current) return; bewaar("ta_trayinkoop",trayinkoop); fbSaveAll("trayinkoop",[trayinkoop]).then(()=>setSyncStatus("☁️ Opgeslagen")); },[trayinkoop]);
+  useEffect(()=>{ if(!geladen.current) return; bewaar("ta_bedrijf",bedrijf); },[bedrijf]);
+  useEffect(()=>{ if(!geladen.current) return; console.log("SAVE teeltduur",teeltduur.length); bewaar("ta_teeltduur",teeltduur); fbSaveAll("teeltduur",teeltduur).then(()=>setSyncStatus("☁️ Opgeslagen")); },[teeltduur]);
+  useEffect(()=>{ if(!geladen.current) return; console.log("SAVE kiemkracht",kiemkracht.length); bewaar("ta_kiemkracht",kiemkracht); fbSaveAll("kiemkracht",kiemkracht).then(()=>setSyncStatus("☁️ Opgeslagen")); },[kiemkracht]);
+
+  async function syncNaar() {
+    if(window._fbQuotaVol) { setSyncStatus("⚠️ Firebase quota vol"); return; }
+    setSyncStatus("⏳ Synchroniseren...");
+    try {
+      await Promise.all([
+        fbSaveAll("klanten",klanten), fbSaveAll("gewassen",gewassen),
+        fbSaveAll("prijzen",prijzen), fbSaveAll("orders",orders),
+        fbSaveAll("verpakkingen",verpDef), fbSaveAll("kiemkracht",kiemkracht),
+        fbSaveAll("teeltduur",teeltduur), fbSaveAll("zaadinkoop",zaadinkoop)
+      ]);
+      setSyncStatus("✅ Gesynchroniseerd "+new Date().toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"}));
+    } catch(e) {
+      window._fbQuotaVol = true;
+      setSyncStatus("⚠️ Sync mislukt");
+    }
+  }
+
+  // Automatische sync elk uur
+  useEffect(()=>{
+    const interval = setInterval(()=>{
+      if(geladen.current && !window._fbQuotaVol) syncNaar();
+    }, 60 * 60 * 1000); // 1 uur
+    return ()=>clearInterval(interval);
+  }, [klanten, gewassen, prijzen, orders, verpDef, kiemkracht, teeltduur, zaadinkoop]);
 
   function reset(){
     const alles=["ta_klanten","ta_gewassen","ta_prijzen","ta_orders","ta_verp",
@@ -4700,12 +4966,12 @@ function App() {
     {id:"orders",      label:"📦 Orders"},
     {id:"zaadinkoop",  label:"🌰 Zaadinkoop"},
     {id:"planning",    label:"📅 Werklijsten"},
+    {id:"bevestiging", label:"✅ Bevestiging"},
   ];
   const menuRechts=[
     {id:"klanten",     label:"👤 Klanten"},
     {id:"teelten",     label:"🌱 Teelten"},
     {id:"prijzen",     label:"💰 Prijzen"},
-    {id:"bevestiging", label:"✅ Bevestiging"},
     {id:"teeltduur",   label:"🕐 Teeltduur"},
     {id:"kiemkracht",  label:"🌱 Kiemkracht"},
     {id:"instellingen",label:"⚙️ Instellingen"},
@@ -4733,6 +4999,8 @@ function App() {
         ))}
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>
           <span style={{color:"rgba(255,255,255,0.65)",fontSize:11}}>{syncStatus}</span>
+          <button style={{background:"rgba(255,255,255,0.15)",color:wit,border:"1px solid rgba(255,255,255,0.3)",borderRadius:5,padding:"3px 9px",cursor:"pointer",fontSize:11}}
+            onClick={syncNaar}>☁️ Sync</button>
         </div>
       </div>
       {pagina==="orders"       && <Orders      klanten={klanten} gewassen={gewassen} prijzen={prijzen} orders={orders} setOrders={setOrders} verpDef={verpDef} />}

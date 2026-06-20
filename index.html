@@ -1957,7 +1957,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
           );
         })() : (
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"60%",color:subtekst,gap:10}}>
-            <div style={{fontSize:40}}>📦</div><div>Selecteer een order of maak een nieuwe aan</div>
+            <div style={{fontSize:40}}>📦</div><div>Start met kiezen van een klant linksboven</div>
           </div>
         ))}
       </div>
@@ -3841,46 +3841,46 @@ function App() {
     telefoon:"010-1234567", email:"info@uwbedrijf.nl", website:"", iban:"NL00 BANK 0000 0000 00",
     kvk:"", btw:""
   }));
-  const [klanten,setKlanten]   = useState(()=>laad("ta_klanten",  SK));
-  const [gewassen,setGewassen] = useState(()=>laad("ta_gewassen", SG));
-  const [prijzen,setPrijzen]   = useState(()=>laad("ta_prijzen",  SP));
-  const [orders,setOrders]     = useState(()=>laad("ta_orders",   SO));
+  const [klanten,setKlanten]   = useState(()=>laad("ta_klanten",  []));
+  const [gewassen,setGewassen] = useState(()=>laad("ta_gewassen", []));
+  const [prijzen,setPrijzen]   = useState(()=>laad("ta_prijzen",  []));
+  const [orders,setOrders]     = useState(()=>laad("ta_orders",   []));
   const [verpDef,setVerpDef]   = useState(()=>zorgVerpDef(laad("ta_verp", VERPAKKINGEN_DEF)));
   const [syncStatus,setSyncStatus] = useState("⏳ Verbinden met Firebase...");
-  const [geladen,setGeladen]   = useState(false);
+  const geladen = React.useRef(false);
 
-  // Laad data uit Firebase bij opstarten
+  // Laad data: altijd uit Firebase bij start
   useEffect(()=>{
-    async function laadVanFirebase() {
+    async function laadData() {
       setSyncStatus("⏳ Data laden...");
       try {
         const [k,g,p,o,v,km,td] = await Promise.all([
           fbLoadAll("klanten"), fbLoadAll("gewassen"), fbLoadAll("prijzen"),
           fbLoadAll("orders"),  fbLoadAll("verpakkingen"), fbLoadAll("kiemkracht"), fbLoadAll("teeltduur")
         ]);
-        if(k) setKlanten(k);
-        if(g) setGewassen(g);
-        if(p) { console.log("Prijzen geladen:", p.length); setPrijzen(p); }
-        if(o) setOrders(o);
-        if(v) setVerpDef(zorgVerpDef(v));
-        if(km) setKiemkracht(km);
-        if(td) setTeeltduur(td);
-        setSyncStatus("✅ Firebase verbonden ("+(p?.length||0)+" prijzen)");
+        if(k&&k.length) { setKlanten(k); bewaar("ta_klanten",k); }
+        if(g&&g.length) { setGewassen(g); bewaar("ta_gewassen",g); }
+        if(p&&p.length) { setPrijzen(p); bewaar("ta_prijzen",p); }
+        if(o&&o.length) { setOrders(o); bewaar("ta_orders",o); }
+        if(v&&v.length) { setVerpDef(zorgVerpDef(v)); bewaar("ta_verp",v); }
+        if(km&&km.length) { setKiemkracht(km); bewaar("ta_kiemkracht",km); }
+        if(td&&td.length) { setTeeltduur(td); bewaar("ta_teeltduur",td); }
+        setSyncStatus("✅ Data geladen");
       } catch(e) {
         setSyncStatus("⚠️ Offline — lokale data");
       }
-      setGeladen(true);
+      setTimeout(()=>{ geladen.current = true; }, 500);
     }
-    if(window._firebaseReady) laadVanFirebase();
-    else window.addEventListener("firebaseReady", laadVanFirebase, {once:true});
+    if(window._firebaseReady) laadData();
+    else window.addEventListener("firebaseReady", laadData, {once:true});
   }, []);
 
   // Sla op naar Firebase + localStorage bij elke wijziging (alleen na init)
-  useEffect(()=>{ if(!geladen) return; bewaar("ta_klanten",klanten); fbSaveAll("klanten",klanten).then(()=>setSyncStatus("☁️ Opgeslagen")); },[klanten]);
-  useEffect(()=>{ if(!geladen) return; bewaar("ta_gewassen",gewassen); fbSaveAll("gewassen",gewassen).then(()=>setSyncStatus("☁️ Opgeslagen")); },[gewassen]);
-  useEffect(()=>{ if(!geladen) return; bewaar("ta_prijzen",prijzen); fbSaveAll("prijzen",prijzen).then(()=>setSyncStatus("☁️ Opgeslagen")); },[prijzen]);
-  useEffect(()=>{ if(!geladen) return; bewaar("ta_orders",orders); fbSaveAll("orders",orders).then(()=>setSyncStatus("☁️ Opgeslagen")); },[orders]);
-  useEffect(()=>{ if(!geladen) return; bewaar("ta_verp",verpDef); fbSaveAll("verpakkingen",verpDef).then(()=>setSyncStatus("☁️ Opgeslagen")); },[verpDef]);
+  useEffect(()=>{ bewaar("ta_klanten",klanten); if(geladen.current) fbSaveAll("klanten",klanten).then(()=>setSyncStatus("☁️ Opgeslagen")); },[klanten]);
+  useEffect(()=>{ bewaar("ta_gewassen",gewassen); if(geladen.current) fbSaveAll("gewassen",gewassen).then(()=>setSyncStatus("☁️ Opgeslagen")); },[gewassen]);
+  useEffect(()=>{ bewaar("ta_prijzen",prijzen); if(geladen.current) fbSaveAll("prijzen",prijzen).then(()=>setSyncStatus("☁️ Opgeslagen")); },[prijzen]);
+  useEffect(()=>{ bewaar("ta_orders",orders); if(geladen.current) fbSaveAll("orders",orders).then(()=>setSyncStatus("☁️ Opgeslagen")); },[orders]);
+  useEffect(()=>{ bewaar("ta_verp",verpDef); if(geladen.current) fbSaveAll("verpakkingen",verpDef).then(()=>setSyncStatus("☁️ Opgeslagen")); },[verpDef]);
   useEffect(()=>{ bewaar("ta_zaadinkoop",zaadinkoop); fbSaveAll("zaadinkoop",zaadinkoop).then(()=>setSyncStatus("☁️ Opgeslagen")); },[zaadinkoop]);
   useEffect(()=>{ bewaar("ta_bedrijf",bedrijf); },[bedrijf]);
   useEffect(()=>{ bewaar("ta_teeltduur",teeltduur); fbSaveAll("teeltduur",teeltduur).then(()=>setSyncStatus("☁️ Opgeslagen")); },[teeltduur]);

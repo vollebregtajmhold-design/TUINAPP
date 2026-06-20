@@ -1521,10 +1521,10 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
           function karOmschrijving(verdeling) {
             if(!verdeling) return "—";
             const delen=[];
-            if(verdeling.a>0) delen.push(`${verdeling.a}×48(${11}pl)`);
-            if(verdeling.b>0) delen.push(`${verdeling.b}×56(${13}pl)`);
-            if(verdeling.c>0) delen.push(`${verdeling.c}×60(${14}pl)`);
-            if(verdeling.rest>0) delen.push(`1×rest(${verdeling.rest-1}pl)`);
+            if(verdeling.a>0) delen.push(`${verdeling.a}× 11pl`);
+            if(verdeling.b>0) delen.push(`${verdeling.b}× 13pl`);
+            if(verdeling.c>0) delen.push(`${verdeling.c}× 14pl`);
+            if(verdeling.rest>0) delen.push(`1× ${verdeling.rest-1}pl`);
             return delen.join(" + ");
           }
 
@@ -1620,6 +1620,33 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
                         );
                       })}
                     </tbody>
+                    <tfoot>{(()=>{
+                      const totTrays=tOrders.reduce((s,o)=>s+o.regels.reduce((r,x)=>r+x.aantal,0),0);
+                      const totPl=tOrders.reduce((s,o)=>s+o.regels.reduce((r,x)=>{const vd=verpDef.find(v=>v.naam===x.verpakking);return r+(vd?.aantal||0)*x.aantal;},0),0);
+                      const totKarren=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return s+(v?v.k:0);},0);
+                      const tot48=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return s+(v?v.a:0);},0);
+                      const tot56=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return s+(v?v.b:0);},0);
+                      const tot60=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return s+(v?v.c:0);},0);
+                      const totRest=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return s+(v&&v.rest>0?1:0);},0);
+                      const totRestPl=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return s+(v&&v.rest>0?v.rest-1:0);},0);
+                      const restDetails=tOrders.filter(o=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return v&&v.rest>0;}).map(o=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return v.rest-1;});
+                      const samenvatting=[
+                        tot48>0?`${tot48}× 11pl`:null,
+                        tot56>0?`${tot56}× 13pl`:null,
+                        tot60>0?`${tot60}× 14pl`:null,
+                        restDetails.length>0?`restkar: ${restDetails.map(p=>p+"pl").join(" + ")}`:null,
+                      ].filter(Boolean).join(" · ");
+                      const bS={padding:"5px 6px",fontWeight:700,borderTop:`2px solid ${groen}`,background:"#e8f5ee"};
+                      return (
+                        <tr>
+                          <td colSpan={4} style={{...bS,color:groen,fontSize:11}}>{samenvatting}</td>
+                          <td style={{...bS,textAlign:"right",color:groen}}>{totTrays}</td>
+                          <td style={{...bS,textAlign:"right",color:groen}}>{totKarren}</td>
+                          <td style={{...bS,fontSize:11,color:subtekst}}></td>
+                          <td style={{...bS,textAlign:"right",color:groen}}>{totPl.toLocaleString("nl-NL")}</td>
+                        </tr>
+                      );
+                    })()}</tfoot>
                   </table>
               }
             </div>

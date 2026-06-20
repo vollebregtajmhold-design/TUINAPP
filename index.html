@@ -291,6 +291,12 @@ function Klantenbeheer({ klanten, setKlanten, gewassen, verpDef }) {
             </div>
             <div style={gs.sectie}><div style={gs.sectieLabel}>Financieel</div>
               {veld("BTW-nummer","btwnummer")}{veld("KVK-nummer","kvk")}
+              <div style={gs.veldGroep}>
+                <label style={gs.label}>Betalingstermijn (dagen)</label>
+                <select style={gs.input} value={kd.betalingstermijn||30} onChange={e=>setKd({...kd,betalingstermijn:Number(e.target.value)})}>
+                  {[7,14,21,30,45,60].map(d=><option key={d} value={d}>{d} dagen</option>)}
+                </select>
+              </div>
             </div>
             <div style={gs.sectie}><div style={gs.sectieLabel}>Voorkeuren</div>
               <div style={{display:"flex",gap:10}}>
@@ -401,7 +407,13 @@ function Teelten({ gewassen, setGewassen }) {
   const [ges,setGes]=useState(null); const [zoek,setZoek]=useState("");
   const [gwF,setGwF]=useState(false); const [gwN,setGwN]=useState(""); const [bew,setBew]=useState(null);
   const [si,setSi]=useState(""); const [delGw,setDelGw]=useState(null); const [delS,setDelS]=useState(null);
-  const gefilterd=gewassen.filter(g=>g.naam.toLowerCase().includes(zoek.toLowerCase()));
+  const zoekL = zoek.toLowerCase();
+  const gefilterd = zoek
+    ? gewassen.filter(g=>
+        g.naam.toLowerCase().includes(zoekL) ||
+        (g.soorten||[]).some(s=>s.toLowerCase().includes(zoekL))
+      )
+    : gewassen;
 
   function gwSave(){if(!gwN.trim())return;if(bew){const b=gewassen.map(g=>g.id===bew.id?{...g,naam:gwN}:g);setGewassen(b);setGes(b.find(g=>g.id===bew.id));}else setGewassen([...gewassen,{id:Date.now(),naam:gwN,soorten:[]}]);setGwN("");setGwF(false);setBew(null);}
   function gwDel(id){setGewassen(gewassen.filter(g=>g.id!==id));if(ges?.id===id)setGes(null);setDelGw(null);}
@@ -411,15 +423,22 @@ function Teelten({ gewassen, setGewassen }) {
   return (
     <div style={{display:"flex",height:"calc(100vh - 50px)"}}>
       <div style={{width:260,borderRight:`1px solid ${rand}`,background:wit,overflowY:"auto",padding:10}}>
-        <input style={{...gs.input,marginBottom:8}} placeholder="🔍 Zoek gewas..." value={zoek} onChange={e=>setZoek(e.target.value)} />
+        <input style={{...gs.input,marginBottom:8}} placeholder="🔍 Zoek gewas of soort..." value={zoek} onChange={e=>setZoek(e.target.value)} onKeyDown={e=>e.key==="Escape"&&setZoek("")} />
         <button style={{...gs.knopPrimair,width:"100%",marginBottom:8}} onClick={()=>{setBew(null);setGwN("");setGwF(true);}}>+ Nieuw gewas</button>
-        <div style={{fontSize:10,color:subtekst,marginBottom:6}}>{gefilterd.length} gewas(sen)</div>
+        <div style={{fontSize:10,color:subtekst,marginBottom:6}}>{gefilterd.length} gewas(sen){zoekL?' gevonden':''}</div>
         {gefilterd.map(g=>(
           <div key={g.id} onClick={()=>setGes(g)}
             style={{padding:"8px 10px",borderRadius:6,cursor:"pointer",marginBottom:3,
               background:ges?.id===g.id?lichtGroen:"transparent",border:`1px solid ${ges?.id===g.id?groen:"transparent"}`}}>
             <div style={{fontWeight:600}}>{g.naam}</div>
-            <div style={{fontSize:11,color:subtekst}}>{g.soorten.length} soort(en)</div>
+            <div style={{fontSize:11,color:subtekst}}>
+              {zoekL
+                ? (g.soorten||[]).filter(s=>s.toLowerCase().includes(zoekL)).map(s=>(
+                    <span key={s} style={{background:"#fef08a",borderRadius:3,padding:"0 3px",marginRight:3,fontSize:10,color:"#713f12"}}>{s}</span>
+                  ))
+                : g.soorten.length+" soort(en)"
+              }
+            </div>
           </div>
         ))}
       </div>
@@ -989,6 +1008,10 @@ function WeekGroep({ wk, weekOrders, klanten, ges, verpDef, onOpen, onKopie, pla
               </div>
               <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
                 <span style={{fontSize:10,fontWeight:600,background:S_BG[o.status],color:S_KLEUR[o.status],borderRadius:20,padding:"1px 6px"}}>{S_LABEL[o.status]}</span>
+                {o.factuurNr&&(o.betaaldOp
+                  ? <span style={{fontSize:9,fontWeight:600,background:"#dcfce7",color:"#16a34a",borderRadius:20,padding:"1px 6px"}}>✅ Betaald</span>
+                  : <span style={{fontSize:9,fontWeight:600,background:"#fef3c7",color:"#b45309",borderRadius:20,padding:"1px 6px"}}>🧾 #{o.factuurNr}</span>
+                )}
                 <div style={{display:"flex",gap:2}}>
                   <button title="Kopiëren" style={{background:"none",border:"none",cursor:"pointer",fontSize:10,padding:"0 2px",color:groen,lineHeight:1}}
                     onClick={e=>{e.stopPropagation();onKopie(o);}}>📋</button>
@@ -1291,6 +1314,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
   const [twk,setTwk]=useState(()=>{const n=new Date();return `${String(getJaar(n)).slice(-2)}${String(getWeekNr(n)+1).padStart(2,"0")}`;});
   const [zoek,setZoek]=useState("");
   const [mailStatus,setMailStatus]=useState("");
+  const [factuurStatus,setFactuurStatus]=useState("");
   const [mailLog,setMailLog]=useState(()=>{ try{ return JSON.parse(localStorage.getItem('ta_maillog')||'[]'); }catch(e){ return []; } });
 
   const [alleWkenOpen,setAlleWkenOpen]=useState(null); // null=default, true=alle open, false=alle dicht
@@ -1534,6 +1558,207 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
     if(w){w.document.open();w.document.write(doc);w.document.close();setTimeout(()=>w.print(),400);}
   }
 
+
+  function drukFactuur(order) {
+    const kl = klanten.find(k=>k.id===order.klantId)||{};
+    const bd = bedrijf||{};
+    const vandaag = new Date().toLocaleDateString("nl-NL",{day:"2-digit",month:"long",year:"numeric"});
+    const btwPct = bd.btwPct??21;
+    const termijn = kl.betalingstermijn||bd.betalingstermijn||30;
+    const vervalDatum = new Date();
+    vervalDatum.setDate(vervalDatum.getDate()+termijn);
+    const vervalStr = vervalDatum.toLocaleDateString("nl-NL",{day:"2-digit",month:"long",year:"numeric"});
+
+    const regels = order.regels.map((r,i)=>{
+      const vd = verpDef.find(v=>v.naam===r.verpakking);
+      const pl = r.vastPlanten??((vd?.aantal||0)*r.aantal);
+      const prijs = r.prijs?Number(r.prijs):0;
+      const bedrag = pl*prijs;
+      const bg = i%2===0?"#fff":"#f9fcfb";
+      return {r, pl, prijs, bedrag, bg};
+    });
+
+    const subTotaal = regels.reduce((s,x)=>s+x.bedrag,0);
+    const btwBedrag = subTotaal*(btwPct/100);
+    const totaal = subTotaal+btwBedrag;
+
+    const rijHtml = regels.map(({r,pl,prijs,bedrag,bg})=>(
+      "<tr style='background:"+bg+"'>"
+      +"<td style='padding:6px 8px;border:1px solid #eee'>"+r.soort+"</td>"
+      +"<td style='padding:6px 8px;border:1px solid #eee'>"+r.verpakking+"</td>"
+      +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right'>"+r.aantal+"</td>"
+      +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right'>"+pl.toLocaleString("nl-NL")+"</td>"
+      +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right'>"+(prijs?"€"+prijs.toFixed(3):"—")+"</td>"
+      +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right;font-weight:600;color:#2d6a4f'>"+(bedrag?"€"+bedrag.toLocaleString("nl-NL",{minimumFractionDigits:2}):"—")+"</td>"
+      +"</tr>"
+    )).join("");
+
+    const doc = "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
+      +"<style>@page{size:A4 portrait;margin:0} body{font-family:Arial,sans-serif;font-size:10px;color:#222;margin:0;padding:0} table{border-collapse:collapse;width:100%} @media print{button{display:none}}</style></head><body>"
+
+      // Briefhoofd
+      +"<div style='background:#2d6a4f;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center'>"
+        +"<div><div style='font-size:16px;font-weight:700'>VOLLEBREGT CYCLAMEN</div>"
+        +"<div style='font-size:8px;opacity:0.85;margin-top:2px'>"+(bd.adres||"")+" &middot; "+(bd.postcode||"")+" "+(bd.plaats||"")+"</div></div>"
+        +"<div style='text-align:right;font-size:8px;opacity:0.85'><div>"+(bd.telefoon||"")+"</div><div>"+(bd.email||"")+"</div>"
+        +(bd.kvk?"<div>KVK: "+bd.kvk+"</div>":"")
+        +(bd.btw?"<div>BTW: "+bd.btw+"</div>":"")+"</div>"
+      +"</div>"
+
+      +"<div style='padding:16px 20px'>"
+
+      // Klant + factuurgegevens
+      +"<div style='display:flex;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #2d6a4f'>"
+        +"<div>"
+          +"<div style='font-size:8px;color:#888;margin-bottom:3px'>Aan:</div>"
+          +"<div style='font-size:12px;font-weight:700'>"+(kl.naam||"")+"</div>"
+          +(kl.adres?"<div style='font-size:8px;color:#555'>"+kl.adres+"</div>":"")
+          +((kl.postcode||kl.plaats)?"<div style='font-size:8px;color:#555'>"+(kl.postcode||"")+" "+(kl.plaats||"")+"</div>":"")
+          +(kl.btwnummer?"<div style='font-size:8px;color:#888;margin-top:4px'>BTW: "+kl.btwnummer+"</div>":"")
+        +"</div>"
+        +"<div style='text-align:right'>"
+          +"<div style='font-size:20px;font-weight:700;color:#2d6a4f'>FACTUUR</div>"
+          +"<div style='font-size:10px;color:#555;margin-top:4px'>Factuurnr: <strong>#"+(order.factuurNr||"—")+"</strong></div>"
+          +"<div style='font-size:9px;color:#555'>Datum: "+vandaag+"</div>"
+          +"<div style='font-size:9px;color:#555'>Vervaldatum: <strong>"+vervalStr+"</strong></div>"
+          +"<div style='font-size:9px;color:#555'>Leverweek: "+weekLabel(order.leverdatum)+"</div>"
+          +(order.pakbonNr?"<div style='font-size:9px;color:#555'>Pakbon: #"+order.pakbonNr+"</div>":"")
+          +(order.afleverNr?"<div style='font-size:9px;color:#555'>Afleverbon: #"+order.afleverNr+"</div>":"")
+        +"</div>"
+      +"</div>"
+
+      // Tabel
+      +"<table style='margin-bottom:14px'><thead><tr>"
+        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Soort</th>"
+        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Fust</th>"
+        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Trays</th>"
+        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Planten</th>"
+        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Prijs/st</th>"
+        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Bedrag</th>"
+      +"</tr></thead><tbody>"+rijHtml+"</tbody></table>"
+
+      // Totaalblok
+      +"<div style='display:flex;justify-content:flex-end'>"
+        +"<table style='width:260px'>"
+          +"<tr><td style='padding:4px 8px;color:#555'>Subtotaal</td><td style='padding:4px 8px;text-align:right'>€"+subTotaal.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</td></tr>"
+          +"<tr><td style='padding:4px 8px;color:#555'>BTW "+btwPct+"%</td><td style='padding:4px 8px;text-align:right'>€"+btwBedrag.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</td></tr>"
+          +"<tr style='background:#e8f5ee;font-weight:700;font-size:12px'>"
+            +"<td style='padding:6px 8px;color:#2d6a4f;border-top:2px solid #2d6a4f'>Totaal te betalen</td>"
+            +"<td style='padding:6px 8px;text-align:right;color:#2d6a4f;border-top:2px solid #2d6a4f'>€"+totaal.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</td>"
+          +"</tr>"
+        +"</table>"
+      +"</div>"
+
+      // Betalingsgegevens
+      +"<div style='margin-top:20px;padding:10px 14px;background:#f0f7f4;border-radius:4px;font-size:9px;color:#444'>"
+        +"<div style='font-weight:700;margin-bottom:4px'>Betalingsgegevens</div>"
+        +"<div>Gelieve het bedrag van <strong>€"+totaal.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</strong> binnen <strong>"+termijn+" dagen</strong> over te maken op:</div>"
+        +"<div style='margin-top:4px'>IBAN: <strong>"+(bd.iban||"")+"</strong> &nbsp;&middot;&nbsp; T.n.v.: <strong>"+(bd.naam||"Vollebregt Cyclamen")+"</strong></div>"
+        +"<div style='margin-top:2px'>Onder vermelding van factuurnummer <strong>#"+(order.factuurNr||"")+"</strong></div>"
+      +"</div>"
+
+      +"</div>"
+
+      // Footer
+      +"<div style='background:#f0f7f4;padding:6px 20px;font-size:7px;color:#888;display:flex;justify-content:space-between;border-top:1px solid #c8e6c9'>"
+        +"<span>"+(bd.naam||"")+" &middot; "+(bd.adres||"")+" "+(bd.postcode||"")+" "+(bd.plaats||"")+"</span>"
+        +(bd.iban?"<span>IBAN: "+bd.iban+"</span>":"")
+        +(bd.btw?"<span>BTW: "+bd.btw+"</span>":"")
+      +"</div>"
+      +"</body></html>";
+
+    const w=window.open("","_blank");
+    if(w){w.document.open();w.document.write(doc);w.document.close();setTimeout(()=>w.print(),400);}
+  }
+
+  function mailFactuur(order) {
+    const kl = klanten.find(k=>k.id===order.klantId)||{};
+    const bd = bedrijf||{};
+    const mailUrl = localStorage.getItem('ta_mailUrl')||'';
+    if(!kl.email){ alert('Geen e-mailadres bekend voor '+kl.naam); return; }
+    if(!mailUrl){ alert('Geen mail URL ingesteld. Ga naar ⚙️ Instellingen.'); return; }
+
+    const btwPct = bd.btwPct??21;
+    const termijn = kl.betalingstermijn||bd.betalingstermijn||30;
+    const vervalDatum = new Date();
+    vervalDatum.setDate(vervalDatum.getDate()+termijn);
+    const vervalStr = vervalDatum.toLocaleDateString("nl-NL",{day:"2-digit",month:"long",year:"numeric"});
+    const vandaag = new Date().toLocaleDateString("nl-NL",{day:"2-digit",month:"long",year:"numeric"});
+
+    const regels = order.regels.map((r,i)=>{
+      const vd = verpDef.find(v=>v.naam===r.verpakking);
+      const pl = r.vastPlanten??((vd?.aantal||0)*r.aantal);
+      const prijs = r.prijs?Number(r.prijs):0;
+      const bedrag = pl*prijs;
+      const bg = i%2===0?"#fff":"#f9fcfb";
+      return {r,pl,prijs,bedrag,bg};
+    });
+    const subTotaal = regels.reduce((s,x)=>s+x.bedrag,0);
+    const btwBedrag = subTotaal*(btwPct/100);
+    const totaal = subTotaal+btwBedrag;
+
+    const rijHtml = regels.map(function(x){
+      return "<tr style='background:"+x.bg+"'>"
+        +"<td style='padding:6px 8px;border:1px solid #eee'>"+x.r.soort+"</td>"
+        +"<td style='padding:6px 8px;border:1px solid #eee'>"+x.r.verpakking+"</td>"
+        +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right'>"+x.r.aantal+"</td>"
+        +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right'>"+x.pl.toLocaleString("nl-NL")+"</td>"
+        +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right'>"+(x.prijs?"€"+x.prijs.toFixed(3):"—")+"</td>"
+        +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right;font-weight:600;color:#2d6a4f'>"+(x.bedrag?"€"+x.bedrag.toLocaleString("nl-NL",{minimumFractionDigits:2}):"—")+"</td>"
+        +"</tr>";
+    }).join("");
+
+    const berichtHtml = "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
+      +"<style>body{font-family:Arial,sans-serif;font-size:11px;color:#222;padding:20px;max-width:680px;margin:0 auto} table{border-collapse:collapse;width:100%}</style></head><body>"
+      +"<div style='background:#2d6a4f;color:#fff;padding:12px 18px;margin:-20px -20px 20px;display:flex;justify-content:space-between'>"
+        +"<div><div style='font-size:14px;font-weight:700'>VOLLEBREGT CYCLAMEN</div>"
+        +"<div style='font-size:8px;opacity:0.85'>"+(bd.adres||"")+" &middot; "+(bd.postcode||"")+" "+(bd.plaats||"")+"</div></div>"
+        +"<div style='text-align:right;font-size:8px;opacity:0.85'><div>"+(bd.telefoon||"")+"</div><div>"+(bd.email||"")+"</div></div>"
+      +"</div>"
+      +"<div style='display:flex;justify-content:space-between;margin-bottom:16px'>"
+        +"<div><div style='font-size:12px;font-weight:700'>"+kl.naam+"</div>"
+        +(kl.adres?"<div style='font-size:10px;color:#555'>"+kl.adres+"</div>":"")
+        +((kl.postcode||kl.plaats)?"<div style='font-size:10px;color:#555'>"+(kl.postcode||"")+" "+(kl.plaats||"")+"</div>":"")+"</div>"
+        +"<div style='text-align:right'><div style='font-size:18px;font-weight:700;color:#2d6a4f'>FACTUUR</div>"
+        +"<div style='font-size:10px;color:#555'>Nr: <strong>#"+(order.factuurNr||"")+"</strong></div>"
+        +"<div style='font-size:10px;color:#555'>Datum: "+vandaag+"</div>"
+        +"<div style='font-size:10px;color:#dc2626;font-weight:700'>Vervaldatum: "+vervalStr+"</div></div>"
+      +"</div>"
+      +"<table style='margin-bottom:12px'><thead><tr>"
+        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Soort</th>"
+        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Fust</th>"
+        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Trays</th>"
+        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Planten</th>"
+        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>€/st</th>"
+        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Bedrag</th>"
+      +"</tr></thead><tbody>"+rijHtml+"</tbody></table>"
+      +"<div style='display:flex;justify-content:flex-end;margin-bottom:16px'><table style='width:240px'>"
+        +"<tr><td style='padding:4px 8px;color:#555'>Subtotaal</td><td style='padding:4px 8px;text-align:right'>€"+subTotaal.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</td></tr>"
+        +"<tr><td style='padding:4px 8px;color:#555'>BTW "+btwPct+"%</td><td style='padding:4px 8px;text-align:right'>€"+btwBedrag.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</td></tr>"
+        +"<tr style='background:#e8f5ee;font-weight:700'><td style='padding:6px 8px;color:#2d6a4f;border-top:2px solid #2d6a4f'>Totaal</td>"
+        +"<td style='padding:6px 8px;text-align:right;color:#2d6a4f;border-top:2px solid #2d6a4f'>€"+totaal.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</td></tr>"
+      +"</table></div>"
+      +"<div style='padding:10px 14px;background:#f0f7f4;border-radius:4px;font-size:10px;color:#444'>"
+        +"Gelieve <strong>€"+totaal.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</strong> binnen <strong>"+termijn+" dagen</strong> over te maken op "
+        +"IBAN <strong>"+(bd.iban||"")+"</strong> t.n.v. <strong>"+(bd.naam||"Vollebregt Cyclamen")+"</strong>, "
+        +"onder vermelding van <strong>#"+(order.factuurNr||"")+"</strong>."
+      +"</div>"
+      +"</body></html>";
+
+    const onderwerp = "Factuur #"+(order.factuurNr||"")+" - Vollebregt Cyclamen";
+    setFactuurStatus("📧 Versturen...");
+    fetch(mailUrl,{
+      method:"POST", mode:"no-cors",
+      headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify({to_email:kl.email,onderwerp,bericht:"",html:berichtHtml})
+    }).then(()=>{
+      const logEntry={datum:new Date().toLocaleString("nl-NL"),klant:kl.naam,email:kl.email,onderwerp,week:weekLabel(order.leverdatum)};
+      const log=JSON.parse(localStorage.getItem("ta_maillog")||"[]");
+      localStorage.setItem("ta_maillog",JSON.stringify([logEntry,...log].slice(0,50)));
+      setFactuurStatus("✅ Factuur verstuurd naar "+kl.email);
+      setTimeout(()=>setFactuurStatus(""),4000);
+    }).catch(()=>setFactuurStatus("⚠️ Versturen mislukt"));
+  }
 
   function mailBevestiging(order) {
     const kl = klanten.find(k=>k.id===order.klantId)||{};
@@ -1990,17 +2215,70 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
                         })()}
                         {data.afleverNr&&<span style={{background:"#dbeafe",color:"#1d4ed8",borderRadius:4,padding:"3px 6px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>#{data.afleverNr}</span>}
                       </div>
+                      {/* Factuur */}
                       <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                        <button style={{background:"#b45309",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",flex:1}}
-                          onClick={()=>{
-                            if(!data.id&&!data.klantId) return;
-                            const bestaandeNrs=orders.filter(o=>o.factuurNr).map(o=>Number(o.factuurNr)||0);
-                            const volgendNr=bestaandeNrs.length>0?Math.max(...bestaandeNrs)+1:1;
-                            const bijgewerkt={...data,factuurNr:String(volgendNr).padStart(4,"0")};
-                            if(data.id){setOrders(orders.map(o=>o.id===data.id?bijgewerkt:o));setData(bijgewerkt);}
-                          }}>🧾 Factuur</button>
+                        {(()=>{
+                          const kanFactuur = !!data.afleverNr;
+                          const heeftFactuur = !!data.factuurNr;
+                          if(!heeftFactuur) return (
+                            <button
+                              style={{background:kanFactuur?"#b45309":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:kanFactuur?"pointer":"not-allowed",flex:1}}
+                              title={!kanFactuur?"Eerst afleverbon aanmaken":"Factuur aanmaken"}
+                              onClick={()=>{
+                                if(!kanFactuur) return;
+                                if(!window.confirm("Factuur aanmaken voor "+klanten.find(k=>k.id===data.klantId)?.naam+"?")) return;
+                                const bestaandeNrs=orders.filter(o=>o.factuurNr).map(o=>Number(o.factuurNr)||0);
+                                const volgendNr=bestaandeNrs.length>0?Math.max(...bestaandeNrs)+1:1;
+                                const bijgewerkt={...data,factuurNr:String(volgendNr).padStart(4,"0")};
+                                setOrders(orders.map(o=>o.id===data.id?bijgewerkt:o));
+                                setData(bijgewerkt);
+                                setTimeout(()=>drukFactuur(bijgewerkt),200);
+                              }}>
+                              🧾 Factuur aanmaken
+                            </button>
+                          );
+                          return (
+                            <button style={{background:"#b45309",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",flex:1}}
+                              onClick={()=>drukFactuur(data)}>
+                              🖨️ Herdruk factuur
+                            </button>
+                          );
+                        })()}
                         {data.factuurNr&&<span style={{background:"#fef3c7",color:"#b45309",borderRadius:4,padding:"3px 6px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>#{data.factuurNr}</span>}
                       </div>
+                      {/* Mail factuur + betaalstatus */}
+                      {data.factuurNr&&(
+                        <div style={{display:"flex",flexDirection:"column",gap:3,marginTop:2}}>
+                          {klanten.find(k=>k.id===data.klantId)?.email&&(
+                            <button style={{background:"#1d4ed8",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",width:"100%"}}
+                              onClick={()=>mailFactuur(data)}>
+                              📧 Factuur mailen naar {klanten.find(k=>k.id===data.klantId)?.email}
+                            </button>
+                          )}
+                          {factuurStatus&&<div style={{fontSize:10,color:factuurStatus.startsWith("✅")?"#16a34a":"#f59e0b",textAlign:"center"}}>{factuurStatus}</div>}
+                          <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                            {!data.betaaldOp
+                              ? <button style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",flex:1}}
+                                  onClick={()=>{
+                                    const bijgewerkt={...data,betaaldOp:new Date().toISOString().slice(0,10)};
+                                    setOrders(orders.map(o=>o.id===data.id?bijgewerkt:o));
+                                    setData(bijgewerkt);
+                                  }}>✅ Markeer als betaald</button>
+                              : <div style={{display:"flex",gap:4,alignItems:"center",flex:1}}>
+                                  <span style={{background:"#dcfce7",color:"#16a34a",borderRadius:4,padding:"3px 8px",fontSize:11,fontWeight:600,flex:1,textAlign:"center"}}>
+                                    ✅ Betaald op {new Date(data.betaaldOp).toLocaleDateString("nl-NL")}
+                                  </span>
+                                  <button style={{background:"transparent",color:"#9ca3af",border:"1px solid #e2e8e4",borderRadius:4,padding:"2px 6px",fontSize:10,cursor:"pointer"}}
+                                    onClick={()=>{
+                                      const bijgewerkt={...data,betaaldOp:null};
+                                      setOrders(orders.map(o=>o.id===data.id?bijgewerkt:o));
+                                      setData(bijgewerkt);
+                                    }}>✕</button>
+                                </div>
+                            }
+                          </div>
+                        </div>
+                      )}
                       <div style={{display:"flex",gap:4,marginTop:2}}>
                         <button style={{...gs.knopPrimair,flex:1,padding:"4px",fontSize:11}} onClick={opslaan}>💾 Opslaan</button>
                         <button style={{...gs.knopSecundair,flex:1,padding:"4px",fontSize:11}} onClick={()=>setForm(false)}>✕ Sluiten</button>
@@ -4207,7 +4485,7 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
 // ════════════════════════════════════════════════════════
 // HOOFD APP
 // ════════════════════════════════════════════════════════
-function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef }) {
+function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef , backupDownloaden, backupLaden}) {
   const [b, setB] = useState({...bedrijf});
   const [mailUrl, setMailUrl] = useState(()=>{ try{ return localStorage.getItem('ta_mailUrl')||'https://script.google.com/macros/s/AKfycby5SF6Sx9DPmFNBO_hb1ztwmdHApE19DIinmm7rs_CEJQdpQO8HLPuEI9Y4dvIUAMOi/exec'; }catch(e){ return ''; } });
   const [fustNaam, setFustNaam] = useState("");
@@ -4309,19 +4587,7 @@ function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef }) {
           />
         </div>
       </div>
-      <div style={gs.sectie}>
-        <div style={gs.sectieLabel}>🌱 Zaadleverancier</div>
-        <div style={gs.veldGroep}>
-          <label style={gs.label}>E-mail zaadleverancier</label>
-          <input style={gs.input} type="email" placeholder="leverancier@zaad.nl"
-            value={b.leverancierEmail||""} onChange={e=>setB({...b,leverancierEmail:e.target.value})} />
-        </div>
-        <div style={gs.veldGroep}>
-          <label style={gs.label}>Naam zaadleverancier</label>
-          <input style={gs.input} type="text" placeholder="bijv. Royal Brinkman"
-            value={b.leverancierNaam||""} onChange={e=>setB({...b,leverancierNaam:e.target.value})} />
-        </div>
-      </div>
+
       <div style={gs.sectie}>
         <div style={gs.sectieLabel}>📧 E-mail instellingen</div>
         <div style={{fontSize:12,color:subtekst,marginBottom:8,lineHeight:1.6}}>
@@ -4338,6 +4604,93 @@ function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef }) {
         }}>💾 Mail URL opslaan</button>
       </div>
       <button style={gs.knopPrimair} onClick={()=>setBedrijf({...b})}>💾 Opslaan</button>
+
+      {/* BACKUP SECTIE */}
+      <div style={{marginTop:24,padding:14,background:"#f0f7f4",border:"1px solid #c8e6c9",borderRadius:8}}>
+        <div style={{fontWeight:700,color:groen,fontSize:13,marginBottom:6}}>💾 Backup</div>
+        <div style={{fontSize:11,color:subtekst,marginBottom:12,lineHeight:1.6}}>
+          Download een lokale kopie van alle data. Bij verlies van Firebase data kun je deze terugzetten.
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <button style={{...gs.knopPrimair,fontSize:12}} onClick={backupDownloaden}>⬇️ Backup downloaden</button>
+          <button style={{background:"#6b7280",color:"#fff",fontSize:12,cursor:"pointer",padding:"6px 14px",borderRadius:6,border:"none",fontWeight:600}}
+            onClick={()=>document.getElementById("ta-backup-input").click()}>
+            ⬆️ Backup terugzetten
+          </button>
+          <input id="ta-backup-input" type="file" accept=".json" style={{display:"none"}} onChange={backupLaden} />
+        </div>
+      </div>
+
+      {/* RESET SECTIE */}
+      <div style={{marginTop:24,padding:14,background:"#fff5f5",border:"2px solid #fca5a5",borderRadius:8}}>
+        <div style={{fontWeight:700,color:"#dc2626",fontSize:13,marginBottom:6}}>⚠️ Gevaarzone — Alle data wissen</div>
+        <div style={{fontSize:11,color:"#7f1d1d",marginBottom:12,lineHeight:1.6}}>
+          Dit wist <strong>alle</strong> orders, klanten, gewassen, prijzen en instellingen permanent.
+          Dit kan <strong>niet ongedaan</strong> worden gemaakt. Maak eerst een backup via GitHub.
+        </div>
+        {(()=>{
+          const [stap, setStap] = useState(0);
+          const [code, setCode] = useState("");
+          const BEVESTIG_CODE = "WISAL";
+          return (
+            <div>
+              {stap===0&&(
+                <button style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:6,
+                  padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}
+                  onClick={()=>setStap(1)}>
+                  🗑️ Alle data wissen...
+                </button>
+              )}
+              {stap===1&&(
+                <div>
+                  <div style={{fontSize:11,color:"#dc2626",marginBottom:8,fontWeight:600}}>
+                    Weet u het zeker? Dit kan niet ongedaan worden gemaakt.
+                  </div>
+                  <div style={{display:"flex",gap:8}}>
+                    <button style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:6,
+                      padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}
+                      onClick={()=>setStap(2)}>
+                      Ja, ik weet het zeker
+                    </button>
+                    <button style={{...gs.knopSecundair,fontSize:12}} onClick={()=>setStap(0)}>
+                      Annuleren
+                    </button>
+                  </div>
+                </div>
+              )}
+              {stap===2&&(
+                <div>
+                  <div style={{fontSize:11,color:"#dc2626",marginBottom:6,fontWeight:600}}>
+                    Typ <strong>{BEVESTIG_CODE}</strong> om te bevestigen:
+                  </div>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    <input
+                      style={{...gs.input,width:100,borderColor:"#dc2626",fontWeight:700,fontSize:13}}
+                      value={code} placeholder={BEVESTIG_CODE}
+                      onChange={e=>setCode(e.target.value.toUpperCase())}
+                    />
+                    <button
+                      style={{background:code===BEVESTIG_CODE?"#dc2626":"#9ca3af",color:"#fff",
+                        border:"none",borderRadius:6,padding:"6px 14px",
+                        cursor:code===BEVESTIG_CODE?"pointer":"not-allowed",fontSize:12,fontWeight:700}}
+                      onClick={()=>{
+                        if(code!==BEVESTIG_CODE) return;
+                        reset();
+                        setStap(0);
+                        setCode("");
+                      }}>
+                      ☠️ Nu wissen
+                    </button>
+                    <button style={{...gs.knopSecundair,fontSize:12}} onClick={()=>{setStap(0);setCode("");}}>
+                      Annuleren
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </div>
     </div>
   );
 }
@@ -4399,6 +4752,32 @@ function App() {
   useEffect(()=>{ if(!geladen) return; bewaar("ta_teeltduur",teeltduur); fbSaveAll("teeltduur",teeltduur).then(()=>setSyncStatus("☁️ Opgeslagen")); },[teeltduur,geladen]);
   useEffect(()=>{ if(!geladen) return; bewaar("ta_kiemkracht",kiemkracht); fbSaveAll("kiemkracht",kiemkracht).then(()=>setSyncStatus("☁️ Opgeslagen")); },[kiemkracht,geladen]);
 
+  function backupDownloaden(){
+    const sleutels=["ta_klanten","ta_gewassen","ta_orders","ta_prijzen","ta_verpDef","ta_kiemkracht","ta_teeltduur","ta_zaadinkoop","ta_bedrijf"];
+    const data={};
+    sleutels.forEach(function(k){try{data[k]=JSON.parse(localStorage.getItem(k)||"null");}catch(e){}});
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="TuinApp_backup_"+new Date().toISOString().slice(0,10)+".json";
+    a.click();
+  }
+  function backupLaden(e){
+    const file=e.target.files[0];
+    if(!file) return;
+    const reader=new FileReader();
+    reader.onload=function(ev){
+      try{
+        const data=JSON.parse(ev.target.result);
+        if(!window.confirm("Backup laden van "+file.name+"? Huidige data wordt overschreven.")) return;
+        Object.keys(data).forEach(function(k){if(data[k]!==null) localStorage.setItem(k,JSON.stringify(data[k]));});
+        alert("Backup geladen. De pagina wordt herladen.");
+        location.reload();
+      }catch(err){alert("Ongeldig bestand: "+err.message);}
+    };
+    reader.readAsText(file);
+    e.target.value="";
+  }
   function reset(){
     if(!window.confirm("Alle data wissen? Dit verwijdert ook de Firebase data!"))return;
     ["ta_klanten","ta_gewassen","ta_prijzen","ta_orders","ta_verp"].forEach(k=>localStorage.removeItem(k));
@@ -4418,9 +4797,9 @@ function App() {
     {id:"klanten",     label:"👤 Klanten"},
     {id:"teelten",     label:"🌱 Teelten"},
     {id:"teeltduur",   label:"🕐 Teeltduur"},
-    {id:"prijzen",     label:"💰 Prijzen"},
+    {id:"prijzen",     label:"💰 Verkoopprijzen"},
     {id:"kiemkracht",  label:"🌱 Kiemkracht"},
-    {id:"inkoop",      label:"🌾 Inkoopprijzen"},
+    {id:"inkoop",      label:"🌾 Inkoopprijzen zaad"},
     {id:"instellingen",label:"⚙️ Instellingen"},
   ];
   const stamdataOpen = stamdata.some(m=>m.id===pagina);
@@ -4465,7 +4844,7 @@ function App() {
         </div>
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>
           <span style={{color:"rgba(255,255,255,0.65)",fontSize:11}}>{syncStatus}</span>
-          <button onClick={reset} style={{background:"rgba(255,255,255,0.15)",color:wit,border:"1px solid rgba(255,255,255,0.3)",borderRadius:5,padding:"3px 9px",cursor:"pointer",fontSize:11}}>🔄 Reset</button>
+          
         </div>
       </div>
       {pagina==="orders"       && <Orders      klanten={klanten} gewassen={gewassen} prijzen={prijzen} orders={orders} setOrders={setOrders} verpDef={verpDef} bedrijf={bedrijf} />}
@@ -4482,7 +4861,7 @@ function App() {
       {pagina==="kiemkracht"   && <Kiemkracht gewassen={gewassen} kiemkracht={kiemkracht} setKiemkracht={setKiemkracht} />}
       {pagina==="inkoop"       && <Inkoopprijzen gewassen={gewassen} setGewassen={setGewassen} />}
       {pagina==="verpakkingen" && <Verpakkingen verpDef={verpDef} setVerpDef={setVerpDef} />}
-      {pagina==="instellingen"  && <Instellingen bedrijf={bedrijf} setBedrijf={setBedrijf} gewassen={gewassen} setGewassen={setGewassen} orders={orders} setOrders={setOrders} prijzen={prijzen} setPrijzen={setPrijzen} kiemkracht={kiemkracht} setKiemkracht={setKiemkracht} teeltduur={teeltduur} setTeeltduur={setTeeltduur} verpDef={verpDef} setVerpDef={setVerpDef} />}
+      {pagina==="instellingen"  && <Instellingen bedrijf={bedrijf} setBedrijf={setBedrijf} gewassen={gewassen} setGewassen={setGewassen} orders={orders} setOrders={setOrders} prijzen={prijzen} setPrijzen={setPrijzen} kiemkracht={kiemkracht} setKiemkracht={setKiemkracht} teeltduur={teeltduur} setTeeltduur={setTeeltduur} verpDef={verpDef} setVerpDef={setVerpDef}  backupDownloaden={backupDownloaden} backupLaden={backupLaden}/>}
     </div>
   );
 }
@@ -4977,6 +5356,26 @@ function Inkoopprijzen({ gewassen, setGewassen }) {
                       </tr>
                     </thead>
                     <tbody>
+                      {/* Allen rij */}
+                      <tr style={{background:"#f0f7f4"}}>
+                        <td style={{...mTD,color:subtekst,fontStyle:"italic"}}>Vul alle soorten:</td>
+                        <td style={{...mTD,textAlign:"right"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:3,justifyContent:"flex-end"}}>
+                            <span style={{fontSize:11,color:subtekst}}>€</span>
+                            <input
+                              style={{...iS,background:"#f0f7f4",fontStyle:"italic"}}
+                              type="number" step="0.01" min="0" placeholder="Allen"
+                              onFocus={e=>e.target.select()}
+                              onChange={e=>{
+                                if(e.target.value==="") return;
+                                const val = Number(e.target.value);
+                                const b = gewassen.map(g=>g.id===gw.id?{...g,inkoopPrijzen:{...(g.inkoopPrijzen||{}),...Object.fromEntries(gw.soorten.map(s=>[s,val]))}}:g);
+                                setGewassen(b);
+                              }}
+                            />
+                          </div>
+                        </td>
+                      </tr>
                       {gw.soorten.map((s,si)=>{
                         const prijs = (gw.inkoopPrijzen||{})[s];
                         return (

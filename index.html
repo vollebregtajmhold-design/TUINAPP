@@ -1391,33 +1391,37 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
         <div style={{padding:"8px 10px",borderBottom:`1px solid ${rand}`,flexShrink:0}}>
 
           {/* Klant — verplicht, altijd als eerste */}
-          <select style={{...gs.input,marginBottom:6,fontSize:14,fontWeight:700,color:filtK?groen:subtekst,borderColor:filtK?groen:rand}}
+          <select style={{...gs.input,marginBottom:6,fontSize:14,fontWeight:700,
+            color:"#fff",
+            background:groen,
+            borderColor:groen}}
             value={filtK} onChange={e=>{setFiltK(e.target.value);setGes(null);setForm(false);}}>
             <option value={0}>— Kies een klant —</option>
             {klanten.sort((a,b)=>a.naam.localeCompare(b.naam)).map(k=><option key={k.id} value={k.id}>{k.naam}</option>)}
           </select>
 
-          {/* Zoek */}
-          <input style={{...gs.input,marginBottom:6,fontSize:12}} placeholder="🔍 Zoek order..." value={zoek||""} onChange={e=>setZoek(e.target.value)} />
-
-          {/* Week van/tot — onder elkaar */}
-          <div style={{display:"flex",flexDirection:"column",gap:3,marginBottom:4}}>
-            <div style={{display:"flex",gap:4,alignItems:"center"}}>
-              <span style={{fontSize:11,color:subtekst,width:24}}>Van</span>
-              <select style={{flex:1,padding:"4px 5px",border:`1px solid ${rand}`,borderRadius:5,background:wit,fontSize:11}} value={filtVanWeek} onChange={e=>setFiltVanWeek(e.target.value)}>
-                <option value="">Alle</option>
-                {alleWeken.map(w=><option key={w}>{w}</option>)}
-              </select>
+          {filtK && <>
+            {/* Zoek */}
+            <input style={{...gs.input,marginBottom:6,fontSize:12}} placeholder="🔍 Zoek order..." value={zoek||""} onChange={e=>setZoek(e.target.value)} />
+            {/* Week van/tot */}
+            <div style={{display:"flex",flexDirection:"column",gap:3,marginBottom:4}}>
+              <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                <span style={{fontSize:11,color:subtekst,width:24}}>Van</span>
+                <select style={{flex:1,padding:"4px 5px",border:`1px solid ${rand}`,borderRadius:5,background:wit,fontSize:11}} value={filtVanWeek} onChange={e=>setFiltVanWeek(e.target.value)}>
+                  <option value="">Alle</option>
+                  {alleWeken.map(w=><option key={w}>{w}</option>)}
+                </select>
+              </div>
+              <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                <span style={{fontSize:11,color:subtekst,width:24}}>Tot</span>
+                <select style={{flex:1,padding:"4px 5px",border:`1px solid ${rand}`,borderRadius:5,background:wit,fontSize:11}} value={filtTotWeek} onChange={e=>setFiltTotWeek(e.target.value)}>
+                  <option value="">Alle</option>
+                  {alleWeken.map(w=><option key={w}>{w}</option>)}
+                </select>
+              </div>
             </div>
-            <div style={{display:"flex",gap:4,alignItems:"center"}}>
-              <span style={{fontSize:11,color:subtekst,width:24}}>Tot</span>
-              <select style={{flex:1,padding:"4px 5px",border:`1px solid ${rand}`,borderRadius:5,background:wit,fontSize:11}} value={filtTotWeek} onChange={e=>setFiltTotWeek(e.target.value)}>
-                <option value="">Alle</option>
-                {alleWeken.map(w=><option key={w}>{w}</option>)}
-              </select>
-            </div>
-          </div>
-          <div style={{fontSize:11,color:subtekst}}>{gefilterd.length} order(s)</div>
+            <div style={{fontSize:11,color:subtekst}}>{gefilterd.length} order(s)</div>
+          </>}
         </div>
         <div style={{overflowY:"auto",flex:1,padding:"6px 8px"}}>
           {/* + Nieuwe order — alleen als klant gekozen */}
@@ -1429,14 +1433,14 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
                   setRegel(maakLegeRegel(Number(filtK)));
                   setForm(true);setGes(null);setTab("lijst");
                 }}>+ Nieuwe order</button>
-            : <div style={{textAlign:"center",color:subtekst,fontSize:12,padding:"12px 0"}}>Kies eerst een klant</div>
+            : null
           }
+          {filtK && <>
           <div style={{display:"flex",gap:4,marginBottom:6}}>
             <button style={{...gs.knopSecundair,flex:1,padding:"2px",fontSize:10}} onClick={()=>{setAlleWkenOpen(true);setTimeout(()=>setAlleWkenOpen(null),100);}}>▼ Alles open</button>
             <button style={{...gs.knopSecundair,flex:1,padding:"2px",fontSize:10}} onClick={()=>{setAlleWkenOpen(false);setTimeout(()=>setAlleWkenOpen(null),100);}}>▲ Alles dicht</button>
           </div>
           {(()=>{
-            // Groepeer per week
             const perWeek = {};
             gefilterd.forEach(o=>{
               const wk = weekLabel(o.leverdatum);
@@ -1452,6 +1456,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
               />
             ));
           })()}
+          </>}
         </div>
       </div>
 
@@ -1477,8 +1482,8 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
         )}
 
         {tab==="transport" && (()=>{
-          const alleWk=[...new Set(orders.filter(o=>o.status!=="geleverd").map(o=>weekLabel(o.leverdatum)))].sort();
-          const tOrders=orders.filter(o=>weekLabel(o.leverdatum)===twk&&o.status!=="geleverd"&&!/^\d/.test(klanten.find(k=>k.id===o.klantId)?.naam||""))
+          const alleWk=[...new Set(orders.map(o=>weekLabel(o.leverdatum)))].sort();
+          const tOrders=orders.filter(o=>weekLabel(o.leverdatum)===twk&&!/^\d/.test(klanten.find(k=>k.id===o.klantId)?.naam||""))
             .sort((a,b)=>(klanten.find(k=>k.id===a.klantId)?.naam||"").localeCompare(klanten.find(k=>k.id===b.klantId)?.naam||""));
 
           function berekenKarren(trays) {

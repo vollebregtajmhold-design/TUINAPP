@@ -1478,7 +1478,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
 
         {tab==="transport" && (()=>{
           const alleWk=[...new Set(orders.filter(o=>o.status!=="geleverd").map(o=>weekLabel(o.leverdatum)))].sort();
-          const tOrders=orders.filter(o=>weekLabel(o.leverdatum)===twk&&o.status!=="geleverd")
+          const tOrders=orders.filter(o=>weekLabel(o.leverdatum)===twk&&o.status!=="geleverd"&&!/^\d/.test(klanten.find(k=>k.id===o.klantId)?.naam||""))
             .sort((a,b)=>(klanten.find(k=>k.id===a.klantId)?.naam||"").localeCompare(klanten.find(k=>k.id===b.klantId)?.naam||""));
 
           function berekenKarren(trays) {
@@ -1539,7 +1539,8 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
               const trays=o.regels.reduce((s,r)=>s+r.aantal,0);
               const pl=o.regels.reduce((s,r)=>{const vd=verpDef.find(v=>v.naam===r.verpakking);return s+(vd?.aantal||0)*r.aantal;},0);
               const fusten=[...new Set(o.regels.map(r=>r.verpakking))].join(", ");
-              const verd=berekenKarren(trays);
+              const isGetalKlant=/^\d/.test(kl.naam||"");
+              const verd=isGetalKlant?null:berekenKarren(trays);
               const bg=i%2===0?"#fff":"#f9fcfb";
               return "<tr style='background:"+bg+"'>"
                 +"<td style='padding:5px 8px;border:1px solid #eee;font-weight:700'>"+kl.naam+"</td>"
@@ -1605,7 +1606,8 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
                         const trays=o.regels.reduce((s,r)=>s+r.aantal,0);
                         const pl=o.regels.reduce((s,r)=>{const vd=verpDef.find(v=>v.naam===r.verpakking);return s+(vd?.aantal||0)*r.aantal;},0);
                         const fusten=[...new Set(o.regels.map(r=>r.verpakking))].join(", ");
-                        const verd=berekenKarren(trays);
+                        const isGetalKlant=/^\d/.test(kl.naam||"");
+                        const verd=isGetalKlant?null:berekenKarren(trays);
                         return (
                           <tr key={o.id} style={{background:i%2===0?wit:"#f9fcfb"}}>
                             <td style={{...TD,fontWeight:700,color:groen}}>{kl.naam}</td>
@@ -1680,7 +1682,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
                     <input style={{...gs.input,padding:"3px 5px",fontSize:12,width:"100%"}} placeholder="Notitie..." value={data.notitie} onChange={e=>setData({...data,notitie:e.target.value})} />
                     {/* Actieknoppen */}
                     <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:2}}>
-                      {/* Bevestigen + nr op 1 regel */}
+                      {/* Bevestigen */}
                       <div style={{display:"flex",gap:4,alignItems:"center"}}>
                         <button style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",flex:1}}
                           onClick={()=>{
@@ -1689,48 +1691,140 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
                             const volgendNr=bestaandeNrs.length>0?Math.max(...bestaandeNrs)+1:1;
                             const regelsMetVast=data.regels.map(r=>{const vd2=verpDef.find(v=>v.naam===r.verpakking);return {...r,vastPlanten:(vd2?.aantal||0)*r.aantal};});
                             const bevestigd={...data,status:"bevestigd",regels:regelsMetVast,bevestigingNr:String(volgendNr).padStart(4,"0")};
-                            if(data.id){setOrders(orders.map(o=>o.id===data.id?bevestigd:o));setGes(bevestigd);}
-                            else{const nr=data.eigenOrderNr?.trim()||maakOrderNr(data.klantId,data.leverdatum,orders,null);const n={...bevestigd,id:Date.now(),orderNr:nr};setOrders([...orders,n]);setGes(n);}
-                            setForm(false);
+                            if(data.id){setOrders(orders.map(o=>o.id===data.id?bevestigd:o));setGes(bevestigd);setData(bevestigd);}
+                            else{const nr=data.eigenOrderNr?.trim()||maakOrderNr(data.klantId,data.leverdatum,orders,null);const n={...bevestigd,id:Date.now(),orderNr:nr};setOrders([...orders,n]);setGes(n);setData(n);}
                           }}>✅ Bevestigen</button>
                         {data.bevestigingNr&&<span style={{background:"#ede9fe",color:"#7c3aed",borderRadius:4,padding:"3px 6px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>#{data.bevestigingNr}</span>}
                       </div>
-                      {/* Afleverbon + nr op 1 regel */}
+
+                      {/* Afleverdatum — activeert pakbon */}
+                      <div>
+                        <div style={{fontSize:9,color:subtekst,marginBottom:2}}>Afleverdatum</div>
+                        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                          <input type="date" style={{...gs.input,fontSize:12,flex:1}}
+                            value={data.afleverdatum||""}
+                            onChange={e=>{
+                              const bijgewerkt={...data,afleverdatum:e.target.value};
+                              setData(bijgewerkt);
+                              if(data.id) setOrders(orders.map(o=>o.id===data.id?bijgewerkt:o));
+                            }}
+                          />
+                          {data.afleverdatum&&(()=>{
+                            const DAGEN=["ZO","MA","DI","WO","DO","VR","ZA"];
+                            const d=new Date(data.afleverdatum);
+                            return <span style={{fontSize:12,fontWeight:700,color:groen,whiteSpace:"nowrap"}}>
+                              wk{getWeekNr(data.afleverdatum)} {DAGEN[d.getDay()]}
+                            </span>;
+                          })()}
+                        </div>
+                      </div>
+
+                      {/* Pakbon — actief als bevestigd + afleverdatum */}
                       <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                        <button style={{background:"#1d4ed8",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",flex:1}}
+                        <button
+                          disabled={!data.pakbonNr&&(!data.bevestigingNr||!data.afleverdatum)}
+                          style={{background:(data.pakbonNr||(data.bevestigingNr&&data.afleverdatum))?"#0891b2":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:(data.pakbonNr||(data.bevestigingNr&&data.afleverdatum))?"pointer":"default",flex:1}}
                           onClick={()=>{
-                            if(!data.id&&!data.klantId) return;
+                            if(!data.pakbonNr&&(!data.bevestigingNr||!data.afleverdatum)) return;
+                            const bestaandeNrs=orders.filter(o=>o.pakbonNr).map(o=>Number(o.pakbonNr)||0);
+                            const pakbonNr=data.pakbonNr||String((bestaandeNrs.length?Math.max(...bestaandeNrs):0)+1).padStart(4,"0");
+                            const bijgewerkt={...data,pakbonNr,status:"geleverd"};
+                            if(data.id){setOrders(orders.map(o=>o.id===data.id?bijgewerkt:o));setData(bijgewerkt);setGes(bijgewerkt);}
+                            const kl=klanten.find(k=>k.id===data.klantId);
+                            const bd=bedrijf||{};
+                            const DAGEN=["ZO","MA","DI","WO","DO","VR","ZA"];
+                            const aflD=new Date(data.afleverdatum||new Date());
+                            const aflDatum=aflD.toLocaleDateString("nl-NL");
+                            const aflWkDag="wk"+getWeekNr(data.afleverdatum||new Date().toISOString().split("T")[0])+" "+DAGEN[aflD.getDay()];
+                            const logo=bd.logo?"<img src='"+bd.logo+"' style='max-height:60px;max-width:140px;object-fit:contain'/>":"";
+                            const totTrays=(data.regels||[]).reduce((s,r)=>s+r.aantal,0);
+                            const totPl=(data.regels||[]).reduce((s,r)=>{const vd=verpDef.find(v=>v.naam===r.verpakking);return s+(vd?.aantal||0)*r.aantal;},0);
+                            // Karverdeling — alleen als klantnaam niet begint met cijfer
+                            const klNaam=kl?.naam||"";
+                            const isGetalKlant=/^\d/.test(klNaam);
+                            function berekenKarrenPrint(trays) {
+                              const afgerond=Math.ceil(trays/4)*4;
+                              const lagen=afgerond/4;
+                              let beste=null;
+                              for(let k=1;k<=Math.ceil(lagen/12);k++){
+                                for(let a=0;a<=k;a++){for(let b=0;b<=k-a;b++){const c=k-a-b;if(c>4)continue;if(a*12+b*14+c*15===lagen){const sc=c*1000+b*10;if(!beste||k<beste.k||(k===beste.k&&sc<beste.score))beste={k,a,b,c,rest:0,score:sc};}}}
+                                if(k>=2){for(let a=0;a<=k-1;a++){for(let b=0;b<=k-1-a;b++){for(let c=0;c<=Math.min(k-1-a-b,4);c++){const volL=a*12+b*14+c*15;const rL=lagen-volL;if(rL>=1&&rL<=11&&a+b+c===k-1){const sc=c*1000+b*10+1;if(!beste||k<beste.k||(k===beste.k&&sc<beste.score))beste={k,a,b,c,rest:rL,score:sc};}}}}}
+                                if(beste&&beste.k===k) break;
+                              }
+                              if(!beste&&lagen<=11)beste={k:1,a:0,b:0,c:0,rest:lagen,score:0};
+                              return beste;
+                            }
+                            function karOmschrijvingPrint(v){if(!v)return"—";const d=[];if(v.a>0)d.push(v.a+"× 11pl");if(v.b>0)d.push(v.b+"× 13pl");if(v.c>0)d.push(v.c+"× 14pl");if(v.rest>0)d.push("1× "+(v.rest-1)+"pl");return d.join(" + ");}
+                            const verd=isGetalKlant?null:berekenKarrenPrint(totTrays);
+                            const karSectie=(!isGetalKlant&&verd)
+                              ?"<div style='background:#e8f5ee;border-radius:6px;padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center'>"
+                                +"<div><div style='font-size:11px;color:#555;margin-bottom:2px'>Karverdeling</div>"
+                                +"<div style='font-size:20px;font-weight:700;color:#2d6a4f'>"+karOmschrijvingPrint(verd)+"</div></div>"
+                                +"<div style='text-align:right'><div style='font-size:11px;color:#555;margin-bottom:2px'>Totaal karren</div>"
+                                +"<div style='font-size:28px;font-weight:700;color:#2d6a4f'>"+verd.k+"</div></div>"
+                              +"</div>"
+                              :"";
+                            const rijen=(data.regels||[]).map((r,i)=>{const vd=verpDef.find(v=>v.naam===r.verpakking);const bg=i%2===0?"#fff":"#f9fcfb";return "<tr style='background:"+bg+"'><td style='padding:5px 8px;border:1px solid #eee'>"+r.gewas+"</td><td style='padding:5px 8px;border:1px solid #eee'>"+r.soort+"</td><td style='padding:5px 8px;border:1px solid #eee'>"+r.verpakking+"</td><td style='padding:5px 8px;border:1px solid #eee;text-align:right'>"+r.aantal+"</td><td style='padding:5px 8px;border:1px solid #eee'></td></tr>";}).join("");
+                            const html="<!DOCTYPE html><html><head><meta charset='UTF-8'><style>@page{size:A4;margin:15mm} body{font-family:Arial,sans-serif;font-size:11px;color:#222;margin:0} table{border-collapse:collapse;width:100%} @media print{button{display:none}} .sig{border-top:1px solid #999;margin-top:50px;padding-top:4px;font-size:10px;color:#666;width:180px;display:inline-block}</style></head><body>"
+                              +"<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid #2d6a4f'><div>"+logo+"</div>"
+                              +"<div style='text-align:right;font-size:11px;line-height:1.8'><div style='font-size:15px;font-weight:700'>"+klNaam+"</div>"
+                              +"<div>Pakbon <strong>#"+pakbonNr+"</strong></div>"
+                              +"<div>Afleverdatum: <strong>"+aflDatum+" ("+aflWkDag+")</strong></div>"
+                              +(data.bevestigingNr?"<div>Bevestiging: #"+data.bevestigingNr+"</div>":"")
+                              +"</div></div>"
+                              +karSectie
+                              +"<table><thead><tr>"
+                              +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Gewas</th>"
+                              +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Soort</th>"
+                              +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Fust</th>"
+                              +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Trays</th>"
+                              +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Planten</th>"
+                              +"</tr></thead><tbody>"+rijen+"</tbody>"
+                              +"<tfoot><tr style='background:#e8f5ee;font-weight:700'>"
+                              +"<td colspan='3' style='padding:5px 8px;border:1px solid #c8e6c9;color:#2d6a4f;border-top:2px solid #2d6a4f'>Totaal</td>"
+                              +"<td style='padding:5px 8px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f;border-top:2px solid #2d6a4f'>"+totTrays+"</td>"
+                              +"<td style='padding:5px 8px;border:1px solid #c8e6c9;border-top:2px solid #2d6a4f'></td>"
+                              +"</tr></tfoot></table>"
+                              +"<div style='margin-top:40px;display:flex;gap:50px'><div class='sig'>Ontvangen door</div><div class='sig'>Handtekening</div><div class='sig'>Datum</div></div>"
+                              +"</body></html>";
+                            const w=window.open("","_blank");
+                            if(w){w.document.open();w.document.write(html);w.document.close();setTimeout(()=>w.print(),400);}
+                          }}>
+                          {data.pakbonNr?"🖨️ Herdruk pakbon":"🚚 Pakbon & Geleverd"}
+                        </button>
+                        {data.pakbonNr&&<span style={{background:"#cffafe",color:"#0891b2",borderRadius:4,padding:"3px 6px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>#{data.pakbonNr}</span>}
+                      </div>
+
+                      {/* Afleverbon — actief na pakbon */}
+                      <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                        <button
+                          disabled={!data.pakbonNr}
+                          style={{background:data.pakbonNr?"#1d4ed8":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:data.pakbonNr?"pointer":"default",flex:1}}
+                          onClick={()=>{
+                            if(!data.id||!data.pakbonNr) return;
                             const bestaandeNrs=orders.filter(o=>o.afleverNr).map(o=>Number(o.afleverNr)||0);
                             const volgendNr=bestaandeNrs.length>0?Math.max(...bestaandeNrs)+1:1;
                             const bijgewerkt={...data,afleverNr:String(volgendNr).padStart(4,"0"),status:"geleverd"};
-                            if(data.id){setOrders(orders.map(o=>o.id===data.id?bijgewerkt:o));setData(bijgewerkt);}
-                          }}>🚚 Afleverbon</button>
+                            setOrders(orders.map(o=>o.id===data.id?bijgewerkt:o));setData(bijgewerkt);
+                          }}>🚛 Afleverbon</button>
                         {data.afleverNr&&<span style={{background:"#dbeafe",color:"#1d4ed8",borderRadius:4,padding:"3px 6px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>#{data.afleverNr}</span>}
                       </div>
-                      {/* Pakbon + nr op 1 regel */}
+
+                      {/* Factuur — actief na afleverbon */}
                       <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                        <button style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",flex:1}}
+                        <button
+                          disabled={!data.afleverNr}
+                          style={{background:data.afleverNr?"#b45309":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:data.afleverNr?"pointer":"default",flex:1}}
                           onClick={()=>{
-                            if(!data.id&&!data.klantId) return;
-                            const bestaandeNrs=orders.filter(o=>o.pakbonNr).map(o=>Number(o.pakbonNr)||0);
-                            const volgendNr=bestaandeNrs.length>0?Math.max(...bestaandeNrs)+1:1;
-                            const bijgewerkt={...data,pakbonNr:String(volgendNr).padStart(4,"0")};
-                            if(data.id){setOrders(orders.map(o=>o.id===data.id?bijgewerkt:o));setData(bijgewerkt);}
-                          }}>📦 Pakbon</button>
-                        {data.pakbonNr&&<span style={{background:"#cffafe",color:"#0891b2",borderRadius:4,padding:"3px 6px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>#{data.pakbonNr}</span>}
-                      </div>
-                      {/* Factuur + nr op 1 regel */}
-                      <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                        <button style={{background:"#b45309",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",flex:1}}
-                          onClick={()=>{
-                            if(!data.id&&!data.klantId) return;
+                            if(!data.id||!data.afleverNr) return;
                             const bestaandeNrs=orders.filter(o=>o.factuurNr).map(o=>Number(o.factuurNr)||0);
                             const volgendNr=bestaandeNrs.length>0?Math.max(...bestaandeNrs)+1:1;
                             const bijgewerkt={...data,factuurNr:String(volgendNr).padStart(4,"0")};
-                            if(data.id){setOrders(orders.map(o=>o.id===data.id?bijgewerkt:o));setData(bijgewerkt);}
+                            setOrders(orders.map(o=>o.id===data.id?bijgewerkt:o));setData(bijgewerkt);
                           }}>🧾 Factuur</button>
                         {data.factuurNr&&<span style={{background:"#fef3c7",color:"#b45309",borderRadius:4,padding:"3px 6px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>#{data.factuurNr}</span>}
                       </div>
+
                       {/* Opslaan + Sluiten */}
                       <div style={{display:"flex",gap:4,marginTop:2}}>
                         <button style={{...gs.knopPrimair,flex:1,padding:"4px",fontSize:11}} onClick={opslaan}>💾 Opslaan</button>

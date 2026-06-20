@@ -7,6 +7,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <!-- Firebase -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -455,6 +457,7 @@ function Teelten({ gewassen, setGewassen }) {
                         setGes(bijgewerkt.find(g=>g.id===ges.id));
                       }}
                     />
+
                   </div>
                 ))}
               </div>
@@ -889,6 +892,10 @@ function OrderDetail({ ges, kl, klanten, verpDef, gewassen, setSt, setTab, setDa
       <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:6,flexWrap:"wrap",background:"#fff",border:`1px solid ${rand}`,borderRadius:6,padding:"5px 8px"}}>
         <button title="Bewerken" style={{background:lichtGroen,color:groen,border:"none",borderRadius:4,padding:"2px 7px",cursor:"pointer",fontSize:11,fontWeight:600}} onClick={()=>{setData({...ges});setRegel(legeRegel);setForm(true);setTab("lijst");}}>✏️</button>
         <button title="Kopiëren" style={{background:lichtGroen,color:groen,border:"none",borderRadius:4,padding:"2px 7px",cursor:"pointer",fontSize:11,fontWeight:600}} onClick={()=>{setKopO(ges);}}>📋</button>
+        {ges.bevestigingNr&&klanten.find(k=>k.id===ges.klantId)?.email&&(
+          <button title="Bevestiging mailen" style={{background:"#1d4ed8",color:"#fff",border:"none",borderRadius:4,padding:"2px 7px",cursor:"pointer",fontSize:11,fontWeight:600}}
+            onClick={()=>mailBevestiging(ges)}>📧</button>
+        )}
         <span style={{fontWeight:700,fontSize:14}}>{ges.orderNr}</span>
         <span style={{color:subtekst,fontSize:11}}>· {kl?.naam} · {weekLabel(ges.leverdatum)} · {ges.aanmaakdatum}{ges.bevestigingNr&&<> · <strong>Bev: {ges.bevestigingNr}</strong></>}{ges.afleverNr&&<> · <strong>Afl: {ges.afleverNr}</strong></>}</span>
         {ges.notitie&&<span style={{color:subtekst,fontSize:11}}>· {ges.notitie}</span>}
@@ -1283,6 +1290,8 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
   const [tab,setTab]=useState("lijst");
   const [twk,setTwk]=useState(()=>{const n=new Date();return `${String(getJaar(n)).slice(-2)}${String(getWeekNr(n)+1).padStart(2,"0")}`;});
   const [zoek,setZoek]=useState("");
+  const [mailStatus,setMailStatus]=useState("");
+  const [mailLog,setMailLog]=useState(()=>{ try{ return JSON.parse(localStorage.getItem('ta_maillog')||'[]'); }catch(e){ return []; } });
 
   const [alleWkenOpen,setAlleWkenOpen]=useState(null); // null=default, true=alle open, false=alle dicht
   const nuWkLabel = `${String(getJaar(new Date())).slice(-2)}${String(getWeekNr(new Date())).padStart(2,"0")}`;
@@ -1525,6 +1534,118 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
     if(w){w.document.open();w.document.write(doc);w.document.close();setTimeout(()=>w.print(),400);}
   }
 
+
+  function mailBevestiging(order) {
+    const kl = klanten.find(k=>k.id===order.klantId)||{};
+    const bd = bedrijf||{};
+    const mailUrl = localStorage.getItem('ta_mailUrl')||'';
+
+    if(!kl.email) { alert('Geen e-mailadres bekend voor '+kl.naam); return; }
+    if(!mailUrl) { alert('Geen mail URL ingesteld. Ga naar ⚙️ Instellingen.'); return; }
+
+    // Genereer de bevestigings HTML als PDF via print-venster
+    // We sturen de order data mee als JSON zodat de webapp een eenvoudige mail kan sturen
+    const d = order.transportDatum ? new Date(order.transportDatum) : null;
+    const dagenKort = ["ZO","MA","DI","WO","DO","VR","ZA"];
+    const transportStr = d ? d.toLocaleDateString("nl-NL")+" ("+dagenKort[d.getDay()]+" wk "+weekLabel(order.transportDatum)+")" : "—";
+
+    const regelsHtml = order.regels.map(r=>{
+      const vd = verpDef.find(v=>v.naam===r.verpakking);
+      const pl = r.vastPlanten??((vd?.aantal||0)*r.aantal);
+      return "<tr><td style='padding:5px 8px;border:1px solid #eee'>"+r.gewas+"</td>"
+        +"<td style='padding:5px 8px;border:1px solid #eee'>"+r.soort+"</td>"
+        +"<td style='padding:5px 8px;border:1px solid #eee'>"+r.verpakking+"</td>"
+        +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right'>"+(r.prijs?"€"+Number(r.prijs).toFixed(3):"—")+"</td>"
+        +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right'>"+r.aantal+"</td>"
+        +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right;color:#2d6a4f;font-weight:700'>"+pl.toLocaleString("nl-NL")+"</td>"
+        +"</tr>";
+    }).join("");
+
+    const totPl = order.regels.reduce((s,r)=>{const vd=verpDef.find(v=>v.naam===r.verpakking);return s+(r.vastPlanten??((vd?.aantal||0)*r.aantal));},0);
+    const totTrays = order.regels.reduce((s,r)=>s+r.aantal,0);
+
+    const berichtHtml = "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
+      +"<style>body{font-family:Arial,sans-serif;font-size:12px;color:#222;max-width:600px;margin:0 auto;padding:20px}"
+      +"table{border-collapse:collapse;width:100%} th{background:#e8f5ee;color:#2d6a4f;padding:6px 8px;border:1px solid #c8e6c9;text-align:left}"
+      +"</style></head><body>"
+      +"<p>Geachte "+kl.naam+",</p>"
+      +"<p>Hierbij ontvangt u de orderbevestiging voor leverweek <strong>"+weekLabel(order.leverdatum)+"</strong>.</p>"
+      +"<div style='background:#f0f7f4;padding:10px 16px;border-radius:6px;margin:14px 0;font-size:12px'>"
+        +"<strong>Bevestigingsnr:</strong> #"+order.bevestigingNr+" &nbsp;·&nbsp; "
+        +"<strong>Leverweek:</strong> "+weekLabel(order.leverdatum)
+        +(order.notitie?" &nbsp;·&nbsp; <strong>Notitie:</strong> "+order.notitie:"")
+      +"</div>"
+      +"<table><thead><tr>"
+        +"<th>Gewas</th><th>Soort</th><th>Fust</th><th style='text-align:right'>€/st</th><th style='text-align:right'>Trays</th><th style='text-align:right'>Planten</th>"
+      +"</tr></thead><tbody>"+regelsHtml+"</tbody>"
+      +"<tfoot><tr style='background:#e8f5ee;font-weight:700'>"
+        +"<td colspan='4' style='padding:6px 8px;border:1px solid #c8e6c9;color:#2d6a4f'>Totaal</td>"
+        +"<td style='padding:6px 8px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f'>"+totTrays+"</td>"
+        +"<td style='padding:6px 8px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f'>"+totPl.toLocaleString("nl-NL")+"</td>"
+      +"</tr></tfoot></table>"
+      +"<p style='margin-top:20px;color:#555;font-size:11px'>Met vriendelijke groet,<br/><strong>"+bd.naam+"</strong><br/>"+bd.telefoon+"<br/>"+bd.email+"</p>"
+      +"</body></html>";
+
+    const onderwerp = "Orderbevestiging week "+weekLabel(order.leverdatum)+" - "+bd.naam;
+
+    // Genereer PDF via hidden iframe + html2canvas
+    async function verstuurMetPdf() {
+      setMailStatus("📧 PDF genereren...");
+      try {
+        // Maak hidden div met de matrix HTML
+        const div = document.createElement('div');
+        div.style.cssText = 'position:fixed;left:-9999px;top:0;width:900px;background:#fff;padding:20px;font-family:Arial,sans-serif;font-size:11px';
+        div.innerHTML = berichtHtml;
+        document.body.appendChild(div);
+
+        const canvas = await window.html2canvas(div, {scale:1.5, useCORS:true, backgroundColor:'#fff'});
+        document.body.removeChild(div);
+
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
+        const imgData = canvas.toDataURL('image/jpeg', 0.85);
+        const pdfW = pdf.internal.pageSize.getWidth();
+        const pdfH = (canvas.height * pdfW) / canvas.width;
+
+        // Splits over meerdere pagina's als nodig
+        const pageH = pdf.internal.pageSize.getHeight();
+        let y = 0;
+        while(y < pdfH) {
+          if(y > 0) pdf.addPage();
+          pdf.addImage(imgData, 'JPEG', 0, -y, pdfW, pdfH);
+          y += pageH;
+        }
+
+        const pdfBase64 = pdf.output('datauristring').split(',')[1];
+        const bestandsnaam = 'Bevestiging_'+kl.naam+'_wk'+weekLabel(order.leverdatum)+'.pdf';
+
+        setMailStatus("📧 Versturen...");
+        await fetch(mailUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            to_email: kl.email,
+            onderwerp: onderwerp,
+            bericht: "Zie bijgaand de orderbevestiging.",
+            html: berichtHtml,
+            attachment: pdfBase64,
+            attachment_name: bestandsnaam
+          })
+        });
+
+        const logEntry = {datum: new Date().toLocaleString("nl-NL"), klant: kl.naam, email: kl.email, onderwerp: onderwerp, week: weekLabel(order.leverdatum)};
+        setMailLog(prev=>{ const nieuw=[logEntry,...prev].slice(0,50); localStorage.setItem('ta_maillog', JSON.stringify(nieuw)); return nieuw; });
+        setMailStatus("✅ Mail verstuurd naar "+kl.email);
+        setTimeout(()=>setMailStatus(""),4000);
+      } catch(err) {
+        console.error(err);
+        setMailStatus("⚠️ Fout: "+err.message);
+      }
+    }
+    verstuurMetPdf();
+  }
+
   const alleWeken=[...new Set(orders.map(o=>weekLabel(o.leverdatum)))].sort();
   const gefilterd=orders.filter(o=>{
     const wk=weekLabel(o.leverdatum);
@@ -1732,6 +1853,17 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
           );
         })()}
 
+        {/* ── TAB BALK ── */}
+        <div style={{display:"flex",gap:3,padding:"6px 14px",background:"rgba(0,0,0,0.04)",borderBottom:`1px solid ${rand}`}}>
+          {[["lijst","📋 Orders"]].map(([id,lbl])=>(
+            <button key={id} onClick={()=>setTab(id)}
+              style={{padding:"4px 12px",borderRadius:6,border:"none",cursor:"pointer",fontSize:12,
+                fontWeight:tab===id?700:400,background:tab===id?groen:"transparent",color:tab===id?wit:subtekst}}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+
         {/* ── ORDER DETAIL / FORM — eronder ── */}
         <div style={{flex:1,overflowY:"auto",padding:14}}>
         {tab==="lijst" && (form ? (
@@ -1873,6 +2005,15 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
                         <button style={{...gs.knopPrimair,flex:1,padding:"4px",fontSize:11}} onClick={opslaan}>💾 Opslaan</button>
                         <button style={{...gs.knopSecundair,flex:1,padding:"4px",fontSize:11}} onClick={()=>setForm(false)}>✕ Sluiten</button>
                       </div>
+                      {data.bevestigingNr&&data.status==="bevestigd"&&klanten.find(k=>k.id===data.klantId)?.email&&(
+                        <div style={{marginTop:4}}>
+                          <button style={{background:"#1d4ed8",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",width:"100%"}}
+                            onClick={()=>mailBevestiging(data)}>
+                            📧 Bevestiging mailen naar {klanten.find(k=>k.id===data.klantId)?.email}
+                          </button>
+                          {mailStatus&&<div style={{fontSize:10,marginTop:3,color:mailStatus.startsWith("✅")?"#16a34a":"#f59e0b",textAlign:"center"}}>{mailStatus}</div>}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1990,6 +2131,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
         {tab==="matrix" && (
           <MatrixFilterPaneel klanten={klanten} gewassen={gewassen} orders={orders} verpDef={verpDef} weken={WEKEN} />
         )}
+
         </div>
       </div>div>
 
@@ -2812,9 +2954,217 @@ function Bevestiging({ klanten, gewassen, orders, setOrders, verpDef, bedrijf })
   const [herdruk, setHerdruk] = useState(false);
   const [printMulti, setPrintMulti] = useState(null);
   const [printMatrix, setPrintMatrix] = useState(null);
+  const [mailMatrixStatus, setMailMatrixStatus] = useState("");
 
   function plantenVast(r){const vd=vindVd(verpDef,r.verpakking);return r.vastPlanten??((vd?.aantal||0)*r.aantal);}
   function plantenTotaal(regels){return regels.reduce((s,r)=>s+plantenVast(r),0);}
+
+  function mailSeizoensmatrix(klant, klantOrders) {
+    const mailUrl = localStorage.getItem('ta_mailUrl')||'';
+    if(!klant?.email) { alert('Geen e-mailadres bekend voor '+klant?.naam); return; }
+    if(!mailUrl) { alert('Geen mail URL ingesteld. Ga naar ⚙️ Instellingen.'); return; }
+
+    // Bouw matrix
+    const alleWkn = [...new Set(klantOrders.map(o=>weekLabel(o.leverdatum)))].sort();
+    const rijMap = {};
+    klantOrders.forEach(o=>{
+      const wk = weekLabel(o.leverdatum);
+      o.regels.forEach(r=>{
+        const key = r.gewas+"||"+r.soort+"||"+r.verpakking;
+        if(!rijMap[key]) rijMap[key]={gewas:r.gewas,soort:r.soort,verpakking:r.verpakking,prijs:r.prijs,weken:{}};
+        rijMap[key].weken[wk]=(rijMap[key].weken[wk]||0)+plantenVast(r);
+        if(r.prijs) rijMap[key].prijs=r.prijs;
+      });
+    });
+    const rijen = Object.values(rijMap).sort((a,b)=>a.gewas.localeCompare(b.gewas)||a.soort.localeCompare(b.soort));
+    const totaalPerWeek = wk => rijen.reduce((s,r)=>s+(r.weken[wk]||0),0);
+    const rijTotaal = r => alleWkn.reduce((s,wk)=>s+(r.weken[wk]||0),0);
+    const grootTotaal = alleWkn.reduce((s,wk)=>s+totaalPerWeek(wk),0);
+
+    // Bouw HTML
+    // Splits weken in groepen van 10
+    const COLS = 10;
+    const weekGroepen = [];
+    for(let i=0; i<alleWkn.length; i+=COLS) weekGroepen.push(alleWkn.slice(i,i+COLS));
+
+    // Stijlen voor staand A4, kleine letters
+    const th = "padding:3px 4px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right;font-size:8px;font-weight:700;white-space:nowrap;";
+    const thL = "padding:3px 4px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left;font-size:8px;font-weight:700;";
+    const td = "padding:2px 4px;border:1px solid #eee;text-align:right;font-size:8px;";
+    const tdL = "padding:2px 4px;border:1px solid #eee;text-align:left;font-size:8px;";
+
+    function maakTabel(wkGroep) {
+      // Alleen rijen die data hebben in deze weekgroep
+      const actieveRijen = rijen.filter(r=>wkGroep.some(wk=>r.weken[wk]>0));
+      const headerCellen = wkGroep.map(wk=>"<th style='"+th+"'>"+wk+"</th>").join("");
+      const totaalCellen = wkGroep.map(wk=>"<td style='"+th+"font-weight:700'>"+
+        (totaalPerWeek(wk)>0?totaalPerWeek(wk).toLocaleString("nl-NL"):"")+"</td>").join("");
+      const dataRijen2 = actieveRijen.map((r,i)=>{
+        const bg = i%2===0?"#fff":"#f9fcfb";
+        const cellen = wkGroep.map(wk=>"<td style='"+td+(r.weken[wk]?"font-weight:600;color:#222":"color:#ccc")+"'>"+
+          (r.weken[wk]?r.weken[wk].toLocaleString("nl-NL"):"")+"</td>").join("");
+        return "<tr style='background:"+bg+"'>"
+          +"<td style='"+tdL+"font-weight:600'>"+r.soort+"</td>"
+          +"<td style='"+tdL+"'><span style='background:#b7e4c7;color:#2d6a4f;border-radius:10px;padding:0 5px;font-size:7px;font-weight:600'>"+r.verpakking+"</span></td>"
+          +"<td style='"+td+"color:#2d6a4f'>"+(r.prijs?"€"+Number(r.prijs).toFixed(3):"—")+"</td>"
+          +cellen
+          +"<td style='"+td+"font-weight:700;color:#2d6a4f;background:#f0fff4'>"+rijTotaal(r).toLocaleString("nl-NL")+"</td>"
+          +"</tr>";
+      }).join("");
+      return "<table style='border-collapse:collapse;width:100%;margin-bottom:14px;'>"
+        +"<thead><tr>"
+          +"<th style='"+thL+"min-width:110px'>Soort</th>"
+          +"<th style='"+thL+"min-width:55px'>Fust</th>"
+          +"<th style='"+th+"min-width:40px'>€/st</th>"
+          +headerCellen
+          +"<th style='"+th+"background:#c8e6c9;min-width:45px'>Totaal</th>"
+        +"</tr></thead>"
+        +"<tbody>"+dataRijen2+"</tbody>"
+        +"<tfoot><tr style='background:#e8f5ee;'>"
+          +"<td colspan='3' style='"+thL+"border-top:2px solid #2d6a4f'>Totaal</td>"
+          +totaalCellen
+          +"<td style='"+th+"border-top:2px solid #2d6a4f;background:#c8e6c9'>"+grootTotaal.toLocaleString("nl-NL")+"</td>"
+        +"</tr></tfoot>"
+        +"</table>";
+    }
+
+    const tabellenHtml = weekGroepen.map(g=>maakTabel(g)).join("<div style='height:14px'></div>");
+
+    const bd2 = bedrijf||{};
+    const brieftekst = (bd2.brieftekst||"Geachte "+klant.naam+",\n\nHierbij bevestigen wij uw bestelling voor het komende seizoen. In onderstaand overzicht vindt u de details per leverweek.\n\nWij verzoeken u dit overzicht te controleren en eventuele wijzigingen tijdig door te geven.").replace(/\n/g,"<br/>");
+    const logo = bd2.logo?"<img src='"+bd2.logo+"' style='max-height:45px;max-width:130px;object-fit:contain'/><br/>":"";
+
+    const berichtHtml = "<!DOCTYPE html><html><head><meta charset=\'UTF-8\'>"
+      +"<style>"
+        +"@page{size:A4 portrait;margin:0}"
+        +"body{font-family:Arial,sans-serif;font-size:9px;color:#222;margin:0;padding:0}"
+        +"table{border-collapse:collapse;width:100%}"
+      +"</style></head><body>"
+
+      // ── BRIEFHOOFD ──
+      +"<div style=\'background:#2d6a4f;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;\'>"
+        +"<div>"
+          +"<div style=\'font-size:16px;font-weight:700;letter-spacing:1px\'>VOLLEBREGT CYCLAMEN</div>"
+          +"<div style=\'font-size:8px;opacity:0.85;margin-top:2px\'>"+(bd2.adres||"")+" &nbsp;&middot;&nbsp; "+(bd2.postcode||"")+" "+(bd2.plaats||"")+"</div>"
+        +"</div>"
+        +"<div style=\'text-align:right;font-size:8px;opacity:0.85;\'>"
+          +"<div>"+(bd2.telefoon||"")+"</div>"
+          +"<div>"+(bd2.email||"")+"</div>"
+          +(bd2.kvk?"<div>KVK: "+bd2.kvk+"</div>":"")
+          +(bd2.btw?"<div>BTW: "+bd2.btw+"</div>":"")
+        +"</div>"
+      +"</div>"
+
+      // ── INHOUD ──
+      +"<div style=\'padding:16px 20px;\'>"
+
+        // Klant + datum blok
+        +"<div style=\'display:flex;justify-content:space-between;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #e2e8e4;\'>"
+          +"<div>"
+            +"<div style=\'font-size:8px;color:#888;margin-bottom:3px\'>Aan:</div>"
+            +"<div style=\'font-size:11px;font-weight:700\'>"+(klant.naam||"")+"</div>"
+            +(klant.adres?"<div style=\'font-size:8px;color:#555\'>"+klant.adres+"</div>":"")
+            +((klant.postcode||klant.plaats)?"<div style=\'font-size:8px;color:#555\'>"+(klant.postcode||"")+" "+(klant.plaats||"")+"</div>":"")
+          +"</div>"
+          +"<div style=\'text-align:right;\'>"
+            +"<div style=\'font-size:14px;font-weight:700;color:#2d6a4f\'>ORDERBEVESTIGING</div>"
+            +"<div style=\'font-size:8px;color:#555;margin-top:3px\'>Datum: "+new Date().toLocaleDateString("nl-NL",{day:"2-digit",month:"long",year:"numeric"})+"</div>"
+            +"<div style=\'font-size:8px;color:#555\'>Weken: "+alleWkn.join(", ")+"</div>"
+            +"<div style=\'font-size:8px;color:#555\'>Totaal: "+grootTotaal.toLocaleString("nl-NL")+" planten</div>"
+          +"</div>"
+        +"</div>"
+
+        // Standaard tekst
+        +"<div style=\'font-size:8.5px;color:#444;line-height:1.6;margin-bottom:12px;padding:8px 10px;background:#f9fcfb;border-left:3px solid #2d6a4f;\'>"
+          +"Geachte "+(bd.leverancierNaam||"heer/mevrouw")+",<br/><br/>"
+          +"Hierbij bevestigen wij uw order voor het seizoen "+new Date().getFullYear()+" zoals hieronder gespecificeerd. "
+          +"Wij verzoeken u dit overzicht te controleren en eventuele afwijkingen binnen 5 werkdagen aan ons door te geven.<br/><br/>"
+          +"De levering vindt plaats conform de onderstaande weekplanning. "
+          +"Wij stellen het op prijs indien u bij ontvangst de goederen direct controleert op volledigheid en kwaliteit."
+        +"</div>"
+
+        // Matrix tabellen
+        +tabellenHtml
+
+        // Handtekening
+        +"<div style=\'margin-top:16px;padding-top:10px;border-top:1px solid #e2e8e4;font-size:8px;color:#555;\'>"
+          +"<div>Met vriendelijke groet,</div>"
+          +"<div style=\'margin-top:6px;font-weight:700;font-size:10px\'>"+(bd2.naam||"Vollebregt Cyclamen")+"</div>"
+          +"<div style=\'margin-top:2px\'>"+(bd2.telefoon||"")+"&nbsp;&nbsp;"+(bd2.email||"")+"</div>"
+          +(bd2.iban?"<div style=\'margin-top:2px;color:#888\'>IBAN: "+bd2.iban+"</div>":"")
+          +"<div style=\'margin-top:18px;display:flex;gap:50px;\'>"
+            +"<div style=\'border-top:1px solid #bbb;padding-top:3px;min-width:120px\'>Voor akkoord klant</div>"
+            +"<div style=\'border-top:1px solid #bbb;padding-top:3px;min-width:80px\'>Datum</div>"
+          +"</div>"
+        +"</div>"
+
+      +"</div>"
+
+      // ── FOOTER ──
+      +"<div style=\'background:#f0f7f4;padding:6px 20px;font-size:7px;color:#888;display:flex;justify-content:space-between;border-top:1px solid #c8e6c9;\'>"
+        +"<span>"+(bd2.naam||"Vollebregt Cyclamen")+" &nbsp;&middot;&nbsp; "+(bd2.adres||"")+" "+(bd2.postcode||"")+" "+(bd2.plaats||"")+"</span>"
+        +(bd2.iban?"<span>IBAN: "+bd2.iban+"</span>":"")
+        +(bd2.kvk?"<span>KVK: "+bd2.kvk+"</span>":"")
+      +"</div>"
+
+      +"</body></html>";
+
+    const onderwerp = "Seizoensoverzicht weken "+alleWkn.join(", ")+" - Vollebregt Cyclamen";
+    const bestandsnaam = "Seizoensoverzicht_"+klant.naam+"_"+new Date().getFullYear()+".pdf";
+
+    async function verstuurSeizoensmatrix() {
+      setMailMatrixStatus("📧 PDF genereren...");
+      try {
+        // Render matrix HTML naar canvas dan PDF
+        const div = document.createElement('div');
+        div.style.cssText = 'position:fixed;left:-9999px;top:0;width:750px;background:#fff;padding:16px;font-family:Arial,sans-serif;font-size:9px';
+        div.innerHTML = berichtHtml;
+        document.body.appendChild(div);
+
+        const canvas = await window.html2canvas(div, {scale:1.5, useCORS:true, backgroundColor:'#fff'});
+        document.body.removeChild(div);
+
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
+        const imgData = canvas.toDataURL('image/jpeg', 0.85);
+        const pdfW = pdf.internal.pageSize.getWidth();
+        const pdfH = (canvas.height * pdfW) / canvas.width;
+        const pageH = pdf.internal.pageSize.getHeight();
+        let y = 0;
+        while(y < pdfH) {
+          if(y > 0) pdf.addPage();
+          pdf.addImage(imgData, 'JPEG', 0, -y, pdfW, pdfH);
+          y += pageH;
+        }
+        const pdfBase64 = pdf.output('datauristring').split(',')[1];
+
+        setMailMatrixStatus("📧 Versturen...");
+        await fetch(mailUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            to_email: klant.email,
+            onderwerp,
+            bericht: "",
+            html: berichtHtml,
+            attachment: pdfBase64,
+            attachment_name: bestandsnaam
+          })
+        });
+
+        const logEntry = {datum: new Date().toLocaleString("nl-NL"), klant: klant.naam, email: klant.email, onderwerp, week: "seizoen"};
+        const log = JSON.parse(localStorage.getItem('ta_maillog')||'[]');
+        localStorage.setItem('ta_maillog', JSON.stringify([logEntry,...log].slice(0,50)));
+        setMailMatrixStatus("✅ Mail verstuurd naar "+klant.email);
+        setTimeout(()=>setMailMatrixStatus(""),4000);
+      } catch(err) {
+        console.error(err);
+        setMailMatrixStatus("⚠️ Fout: "+err.message);
+      }
+    }
+    verstuurSeizoensmatrix();
+  }
 
   const klantenMetOpen = klanten.filter(k=>orders.some(o=>o.klantId===k.id&&!o.bevestigingNr&&o.status!=="geleverd"))
     .sort((a,b)=>a.naam.localeCompare(b.naam));
@@ -2919,10 +3269,14 @@ function Bevestiging({ klanten, gewassen, orders, setOrders, verpDef, bedrijf })
           </div>
         </div>
         {selKlant&&(
-          <div style={{padding:8,borderTop:`1px solid ${rand}`}}>
+          <div style={{padding:8,borderTop:`1px solid ${rand}`,display:"flex",flexDirection:"column",gap:4}}>
             <button style={{...gs.knopPrimair,background:"#1d4ed8",width:"100%",fontSize:11}} onClick={()=>{
               setPrintMatrix({klant:selKlant,orders:orders.filter(o=>o.klantId===selKlant.id&&o.status!=="geleverd")});
-            }}>Seizoensmatrix</button>
+            }}>🖨️ Seizoensmatrix</button>
+            <button style={{...gs.knopPrimair,background:"#16a34a",width:"100%",fontSize:11}} onClick={()=>{
+              mailSeizoensmatrix(selKlant, orders.filter(o=>o.klantId===selKlant.id&&o.status!=="geleverd"));
+            }}>📧 Mail seizoensmatrix</button>
+            {mailMatrixStatus&&<div style={{fontSize:10,color:mailMatrixStatus.startsWith("✅")?"#16a34a":"#f59e0b",textAlign:"center"}}>{mailMatrixStatus}</div>}
           </div>
         )}
       </div>
@@ -3400,8 +3754,86 @@ function WerklijstPrint({ data, bedrijf, onSluit }) {
 // ════════════════════════════════════════════════════════
 // ZAAD VOORRAAD COMPONENT
 // ════════════════════════════════════════════════════════
+function mailBestelling(bestellingen, setStatus) {
+  const mailUrl = localStorage.getItem('ta_mailUrl')||'';
+  if(!mailUrl) { alert('Geen mail URL ingesteld. Ga naar ⚙️ Instellingen.'); return; }
+
+  const bd = JSON.parse(localStorage.getItem('ta_bedrijf')||'{}');
+  const vandaag = new Date().toLocaleDateString("nl-NL",{day:"2-digit",month:"long",year:"numeric"});
+
+  const th = "padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left;font-size:11px;font-weight:700;";
+  const thR = "padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right;font-size:11px;font-weight:700;";
+  const td = "padding:5px 8px;border:1px solid #eee;font-size:11px;";
+  const tdR = "padding:5px 8px;border:1px solid #eee;font-size:11px;text-align:right;font-weight:700;color:#2d6a4f;";
+
+  const rijen = bestellingen.map(({key,adv},i)=>{
+    const [gewas,soort] = key.split("||");
+    const bg = i%2===0?"#fff":"#f9fcfb";
+    return "<tr style='background:"+bg+"'>"
+      +"<td style='"+td+"font-weight:600'>"+gewas+"</td>"
+      +"<td style='"+td+"'>"+soort+"</td>"
+      +"<td style='"+tdR+"'>"+adv.advies+"</td>"
+      +"</tr>";
+  }).join("");
+
+  const berichtHtml = "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
+    +"<style>body{font-family:Arial,sans-serif;font-size:11px;color:#222;padding:20px} table{border-collapse:collapse;width:100%}</style></head><body>"
+    +"<div style='background:#2d6a4f;color:#fff;padding:14px 20px;margin:-20px -20px 20px;display:flex;justify-content:space-between;align-items:center'>"
+      +"<div>"
+        +"<div style='font-size:15px;font-weight:700'>VOLLEBREGT CYCLAMEN</div>"
+        +"<div style='font-size:8px;opacity:0.85;margin-top:2px'>"+(bd.adres||"")+" &middot; "+(bd.postcode||"")+" "+(bd.plaats||"")+"</div>"
+      +"</div>"
+      +"<div style='text-align:right;font-size:8px;opacity:0.85'><div>"+(bd.telefoon||"")+"</div><div>"+(bd.email||"")+"</div></div>"
+    +"</div>"
+    +"<div style='display:flex;justify-content:space-between;margin-bottom:16px'>"
+      +"<div style='font-size:16px;font-weight:700;color:#2d6a4f'>ZAADBESTELLING</div>"
+      +"<div style='font-size:11px;color:#555'>Datum: "+vandaag+"</div>"
+    +"</div>"
+    +"<div style='font-size:11px;color:#444;line-height:1.6;margin-bottom:16px;padding:8px 12px;background:#f9fcfb;border-left:3px solid #2d6a4f'>"
+      +"Geachte heer/mevrouw,<br/><br/>"
+      +"Hierbij ontvangt u onze zaadbestelling op basis van de huidige planning. "
+      +"Wij verzoeken u de bestelling zo spoedig mogelijk te bevestigen en aan te geven wanneer wij levering kunnen verwachten.<br/><br/>"
+      +"Mocht u vragen hebben, neem dan gerust contact met ons op."
+    +"</div>"
+    +"<table>"
+      +"<thead><tr>"
+        +"<th style='"+th+"min-width:100px'>Gewas</th>"
+        +"<th style='"+th+"min-width:150px'>Soort</th>"
+        +"<th style='"+thR+"min-width:100px'>Bestelhoeveelheid</th>"
+      +"</tr></thead>"
+      +"<tbody>"+rijen+"</tbody>"
+    +"</table>"
+    +"<div style='margin-top:24px;font-size:11px;color:#555'>"
+      +"<div>Met vriendelijke groet,</div>"
+      +"<div style='margin-top:6px;font-weight:700;font-size:12px'>"+(bd.naam||"Vollebregt Cyclamen")+"</div>"
+      +"<div style='margin-top:2px'>"+(bd.telefoon||"")+" &nbsp;|&nbsp; "+(bd.email||"")+"</div>"
+    +"</div>"
+    +(bd.iban?"<div style='margin-top:8px;font-size:9px;color:#aaa'>IBAN: "+bd.iban+"</div>":"")
+    +"</body></html>";
+
+  const onderwerp = "Zaadbestelling "+new Date().toLocaleDateString("nl-NL")+" - Vollebregt Cyclamen";
+  setStatus("📧 Versturen...");
+
+  const leverEmail = bd.leverancierEmail||"";
+  if(!leverEmail) { alert('Geen e-mailadres leverancier ingesteld. Ga naar ⚙️ Instellingen.'); setStatus(""); return; }
+
+  fetch(mailUrl, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ to_email: leverEmail, onderwerp, bericht: "", html: berichtHtml })
+  }).then(()=>{
+    const logEntry = {datum: new Date().toLocaleString("nl-NL"), klant: "Zaadleverancier", email: leverEmail, onderwerp, week: "—"};
+    const log = JSON.parse(localStorage.getItem('ta_maillog')||'[]');
+    localStorage.setItem('ta_maillog', JSON.stringify([logEntry,...log].slice(0,50)));
+    setStatus("✅ Bestelling verstuurd!");
+    setTimeout(()=>setStatus(""),4000);
+  }).catch(()=>setStatus("⚠️ Versturen mislukt"));
+}
+
 function ZaadVoorraad({ zaadinkoop, orders, gewassen, kiemkracht, teeltduur, bedrijf }) {
   const [toonBestel, setToonBestel] = useState(false);
+  const [mailBestelStatus, setMailBestelStatus] = useState("");
   const [selLev, setSelLev] = useState(null);
 
   const nu = new Date();
@@ -3567,7 +3999,11 @@ function ZaadVoorraad({ zaadinkoop, orders, gewassen, kiemkracht, teeltduur, bed
               })}
             </tbody>
           </table>
-          <button style={gs.knopSecundair} onClick={()=>setToonBestel(false)}>Sluiten</button>
+          {mailBestelStatus&&<div style={{fontSize:11,margin:"6px 0",color:mailBestelStatus.startsWith("✅")?"#16a34a":"#f59e0b",textAlign:"center"}}>{mailBestelStatus}</div>}
+          <div style={{display:"flex",gap:8}}>
+            <button style={{...gs.knopPrimair,background:"#1d4ed8"}} onClick={()=>mailBestelling(bestellingen,setMailBestelStatus)}>📧 Bestelling mailen</button>
+            <button style={gs.knopSecundair} onClick={()=>setToonBestel(false)}>Sluiten</button>
+          </div>
         </div></div>
       )}
     </div>
@@ -3595,7 +4031,8 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
       setData({...data,gewas:v,soort,prijs});
     } else if(k==="soort") {
       const gw = gewassen.find(g=>g.naam===data.gewas);
-      const prijs = gw?.inkoopPrijzen?.[v]||laastePrijs;
+      const inkoopPrijs = gw?.inkoopPrijzen?.[v]||"";
+      const prijs = inkoopPrijs||laastePrijs;
       setData({...data,soort:v,prijs});
     } else {
       setData({...data,[k]:v});
@@ -3727,8 +4164,8 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
           ) : (
             <table style={{width:"auto",minWidth:"100%"}}>
               <thead>
-                <tr>{["Datum","Gewas","Soort","Aantal","Kiem%","Code","Leverancier",""].map((h,i)=>(
-                  <th key={h||i} style={{...sTH,textAlign:i>=3&&i<=4?"right":"left"}}>{h}</th>
+                <tr>{["Datum","Gewas","Soort","Aantal","Kiem%","Code","Leverancier","Bedrag",""].map((h,i)=>(
+                  <th key={h||i} style={{...sTH,textAlign:i>=3&&i<=4||i===7?"right":"left"}}>{h}</th>
                 ))}</tr>
               </thead>
               <tbody>
@@ -3741,6 +4178,7 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
                     <td style={{...sTD,textAlign:"right"}}>{z.kiemkracht!=null?`${z.kiemkracht}%`:"—"}</td>
                     <td style={sTD}>{z.code||"—"}</td>
                     <td style={sTD}>{z.leverancier||"—"}</td>
+                    <td style={{...sTD,textAlign:"right",color:groen,fontWeight:600}}>{z.prijs&&z.aantal?"€ "+(z.prijs*z.aantal/1000).toFixed(2):"—"}</td>
                     <td style={{...sTD,textAlign:"right",whiteSpace:"nowrap"}}>
                       <button style={gs.knopKlein} onClick={()=>bewerken(z)}>✏️</button>
                       <button style={{...gs.knopVerwijder,marginLeft:4}} onClick={()=>setDelId(z.id)}>🗑️</button>
@@ -3752,7 +4190,8 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
                 <tr style={{background:"#e8f5ee",fontWeight:700}}>
                   <td colSpan={3} style={{...sTD,color:groen}}>Totaal</td>
                   <td style={{...sTD,textAlign:"right",color:groen}}>{(totaalAantal).toLocaleString("nl-NL")}</td>
-                  <td colSpan={4} style={sTD}></td>
+                  <td colSpan={3} style={sTD}></td>
+                  <td style={{...sTD,textAlign:"right",color:groen,fontWeight:700}}>€ {totaalBedrag.toFixed(2)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -3770,6 +4209,7 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
 // ════════════════════════════════════════════════════════
 function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef }) {
   const [b, setB] = useState({...bedrijf});
+  const [mailUrl, setMailUrl] = useState(()=>{ try{ return localStorage.getItem('ta_mailUrl')||'https://script.google.com/macros/s/AKfycby5SF6Sx9DPmFNBO_hb1ztwmdHApE19DIinmm7rs_CEJQdpQO8HLPuEI9Y4dvIUAMOi/exec'; }catch(e){ return ''; } });
   const [fustNaam, setFustNaam] = useState("");
   const [fustAantal, setFustAantal] = useState("");
   const [fustBewerk, setFustBewerk] = useState(null);
@@ -3856,6 +4296,47 @@ function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef }) {
           </div>
         </div>
       </div>
+      <div style={gs.sectie}>
+        <div style={gs.sectieLabel}>📝 Standaard brieftekst (bevestiging mail)</div>
+        <div style={{fontSize:12,color:subtekst,marginBottom:8}}>
+          Deze tekst verschijnt in de bevestigingsmail onder het briefhoofd.
+        </div>
+        <div style={gs.veldGroep}>
+          <textarea style={{...gs.input,height:100,resize:"vertical",fontSize:12}}
+            placeholder="Geachte klant,&#10;&#10;Hierbij bevestigen wij uw order..."
+            value={b.brieftekst||""}
+            onChange={e=>setB({...b,brieftekst:e.target.value})}
+          />
+        </div>
+      </div>
+      <div style={gs.sectie}>
+        <div style={gs.sectieLabel}>🌱 Zaadleverancier</div>
+        <div style={gs.veldGroep}>
+          <label style={gs.label}>E-mail zaadleverancier</label>
+          <input style={gs.input} type="email" placeholder="leverancier@zaad.nl"
+            value={b.leverancierEmail||""} onChange={e=>setB({...b,leverancierEmail:e.target.value})} />
+        </div>
+        <div style={gs.veldGroep}>
+          <label style={gs.label}>Naam zaadleverancier</label>
+          <input style={gs.input} type="text" placeholder="bijv. Royal Brinkman"
+            value={b.leverancierNaam||""} onChange={e=>setB({...b,leverancierNaam:e.target.value})} />
+        </div>
+      </div>
+      <div style={gs.sectie}>
+        <div style={gs.sectieLabel}>📧 E-mail instellingen</div>
+        <div style={{fontSize:12,color:subtekst,marginBottom:8,lineHeight:1.6}}>
+          Plak hier de Google Apps Script webapp-URL voor het versturen van mails met PDF bijlage.
+        </div>
+        <div style={gs.veldGroep}>
+          <label style={gs.label}>Google Apps Script URL</label>
+          <input style={gs.input} type="text" placeholder="https://script.google.com/macros/s/.../exec"
+            value={mailUrl} onChange={e=>setMailUrl(e.target.value)} />
+        </div>
+        <button style={{...gs.knopSecundair,fontSize:12}} onClick={()=>{
+          localStorage.setItem('ta_mailUrl', mailUrl);
+          alert('✅ Mail URL opgeslagen');
+        }}>💾 Mail URL opslaan</button>
+      </div>
       <button style={gs.knopPrimair} onClick={()=>setBedrijf({...b})}>💾 Opslaan</button>
     </div>
   );
@@ -3928,16 +4409,22 @@ function App() {
     {id:"orders",      label:"📦 Orders"},
     {id:"zaadinkoop",  label:"🌰 Zaadinkoop"},
     {id:"planning",    label:"📅 Werklijsten"},
-    {id:"transport",    label:"🚛 Transport"},
+    {id:"transport",   label:"🚛 Transport"},
     {id:"bevestiging", label:"✅ Bevestiging"},
-    {id:"overzichten",  label:"📊 Overzichten"},
+    {id:"overzichten", label:"📊 Overzichten"},
+    {id:"mailing",     label:"📧 Mailing"},
+  ];
+  const stamdata=[
     {id:"klanten",     label:"👤 Klanten"},
     {id:"teelten",     label:"🌱 Teelten"},
     {id:"teeltduur",   label:"🕐 Teeltduur"},
     {id:"prijzen",     label:"💰 Prijzen"},
     {id:"kiemkracht",  label:"🌱 Kiemkracht"},
+    {id:"inkoop",      label:"🌾 Inkoopprijzen"},
     {id:"instellingen",label:"⚙️ Instellingen"},
   ];
+  const stamdataOpen = stamdata.some(m=>m.id===pagina);
+  const [stamdataDropdown, setStamdataDropdown] = useState(false);
 
   return (
     <div style={{minHeight:"100vh",background:achtergrond}}>
@@ -3950,6 +4437,32 @@ function App() {
             {m.label}
           </button>
         ))}
+        {/* Stamdata dropdown */}
+        <div style={{position:"relative"}}>
+          <button
+            onClick={()=>setStamdataDropdown(!stamdataDropdown)}
+            style={{background:stamdataOpen||stamdataDropdown?"rgba(255,255,255,0.2)":"transparent",color:wit,border:"none",
+              borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:14,
+              fontWeight:stamdataOpen?700:400,display:"flex",alignItems:"center",gap:4}}>
+            ⚙️ Stamdata {stamdataDropdown?"▲":"▼"}
+          </button>
+          {stamdataDropdown&&(
+            <div style={{position:"absolute",top:42,left:0,background:wit,border:`1px solid ${rand}`,
+              borderRadius:8,padding:4,zIndex:300,minWidth:180,boxShadow:"0 4px 16px rgba(0,0,0,0.15)"}}>
+              {stamdata.map(m=>(
+                <button key={m.id} onClick={()=>{setPagina(m.id);setStamdataDropdown(false);}}
+                  style={{display:"block",width:"100%",textAlign:"left",padding:"7px 12px",
+                    border:"none",borderRadius:6,cursor:"pointer",fontSize:13,
+                    background:pagina===m.id?lichtGroen:"transparent",
+                    color:pagina===m.id?groen:tekst,fontWeight:pagina===m.id?700:400}}
+                  onMouseEnter={e=>{if(pagina!==m.id)e.currentTarget.style.background="#f0f7f4"}}
+                  onMouseLeave={e=>{if(pagina!==m.id)e.currentTarget.style.background="transparent"}}>
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>
           <span style={{color:"rgba(255,255,255,0.65)",fontSize:11}}>{syncStatus}</span>
           <button onClick={reset} style={{background:"rgba(255,255,255,0.15)",color:wit,border:"1px solid rgba(255,255,255,0.3)",borderRadius:5,padding:"3px 9px",cursor:"pointer",fontSize:11}}>🔄 Reset</button>
@@ -3960,12 +4473,14 @@ function App() {
       {pagina==="teelten"      && <Teelten     gewassen={gewassen} setGewassen={setGewassen} />}
       {pagina==="prijzen"      && <Prijzen     klanten={klanten} gewassen={gewassen} prijzen={prijzen} setPrijzen={setPrijzen} verpDef={verpDef} />}
       {pagina==="overzichten"  && <div style={{padding:16,overflowY:"auto",height:"calc(100vh - 50px)"}}><MatrixFilterPaneel klanten={klanten} gewassen={gewassen} orders={orders} verpDef={verpDef} weken={weekOpties()} /></div>}
+      {pagina==="mailing" && <MailingPagina klanten={klanten} orders={orders} />}
       {pagina==="transport"    && <TransportPagina klanten={klanten} orders={orders} bedrijf={bedrijf} verpDef={verpDef} />}
       {pagina==="bevestiging"  && <Bevestiging klanten={klanten} gewassen={gewassen} orders={orders} setOrders={setOrders} verpDef={verpDef} bedrijf={bedrijf} />}
       {pagina==="teeltduur"    && <Teeltduur gewassen={gewassen} verpDef={verpDef} teeltduur={teeltduur} setTeeltduur={setTeeltduur} />}
       {pagina==="planning"      && <Teeltplanning klanten={klanten} gewassen={gewassen} verpDef={verpDef} orders={orders} teeltduur={teeltduur} kiemkracht={kiemkracht} bedrijf={bedrijf} />}
       {pagina==="zaadinkoop"   && <Zaadinkoop gewassen={gewassen} zaadinkoop={zaadinkoop} setZaadinkoop={setZaadinkoop} orders={orders} teeltduur={teeltduur} kiemkracht={kiemkracht} verpDef={verpDef} bedrijf={bedrijf} />}
       {pagina==="kiemkracht"   && <Kiemkracht gewassen={gewassen} kiemkracht={kiemkracht} setKiemkracht={setKiemkracht} />}
+      {pagina==="inkoop"       && <Inkoopprijzen gewassen={gewassen} setGewassen={setGewassen} />}
       {pagina==="verpakkingen" && <Verpakkingen verpDef={verpDef} setVerpDef={setVerpDef} />}
       {pagina==="instellingen"  && <Instellingen bedrijf={bedrijf} setBedrijf={setBedrijf} gewassen={gewassen} setGewassen={setGewassen} orders={orders} setOrders={setOrders} prijzen={prijzen} setPrijzen={setPrijzen} kiemkracht={kiemkracht} setKiemkracht={setKiemkracht} teeltduur={teeltduur} setTeeltduur={setTeeltduur} verpDef={verpDef} setVerpDef={setVerpDef} />}
     </div>
@@ -4157,6 +4672,340 @@ function TransportPagina({ klanten, orders, bedrijf, verpDef }) {
             })()}</tfoot>
           </table>
       }
+    </div>
+  );
+}
+
+
+// ════════════════════════════════════════════════════════
+// MAILING PAGINA
+// ════════════════════════════════════════════════════════
+function MailingPagina({ klanten, orders }) {
+  const [mailLog, setMailLog] = useState(()=>{
+    try{ return JSON.parse(localStorage.getItem('ta_maillog')||'[]'); }catch(e){ return []; }
+  });
+
+  // Luister naar wijzigingen in localStorage (als mail verstuurd wordt in Orders)
+  useEffect(()=>{
+    function onStorage(e) {
+      if(e.key==='ta_maillog') {
+        try{ setMailLog(JSON.parse(e.newValue||'[]')); }catch(x){}
+      }
+    }
+    window.addEventListener('storage', onStorage);
+    // Poll ook elke 2 sec want same-tab events triggeren storage event niet
+    const interval = setInterval(()=>{
+      try{ setMailLog(JSON.parse(localStorage.getItem('ta_maillog')||'[]')); }catch(x){}
+    }, 2000);
+    return ()=>{ window.removeEventListener('storage', onStorage); clearInterval(interval); };
+  }, []);
+
+  return (
+    <div style={{padding:16,overflowY:"auto",height:"calc(100vh - 50px)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <h2 style={{fontSize:15,fontWeight:700,color:groen}}>📧 Mailing — Verzonden berichten</h2>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <span style={{fontSize:12,color:subtekst}}>{mailLog.length} mail(s) verstuurd</span>
+          <button style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"4px 10px",cursor:"pointer",fontSize:12}}
+            onClick={()=>{ if(window.confirm("Maillog wissen?")){ setMailLog([]); localStorage.removeItem('ta_maillog'); } }}>
+            🗑️ Wis log
+          </button>
+        </div>
+      </div>
+
+      {mailLog.length===0
+        ? <div style={{textAlign:"center",color:subtekst,padding:60}}>
+            <div style={{fontSize:40,marginBottom:10}}>📧</div>
+            <div>Nog geen mails verstuurd</div>
+          </div>
+        : <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead>
+              <tr>{[["Datum/tijd",180],["Klant",140],["E-mail",180],["Week",60],["Onderwerp",0]].map(([h,w])=>(
+                <th key={h} style={{...TH,fontSize:11,minWidth:w||"auto"}}>{h}</th>
+              ))}</tr>
+            </thead>
+            <tbody>
+              {mailLog.map((m,i)=>(
+                <tr key={i} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                  <td style={{...TD,fontSize:12,whiteSpace:"nowrap"}}>{m.datum}</td>
+                  <td style={{...TD,fontSize:12,fontWeight:600,color:groen}}>{m.klant}</td>
+                  <td style={{...TD,fontSize:12}}>{m.email}</td>
+                  <td style={{...TD,fontSize:12,textAlign:"center"}}><span style={{background:lichtGroen,color:groen,borderRadius:20,padding:"1px 8px",fontSize:11,fontWeight:600}}>{m.week}</span></td>
+                  <td style={{...TD,fontSize:12,color:subtekst}}>{m.onderwerp}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+      }
+    </div>
+  );
+}
+
+
+// ════════════════════════════════════════════════════════
+// KLANT MATRIX PRINT — seizoensoverzicht PDF
+// ════════════════════════════════════════════════════════
+function KlantMatrixPrint({ data, bedrijf, verpDef, onSluit }) {
+  const { klant, orders } = data;
+  const bd = bedrijf||{};
+  const vandaag = new Date().toLocaleDateString("nl-NL");
+
+  function plantenVast(r){
+    const vd=verpDef.find(v=>v.naam===r.verpakking);
+    return r.vastPlanten??((vd?.aantal||0)*r.aantal);
+  }
+
+  // Bouw matrix
+  const alleWkn = [...new Set(orders.map(o=>weekLabel(o.leverdatum)))].sort();
+  const rijMap = {};
+  orders.forEach(o=>{
+    const wk = weekLabel(o.leverdatum);
+    o.regels.forEach(r=>{
+      const key = r.gewas+"||"+r.soort+"||"+r.verpakking;
+      if(!rijMap[key]) rijMap[key]={gewas:r.gewas,soort:r.soort,verpakking:r.verpakking,prijs:r.prijs,weken:{}};
+      rijMap[key].weken[wk]=(rijMap[key].weken[wk]||0)+plantenVast(r);
+      if(r.prijs) rijMap[key].prijs=r.prijs;
+    });
+  });
+  const rijen = Object.values(rijMap).sort((a,b)=>a.soort.localeCompare(b.soort));
+  const totaalPerWeek = wk => rijen.reduce((s,r)=>s+(r.weken[wk]||0),0);
+  const rijTotaal = r => alleWkn.reduce((s,wk)=>s+(r.weken[wk]||0),0);
+  const grootTotaal = alleWkn.reduce((s,wk)=>s+totaalPerWeek(wk),0);
+
+  function printDoc() {
+    const el = document.getElementById("klantmatrix-print-inhoud");
+    const w = window.open("","_blank");
+    w.document.write(`<html><head><title>Seizoensoverzicht ${klant?.naam}</title><style>
+      @page{size:A4 landscape;margin:10mm}
+      body{font-family:Arial,sans-serif;font-size:10px;color:#222;margin:0;padding:0}
+      table{border-collapse:collapse;width:100%}
+      th{background:#e8f5ee;color:#2d6a4f;padding:4px 6px;border:1px solid #c8e6c9;font-size:9px;text-align:right}
+      th.l{text-align:left}
+      td{padding:4px 6px;border:1px solid #eee;font-size:9px;text-align:right}
+      td.l{text-align:left}
+      .weekblok{display:inline-block;background:#e8f5ee;border-radius:6px;padding:6px 10px;margin:3px;min-width:80px;border:1px solid #c8e6c9}
+      .weekblok .wk{font-weight:700;color:#2d6a4f;font-size:10px}
+      .weekblok .pl{font-size:13px;font-weight:700;color:#2d6a4f}
+      .weekblok .lbl{font-size:8px;color:#888}
+      @media print{button{display:none}}
+    </style></head><body>${el.innerHTML}</body></html>`);
+    w.document.close();
+    setTimeout(()=>w.print(),400);
+  }
+
+  const cH={padding:"3px 6px",background:"#e8f5ee",color:groen,fontWeight:700,fontSize:9,border:"1px solid #c8e6c9",textAlign:"right",whiteSpace:"nowrap"};
+  const cL={...cH,textAlign:"left"};
+  const cD={padding:"3px 6px",fontSize:10,border:"1px solid #eee",textAlign:"right"};
+  const cDL={...cD,textAlign:"left"};
+
+  return (
+    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",zIndex:500,overflowY:"auto",padding:20}}>
+      <div style={{maxWidth:1100,margin:"0 auto",background:"#fff",borderRadius:8,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,0.3)"}}>
+        <div style={{display:"flex",gap:8,padding:"10px 16px",background:"#f0f7f4",borderBottom:`1px solid ${rand}`}}>
+          <button style={gs.knopPrimair} onClick={printDoc}>🖨️ Afdrukken / PDF</button>
+          <button style={gs.knopSecundair} onClick={onSluit}>✕ Sluiten</button>
+        </div>
+        <div id="klantmatrix-print-inhoud" style={{padding:"20px 24px",fontFamily:"Arial,sans-serif",fontSize:10}}>
+          {/* Header */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,borderBottom:`2px solid ${groen}`,paddingBottom:10}}>
+            <div>
+              <div style={{fontSize:18,fontWeight:700,color:groen}}>ORDERBEVESTIGING <span style={{color:tekst}}>{klant?.naam}</span></div>
+              <div style={{fontSize:11,color:subtekst,marginTop:2}}>{bd.naam} · {bd.adres}, {bd.postcode} {bd.plaats}</div>
+            </div>
+            <div style={{textAlign:"right",fontSize:11,color:subtekst}}>Datum: {vandaag}</div>
+          </div>
+
+          {/* Totaal per week blokken */}
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:10,fontWeight:700,color:groen,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Totaal per week</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+              {alleWkn.map(wk=>(
+                <div key={wk} style={{background:"#e8f5ee",borderRadius:6,padding:"5px 10px",minWidth:75,border:`1px solid ${lichtGroen}`}}>
+                  <div style={{fontSize:9,fontWeight:700,color:groen}}>Week {wk}</div>
+                  <div style={{fontSize:14,fontWeight:700,color:groen}}>{totaalPerWeek(wk).toLocaleString("nl-NL")}</div>
+                  <div style={{fontSize:8,color:subtekst}}>planten</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Matrix tabel */}
+          <div style={{overflowX:"auto"}}>
+            <table style={{borderCollapse:"collapse",fontSize:10}}>
+              <thead>
+                <tr>
+                  <th style={{...cL,minWidth:100}}>Soort</th>
+                  <th style={{...cL,minWidth:65}}>Fust</th>
+                  <th style={{...cH,minWidth:50}}>€/st.</th>
+                  {alleWkn.map(wk=><th key={wk} style={{...cH,minWidth:50}}>{wk}</th>)}
+                  <th style={{...cH,minWidth:55,background:"#c8e6c9"}}>Totaal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rijen.map((r,i)=>(
+                  <tr key={i} style={{background:i%2===0?"#fff":"#f9fcfb"}}>
+                    <td style={cDL}>{r.soort}</td>
+                    <td style={cDL}><span style={{background:lichtGroen,color:groen,borderRadius:20,padding:"1px 6px",fontSize:9,fontWeight:600}}>{r.verpakking}</span></td>
+                    <td style={{...cD,color:groen}}>{r.prijs?"€"+Number(r.prijs).toFixed(3):"—"}</td>
+                    {alleWkn.map(wk=>(
+                      <td key={wk} style={{...cD,fontWeight:r.weken[wk]?600:300,color:r.weken[wk]?"#222":"#ccc"}}>
+                        {r.weken[wk]?r.weken[wk].toLocaleString("nl-NL"):""}
+                      </td>
+                    ))}
+                    <td style={{...cD,fontWeight:700,color:groen,background:"#f0fff4"}}>{rijTotaal(r).toLocaleString("nl-NL")}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{background:"#e8f5ee",fontWeight:700}}>
+                  <td colSpan={3} style={{...cL,borderTop:`2px solid ${groen}`,color:groen}}>Totaal</td>
+                  {alleWkn.map(wk=><td key={wk} style={{...cH,borderTop:`2px solid ${groen}`}}>{totaalPerWeek(wk).toLocaleString("nl-NL")}</td>)}
+                  <td style={{...cH,borderTop:`2px solid ${groen}`,background:"#c8e6c9"}}>{grootTotaal.toLocaleString("nl-NL")}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          {/* Footer */}
+          <div style={{marginTop:14,paddingTop:8,borderTop:`1px solid ${rand}`,fontSize:9,color:subtekst,display:"flex",justifyContent:"space-between"}}>
+            <span>{bd.naam} · {bd.adres}, {bd.postcode} {bd.plaats}</span>
+            {bd.iban&&<span>IBAN: {bd.iban}</span>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ════════════════════════════════════════════════════════
+// MODULE — INKOOPPRIJZEN ZADEN
+// ════════════════════════════════════════════════════════
+function Inkoopprijzen({ gewassen, setGewassen }) {
+  const [openGewas, setOpenGewas] = useState(()=>
+    Object.fromEntries((gewassen||[]).map(g=>["open_"+g.naam, false]))
+  );
+
+  function setLeverancier(gewasId, veld, waarde) {
+    const b = gewassen.map(g=>g.id===gewasId?{...g,[veld]:waarde}:g);
+    setGewassen(b);
+  }
+
+  function setInkoopPrijs(gewasId, soort, waarde) {
+    const b = gewassen.map(g=>g.id===gewasId?{...g,inkoopPrijzen:{...(g.inkoopPrijzen||{}),[soort]:waarde===''?'':Number(waarde)}}:g);
+    setGewassen(b);
+  }
+
+  const iS = {padding:"3px 6px",border:`1px solid ${rand}`,borderRadius:3,fontSize:12,width:80,textAlign:"right",background:"#fafffe"};
+  const mTH = {...TH,padding:"4px 8px",background:"#dff0e8",color:groen,fontSize:11};
+  const mTD = {padding:"4px 8px",fontSize:12,borderBottom:`1px solid ${rand}`};
+
+  return (
+    <div style={{display:"flex",height:"calc(100vh - 50px)"}}>
+      {/* Info */}
+      <div style={{width:200,borderRight:`1px solid ${rand}`,background:wit,padding:14,flexShrink:0}}>
+        <div style={{fontSize:11,fontWeight:700,color:groen,marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>Inkoopprijzen</div>
+        <div style={{fontSize:12,color:subtekst,lineHeight:1.6}}>
+          Stel per gewas de leverancier in en voer de inkoopprijs per 1000 zaden in per soort.<br/><br/>
+          Deze prijs wordt automatisch ingevuld bij een nieuwe zaadinkoop.
+        </div>
+        <div style={{marginTop:12,fontSize:11,color:subtekst}}>
+          {gewassen.filter(g=>g.leverancier).length} gewassen met leverancier
+        </div>
+      </div>
+
+      {/* Matrix */}
+      <div style={{flex:1,overflowY:"auto",padding:14}}>
+        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
+          <button style={{...gs.knopSecundair,fontSize:11,padding:"3px 10px"}} onClick={()=>{
+            const alleOpen = gewassen.every(g=>openGewas["open_"+g.naam]===true);
+            const nieuw={};
+            gewassen.forEach(g=>nieuw["open_"+g.naam]=!alleOpen);
+            setOpenGewas(nieuw);
+          }}>
+            {gewassen.every(g=>openGewas["open_"+g.naam]===true)?"▲ Inklappen":"▼ Uitklappen"}
+          </button>
+        </div>
+
+        {gewassen.map(gw=>{
+          const openKey = "open_"+gw.naam;
+          const isOpen = openGewas[openKey]===true;
+          const heeftPrijzen = Object.keys(gw.inkoopPrijzen||{}).filter(s=>(gw.inkoopPrijzen||{})[s]!=='').length;
+
+          return (
+            <div key={gw.naam} style={{background:wit,border:`1px solid ${rand}`,borderRadius:6,marginBottom:6,overflow:"hidden"}}>
+              {/* Header */}
+              <div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 10px",
+                background:"#f0f7f4",borderBottom:isOpen?`1px solid ${rand}`:"none",cursor:"pointer"}}
+                onClick={()=>setOpenGewas({...openGewas,[openKey]:!isOpen})}>
+                <span style={{fontSize:12,color:groen}}>{isOpen?"▼":"▶"}</span>
+                <span style={{fontWeight:700,fontSize:14,color:groen,flex:1}}>{gw.naam}</span>
+                {gw.leverancier&&<span style={{fontSize:11,color:subtekst}}>{gw.leverancier}</span>}
+                <span style={{fontSize:10,color:subtekst}}>{heeftPrijzen}/{gw.soorten.length} prijzen</span>
+              </div>
+
+              {isOpen&&(
+                <div style={{padding:"10px 12px"}}>
+                  {/* Leverancier velden */}
+                  <div style={{display:"flex",gap:10,marginBottom:12,background:"#f0f7f4",borderRadius:6,padding:"8px 10px"}}>
+                    <div style={{flex:2}}>
+                      <label style={gs.label}>Naam leverancier</label>
+                      <input style={gs.input} placeholder="bijv. Royal Brinkman"
+                        value={gw.leverancier||""}
+                        onChange={e=>setLeverancier(gw.id,"leverancier",e.target.value)}
+                      />
+                    </div>
+                    <div style={{flex:2}}>
+                      <label style={gs.label}>E-mail leverancier</label>
+                      <input style={gs.input} type="email" placeholder="lever@zaad.nl"
+                        value={gw.leverancierEmail||""}
+                        onChange={e=>setLeverancier(gw.id,"leverancierEmail",e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Prijzen tabel */}
+                  <table style={{width:"auto",tableLayout:"fixed"}}>
+                    <colgroup>
+                      <col style={{width:200}}/>
+                      <col style={{width:100}}/>
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th style={{...mTH,textAlign:"left"}}>Soort</th>
+                        <th style={{...mTH,textAlign:"right"}}>€ / 1000 zaden</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {gw.soorten.map((s,si)=>{
+                        const prijs = (gw.inkoopPrijzen||{})[s];
+                        return (
+                          <tr key={s} style={{background:si%2===0?wit:"#f9fcfb"}}>
+                            <td style={mTD}>{s}</td>
+                            <td style={{...mTD,textAlign:"right"}}>
+                              <div style={{display:"flex",alignItems:"center",gap:3,justifyContent:"flex-end"}}>
+                                <span style={{fontSize:11,color:subtekst}}>€</span>
+                                <input
+                                  style={{...iS,background:prijs!==''&&prijs!==undefined?"#f0fff8":"#fff"}}
+                                  type="number" step="0.01" min="0" placeholder="—"
+                                  value={prijs??''}
+                                  onFocus={e=>e.target.select()}
+                                  onChange={e=>setInkoopPrijs(gw.id,s,e.target.value)}
+                                  onKeyDown={e=>{if(e.key==="Enter"||e.key==="Tab")e.target.blur();}}
+                                />
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -4549,6 +4549,37 @@ function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef }) {
       </div>
       <button style={gs.knopPrimair} onClick={()=>setBedrijf({...b})}>💾 Opslaan</button>
 
+      {/* PINCODE SECTIE */}
+      <div style={{marginTop:24,padding:14,background:"#f0f7f4",border:"1px solid #c8e6c9",borderRadius:8}}>
+        <div style={{fontWeight:700,color:groen,fontSize:13,marginBottom:6}}>🔐 Pincode beveiliging</div>
+        <div style={{fontSize:11,color:subtekst,marginBottom:12,lineHeight:1.6}}>
+          Stel een pincode in om de app te beveiligen. Laat leeg om beveiliging uit te schakelen.
+        </div>
+        {(()=>{
+          const [pinInst, setPinInst] = React.useState(localStorage.getItem("ta_pincode")||"");
+          const [pinOk, setPinOk] = React.useState("");
+          return (
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              <input style={{...gs.input,width:120,letterSpacing:4,fontSize:16,textAlign:"center"}}
+                type="password" maxLength={8} placeholder="••••" value={pinInst}
+                onChange={e=>{ setPinInst(e.target.value); setPinOk(""); }}
+              />
+              <button style={{...gs.knopPrimair,fontSize:12}} onClick={()=>{
+                localStorage.setItem("ta_pincode", pinInst);
+                sessionStorage.setItem("ta_sessie","ok");
+                setPinOk("✅ Opgeslagen");
+              }}>💾 Opslaan</button>
+              {pinInst&&<button style={{...gs.knopSecundair,fontSize:12}} onClick={()=>{
+                localStorage.removeItem("ta_pincode");
+                setPinInst("");
+                setPinOk("✅ Beveiliging uitgeschakeld");
+              }}>🔓 Uitschakelen</button>}
+              {pinOk&&<span style={{fontSize:12,color:groen}}>{pinOk}</span>}
+            </div>
+          );
+        })()}
+      </div>
+
       {/* RESET SECTIE */}
       <div style={{marginTop:24,padding:14,background:"#fff5f5",border:"2px solid #fca5a5",borderRadius:8}}>
         <div style={{fontWeight:700,color:"#dc2626",fontSize:13,marginBottom:6}}>⚠️ Gevaarzone — Alle data wissen</div>
@@ -4625,6 +4656,30 @@ function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef }) {
 
 function App() {
   const { useEffect: ue } = React;
+
+  // ── PINCODE BEVEILIGING ──
+  const OPGESLAGEN_PIN = localStorage.getItem("ta_pincode")||"";
+  const [ingelogd, setIngelogd] = useState(()=>{
+    // Als geen pincode ingesteld, direct ingelogd
+    if(!OPGESLAGEN_PIN) return true;
+    // Check sessie (blijft ingelogd tot tab gesloten wordt)
+    return sessionStorage.getItem("ta_sessie")==="ok";
+  });
+  const [pinInvoer, setPinInvoer] = useState("");
+  const [pinFout, setPinFout] = useState(false);
+
+  function checkPin() {
+    const pin = localStorage.getItem("ta_pincode")||"";
+    if(pinInvoer===pin) {
+      sessionStorage.setItem("ta_sessie","ok");
+      setIngelogd(true);
+      setPinFout(false);
+    } else {
+      setPinFout(true);
+      setPinInvoer("");
+    }
+  }
+
   const [pagina,setPagina]     = useState("orders");
   const [kiemkracht,setKiemkracht] = useState(()=>laad("ta_kiemkracht", []));
   const [teeltduur,setTeeltduur]   = useState(()=>laad("ta_teeltduur", []));
@@ -4716,6 +4771,31 @@ function App() {
   const [stamdataDropdown, setStamdataDropdown] = useState(false);
   const [bonnenDropdown, setBonnenDropdown] = useState(false);
 
+  // Login scherm
+  if(!ingelogd) return (
+    <div style={{minHeight:"100vh",background:"#f0f7f4",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{background:"#fff",borderRadius:12,padding:40,boxShadow:"0 8px 32px rgba(0,0,0,0.12)",minWidth:320,textAlign:"center"}}>
+        <div style={{fontSize:48,marginBottom:8}}>🌱</div>
+        <div style={{fontSize:22,fontWeight:700,color:groen,marginBottom:4}}>TuinApp</div>
+        <div style={{fontSize:13,color:subtekst,marginBottom:24}}>Vollebregt Cyclamen</div>
+        <div style={{fontSize:13,color:tekst,marginBottom:12,fontWeight:600}}>Voer pincode in</div>
+        <input
+          style={{width:"100%",padding:"10px 14px",borderRadius:8,border:`2px solid ${pinFout?"#dc2626":rand}`,
+            fontSize:20,textAlign:"center",letterSpacing:6,outline:"none",boxSizing:"border-box"}}
+          type="password" maxLength={8} value={pinInvoer} autoFocus
+          onChange={e=>{ setPinInvoer(e.target.value); setPinFout(false); }}
+          onKeyDown={e=>e.key==="Enter"&&checkPin()}
+          placeholder="••••"
+        />
+        {pinFout&&<div style={{color:"#dc2626",fontSize:12,marginTop:6}}>Pincode onjuist</div>}
+        <button style={{...gs.knopPrimair,width:"100%",marginTop:14,padding:"10px",fontSize:14}}
+          onClick={checkPin}>
+          Inloggen
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div style={{minHeight:"100vh",background:achtergrond}}>
       <div style={{background:groen,display:"flex",alignItems:"center",height:50,padding:"0 14px",gap:3}}>
@@ -4789,6 +4869,13 @@ function App() {
         </div>
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>
           <span style={{color:"rgba(255,255,255,0.65)",fontSize:11}}>{syncStatus}</span>
+          {localStorage.getItem("ta_pincode")&&(
+            <button onClick={()=>{sessionStorage.removeItem("ta_sessie");setIngelogd(false);}}
+              style={{background:"rgba(255,255,255,0.15)",color:wit,border:"1px solid rgba(255,255,255,0.3)",
+                borderRadius:5,padding:"3px 9px",cursor:"pointer",fontSize:11}}>
+              🔒 Uitloggen
+            </button>
+          )}
           
         </div>
       </div>

@@ -4376,6 +4376,85 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
 // ════════════════════════════════════════════════════════
 // HOOFD APP
 // ════════════════════════════════════════════════════════
+function Dashboard({klanten,gewassen,orders,verpDef,prijzen,kiemkracht,setPagina}){
+  const nu=new Date();
+  const nuWk=String(getJaar(nu)).slice(-2)+String(getWeekNr(nu)).padStart(2,"00");
+  const nWk=String(getJaar(nu)).slice(-2)+String(getWeekNr(nu)+1).padStart(2,"00");
+  const tot=orders.filter(o=>o.status!=="geleverd").length;
+  const res=orders.filter(o=>o.status==="reservering").length;
+  const bev=orders.filter(o=>o.status==="bevestigd").length;
+  const oFact=orders.filter(o=>o.factuurNr&&!o.betaaldOp).length;
+  const dwO=orders.filter(o=>weekLabel(o.leverdatum)===nuWk&&o.status!=="geleverd");
+  const vwO=orders.filter(o=>weekLabel(o.leverdatum)===nWk&&o.status!=="geleverd");
+  function pt(r){return r.reduce((s,x)=>{const v=vindVd(verpDef,x.verpakking);return s+(v?.aantal||0)*x.aantal;},0);}
+  const dwP=dwO.reduce((s,o)=>s+pt(o.regels),0);
+  const vwP=vwO.reduce((s,o)=>s+pt(o.regels),0);
+  const k={background:wit,border:`1px solid ${rand}`,borderRadius:8,padding:"14px 16px",flex:1,minWidth:140};
+  const ro=[...orders].filter(o=>o.status!=="geleverd").sort((a,b)=>new Date(b.aanmaakdatum||0)-new Date(a.aanmaakdatum||0)).slice(0,8);
+  return (
+    <div style={{padding:16,overflowY:"auto",height:"calc(100vh - 50px)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:16}}>
+        <h1 style={{fontSize:18,fontWeight:700,color:groen}}>🏠 Dashboard</h1>
+        <span style={{fontSize:12,color:subtekst}}>{nu.toLocaleDateString("nl-NL")}</span>
+      </div>
+      <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+        <div style={{...k,borderLeft:`4px solid ${groen}`}}>
+          <div style={{fontSize:11,color:subtekst,marginBottom:4}}>Open orders</div>
+          <div style={{fontSize:28,fontWeight:700,color:groen}}>{tot}</div>
+          <div style={{fontSize:11,color:subtekst}}>{res} reservering · {bev} bevestigd</div>
+        </div>
+        <div style={{...k,borderLeft:"4px solid #7c3aed"}}>
+          <div style={{fontSize:11,color:subtekst,marginBottom:4}}>Week {nuWk}</div>
+          <div style={{fontSize:28,fontWeight:700,color:"#7c3aed"}}>{dwO.length}</div>
+          <div style={{fontSize:11,color:subtekst}}>{dwP.toLocaleString("nl-NL")} planten</div>
+        </div>
+        <div style={{...k,borderLeft:"4px solid #0891b2"}}>
+          <div style={{fontSize:11,color:subtekst,marginBottom:4}}>Volgende week</div>
+          <div style={{fontSize:28,fontWeight:700,color:"#0891b2"}}>{vwO.length}</div>
+          <div style={{fontSize:11,color:subtekst}}>{vwP.toLocaleString("nl-NL")} planten</div>
+        </div>
+        <div style={{...k,borderLeft:"4px solid #f59e0b"}}>
+          <div style={{fontSize:11,color:subtekst,marginBottom:4}}>Open facturen</div>
+          <div style={{fontSize:28,fontWeight:700,color:"#f59e0b"}}>{oFact}</div>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+        <div style={{flex:2,minWidth:300,background:wit,border:`1px solid ${rand}`,borderRadius:8,overflow:"hidden"}}>
+          <div style={{padding:"10px 14px",background:"#f0f7f4",borderBottom:`1px solid ${rand}`,display:"flex",justifyContent:"space-between"}}>
+            <span style={{fontWeight:700,color:groen}}>📦 Actieve orders</span>
+            <button style={gs.knopKlein} onClick={()=>setPagina("orders")}>Alle →</button>
+          </div>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead><tr>{["Klant","Week","Planten","Status"].map(h=><th key={h} style={{...TH,fontSize:10}}>{h}</th>)}</tr></thead>
+            <tbody>
+              {ro.length===0&&<tr><td colSpan={4} style={{padding:20,textAlign:"center",color:subtekst}}>Geen actieve orders</td></tr>}
+              {ro.map((o,i)=>{const kl=klanten.find(x=>x.id===o.klantId);const pl=pt(o.regels);return <tr key={o.id} style={{background:i%2===0?wit:"#f9fcfb"}}><td style={{...TD,fontWeight:600}}>{kl?.naam||"—"}</td><td style={TD}>{weekLabel(o.leverdatum)}</td><td style={{...TD,textAlign:"right",color:groen,fontWeight:600}}>{pl.toLocaleString("nl-NL")}</td><td style={TD}><span style={{background:S_BG[o.status],color:S_KLEUR[o.status],borderRadius:20,padding:"1px 8px",fontSize:10,fontWeight:600}}>{S_LABEL[o.status]}</span></td></tr>;})}
+            </tbody>
+          </table>
+        </div>
+        <div style={{flex:1,minWidth:180,display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{background:wit,border:`1px solid ${rand}`,borderRadius:8,padding:14}}>
+            <div style={{fontWeight:700,color:groen,marginBottom:10}}>⚡ Snelkoppelingen</div>
+            {[["📦","Orders","orders"],["✅","Bevestigingen","bevestiging"],["🚛","Transport","transport"],["🧾","Facturen","factuuroverzicht"],["📊","Overzichten","overzichten"],["💹","Marge","margeoverzicht"]].map(([ic,lb,p])=>(
+              <button key={p} onClick={()=>setPagina(p)} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 10px",marginBottom:3,border:`1px solid ${rand}`,borderRadius:6,cursor:"pointer",background:wit,fontSize:13,textAlign:"left",color:tekst}}>
+                <span>{ic}</span>{lb}
+              </button>
+            ))}
+          </div>
+          <div style={{background:wit,border:`1px solid ${rand}`,borderRadius:8,padding:14}}>
+            <div style={{fontWeight:700,color:groen,marginBottom:10}}>📈 Totalen</div>
+            {[["Klanten",klanten.length],["Gewassen",gewassen.length],["Soorten",gewassen.reduce((s,g)=>s+g.soorten.length,0)],["Prijzen",prijzen.length]].map(([lb,w])=>(
+              <div key={lb} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${rand}`,fontSize:12}}>
+                <span style={{color:subtekst}}>{lb}</span><span style={{fontWeight:700,color:groen}}>{w}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef }) {
   const [b, setB] = useState({...bedrijf});
   const [mailUrl, setMailUrl] = useState(()=>{ try{ return localStorage.getItem('ta_mailUrl')||'https://script.google.com/macros/s/AKfycby5SF6Sx9DPmFNBO_hb1ztwmdHApE19DIinmm7rs_CEJQdpQO8HLPuEI9Y4dvIUAMOi/exec'; }catch(e){ return ''; } });
@@ -4727,7 +4806,7 @@ function App() {
   }
 
   const menu=[
-    {id:"orders",      label:"📦 Orders"},
+    {id:"dashboard",label:"🏠 Dashboard"},{id:"orders",      label:"📦 Orders"},
     {id:"zaadinkoop",  label:"🌰 Zaadinkoop"},
     {id:"planning",    label:"📅 Werklijsten"},
     {id:"transport",   label:"🚛 Transport"},
@@ -4864,6 +4943,7 @@ function App() {
           
         </div>
       </div>
+      {pagina==="dashboard" && <Dashboard klanten={klanten} gewassen={gewassen} orders={orders} verpDef={verpDef} prijzen={prijzen} kiemkracht={kiemkracht} setPagina={setPagina} />}
       {pagina==="orders"       && <Orders      klanten={klanten} gewassen={gewassen} prijzen={prijzen} orders={orders} setOrders={setOrders} verpDef={verpDef} bedrijf={bedrijf} />}
       {pagina==="klanten"      && <Klantenbeheer klanten={klanten} setKlanten={setKlanten} gewassen={gewassen} verpDef={verpDef} />}
       {pagina==="soortenbeheer" && <Soortenbeheer

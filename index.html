@@ -38,7 +38,8 @@
     select, input, button { font-family: inherit; font-size: 14px; }
     table { border-collapse: collapse; width: 100%; }
     input[type=number]::-webkit-inner-spin-button { opacity: 1; }
-  </style>
+    .sb { padding:1px 3px;border:1px solid #c8e6c9;border-radius:2px;font-size:11px;width:40px;text-align:right;background:#fafffe; }
+</style>
 </head>
 <body>
 <div id="root"></div>
@@ -995,6 +996,12 @@ function WeekGroep({ wk, weekOrders, klanten, ges, verpDef, onOpen, onKopie, pla
                 )}
                 {o.bevestigingNr&&o.bevestigingGemaild&&(
                   <span style={{fontSize:9,fontWeight:600,background:lichtGroen,color:groen,borderRadius:20,padding:"1px 6px"}}>📧 gemaild</span>
+                )}
+                {o.factuurNr&&!o.betaaldOp&&(
+                  <span style={{fontSize:9,fontWeight:600,background:"#fef3c7",color:"#b45309",borderRadius:20,padding:"1px 6px"}}>🧾 open</span>
+                )}
+                {o.factuurNr&&o.betaaldOp&&(
+                  <span style={{fontSize:9,fontWeight:600,background:"#dcfce7",color:"#16a34a",borderRadius:20,padding:"1px 6px"}}>💶 betaald</span>
                 )}
                 <div style={{display:"flex",gap:2}}>
                   <button title="Kopiëren" style={{background:"none",border:"none",cursor:"pointer",fontSize:10,padding:"0 2px",color:groen,lineHeight:1}}
@@ -4760,6 +4767,7 @@ function App() {
   const stamdata=[
     {id:"klanten",     label:"👤 Klanten"},
     {id:"teelten",     label:"🌱 Teelten"},
+    {id:"soortenbeheer",label:"📋 Soortenbeheer"},
     {id:"teeltduur",   label:"🕐 Teeltduur"},
     {id:"prijzen",     label:"💰 Verkoopprijzen"},
     {id:"kiemkracht",  label:"🌱 Kiemkracht"},
@@ -4881,6 +4889,12 @@ function App() {
       </div>
       {pagina==="orders"       && <Orders      klanten={klanten} gewassen={gewassen} prijzen={prijzen} orders={orders} setOrders={setOrders} verpDef={verpDef} bedrijf={bedrijf} />}
       {pagina==="klanten"      && <Klantenbeheer klanten={klanten} setKlanten={setKlanten} gewassen={gewassen} verpDef={verpDef} />}
+      {pagina==="soortenbeheer" && <Soortenbeheer
+        gewassen={gewassen} setGewassen={setGewassen}
+        kiemkracht={kiemkracht} setKiemkracht={setKiemkracht}
+        teeltduur={teeltduur} setTeeltduur={setTeeltduur}
+        verpDef={verpDef}
+      />}
       {pagina==="teelten"      && <Teelten     gewassen={gewassen} setGewassen={setGewassen} />}
       {pagina==="prijzen"      && <Prijzen     klanten={klanten} gewassen={gewassen} prijzen={prijzen} setPrijzen={setPrijzen} verpDef={verpDef} />}
       {pagina==="overzichten"  && <div style={{padding:16,overflowY:"auto",height:"calc(100vh - 50px)"}}><MatrixFilterPaneel klanten={klanten} gewassen={gewassen} orders={orders} verpDef={verpDef} weken={weekOpties()} /></div>}
@@ -5933,6 +5947,182 @@ function MargeOverzicht({ klanten, gewassen, prijzen, verpDef, kiemkracht }) {
               </tbody>
             </table>
         }
+      </div>
+    </div>
+  );
+}
+
+
+// ════════════════════════════════════════════════════════
+// SOORTENBEHEER
+// ════════════════════════════════════════════════════════
+function Soortenbeheer({ gewassen, setGewassen, kiemkracht, setKiemkracht, teeltduur, setTeeltduur, verpDef }) {
+  const [openGewas, setOpenGewas] = useState({});
+  const fusten = verpDef.filter(function(v){return !v.naam.toLowerCase().includes("zaai");});
+
+  function getKiem(g,s){ const k=kiemkracht.find(function(x){return x.gewas===g&&x.soort===s;}); return k?k.waarde:""; }
+  function setKiem(g,s,val){
+    const id=("k_"+g+"_"+s).replace(/[\/]/g,"_");
+    setKiemkracht(function(prev){
+      const lijst=[...prev]; const i=lijst.findIndex(function(x){return x.id===id;});
+      if(val===""){ return i>=0?lijst.filter(function(_,j){return j!==i;}):lijst; }
+      if(i>=0){lijst[i]={...lijst[i],waarde:Number(val)};return lijst;}
+      return [...lijst,{id:id,gewas:g,soort:s,waarde:Number(val)}];
+    });
+  }
+
+  function getDuur(g,s,f,veld){ const t=teeltduur.find(function(x){return x.gewas===g&&x.soort===s&&x.fust===f;}); return t?(t[veld]??""):""; }
+  function setDuur(g,s,f,veld,val){
+    const id=("t_"+g+"_"+s+"_"+f).replace(/[\/]/g,"_");
+    setTeeltduur(function(prev){
+      const lijst=[...prev]; const i=lijst.findIndex(function(x){return x.id===id;});
+      const v=val===""||val===null?null:Number(val);
+      if(i>=0){lijst[i]={...lijst[i],[veld]:v};return lijst;}
+      return [...lijst,{id:id,gewas:g,soort:s,fust:f,uitzaai:null,inboet:null,[veld]:v}];
+    });
+  }
+
+  function getInkoop(gw,s){ return (gw.inkoopPrijzen||{})[s]??""; }
+  function setInkoop(gw,s,val){
+    setGewassen(gewassen.map(function(g){return g.id===gw.id?{...g,inkoopPrijzen:{...(g.inkoopPrijzen||{}),[s]:val===""?"":Number(val)}}:g;}));
+  }
+
+  function getIntern(gw,s){ return (gw.internNrs||{})[s]||""; }
+  function setIntern(gw,s,val){
+    setGewassen(gewassen.map(function(g){return g.id===gw.id?{...g,internNrs:{...(g.internNrs||{}),[s]:val}}:g;}));
+  }
+
+  function getOud(gw,s){ return !!((gw.oudesoorten||{})[s]); }
+  function setOud(gw,s,val){
+    setGewassen(gewassen.map(function(g){return g.id===gw.id?{...g,oudesoorten:{...(g.oudesoorten||{}),[s]:val}}:g;}));
+  }
+
+  const TH3={padding:"2px 4px",background:"#e8f5ee",color:groen,fontWeight:700,fontSize:10,border:"1px solid #c8e6c9",textAlign:"center",whiteSpace:"nowrap"};
+  const TD3={padding:"1px 3px",fontSize:11,border:"1px solid #eee",verticalAlign:"middle"};
+
+  return (
+    <div style={{display:"flex",height:"calc(100vh - 50px)"}}>
+      <div style={{width:160,borderRight:"1px solid #c8e6c9",background:wit,padding:12,flexShrink:0,fontSize:11}}>
+        <div style={{fontWeight:700,color:groen,marginBottom:8}}>📋 Soortenbeheer</div>
+        <div style={{color:subtekst,lineHeight:1.7,fontSize:10}}>
+          <b>Kiem%</b> kiemkracht<br/>
+          <b>Zaai/Inboet</b> dagen per fust<br/>
+          <b>€/1000</b> inkoopprijs zaad<br/>
+          <b>Oud</b> niet meer actief
+        </div>
+        <button style={{...gs.knopSecundair,fontSize:10,width:"100%",marginTop:12,padding:"3px 6px"}}
+          onClick={function(){
+            var alleOpen=gewassen.every(function(g){return openGewas[g.naam];});
+            var nieuw={};
+            gewassen.forEach(function(g){nieuw[g.naam]=!alleOpen;});
+            setOpenGewas(nieuw);
+          }}>
+          {gewassen.every(function(g){return openGewas[g.naam];})?"▲ Inklappen":"▼ Alles open"}
+        </button>
+      </div>
+
+      <div style={{flex:1,overflowY:"auto",padding:10}}>
+        {gewassen.map(function(gw){
+          var isOpen=!!openGewas[gw.naam];
+          var aantalOud=(gw.soorten||[]).filter(function(s){return getOud(gw,s);}).length;
+          return (
+            <div key={gw.naam} style={{border:"1px solid #c8e6c9",borderRadius:6,marginBottom:5,overflow:"hidden"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 10px",background:"#f0f7f4",cursor:"pointer"}}
+                onClick={function(){setOpenGewas(function(p){return {...p,[gw.naam]:!p[gw.naam]};});}}>
+                <span style={{fontSize:10,color:groen}}>{isOpen?"▼":"▶"}</span>
+                <span style={{fontWeight:700,fontSize:13,color:groen,flex:1}}>{gw.naam}</span>
+                <span style={{fontSize:10,color:subtekst}}>{(gw.soorten||[]).length} soorten</span>
+                {aantalOud>0&&<span style={{fontSize:9,color:"#9ca3af",background:"#f3f4f6",borderRadius:20,padding:"1px 6px"}}>{aantalOud} oud</span>}
+              </div>
+
+              {isOpen&&(
+                <div style={{overflowX:"auto"}}>
+                  <table style={{borderCollapse:"collapse",width:"100%",tableLayout:"auto"}}>
+                    <thead>
+                      <tr>
+                        <th style={{...TH3,textAlign:"left",minWidth:140}}>Soort</th>
+                        <th style={{...TH3,width:45}}>Nr</th>
+                        <th style={{...TH3}}>Kiem%</th>
+                        {fusten.map(function(f){return (
+                          <th key={f.naam} colSpan={2} style={{...TH3,borderLeft:"2px solid #c8e6c9"}}>{f.naam}</th>
+                        );})}
+                        <th style={{...TH3,borderLeft:"2px solid #c8e6c9"}}>€/1000</th>
+                        <th style={{...TH3}}>Oud</th>
+                      </tr>
+                      <tr style={{background:"#f9fcfb"}}>
+                        <th style={{...TH3,background:"#f9fcfb"}}></th>
+                        <th style={{...TH3,background:"#f9fcfb",fontSize:9}}></th>
+                        <th style={{...TH3,background:"#f9fcfb",fontSize:9}}></th>
+                        {fusten.map(function(f){return (
+                          <React.Fragment key={f.naam}>
+                            <th style={{...TH3,background:"#f9fcfb",fontSize:9,borderLeft:"2px solid #c8e6c9"}}>zaai</th>
+                            <th style={{...TH3,background:"#f9fcfb",fontSize:9}}>inboet</th>
+                          </React.Fragment>
+                        );})}
+                        <th style={{...TH3,background:"#f9fcfb",borderLeft:"2px solid #c8e6c9"}}></th>
+                        <th style={{...TH3,background:"#f9fcfb"}}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(gw.soorten||[]).map(function(s,si){
+                        var oud=getOud(gw,s);
+                        return (
+                          <tr key={s} style={{background:oud?"#f9fafb":si%2===0?wit:"#f9fcfb",opacity:oud?0.55:1}}>
+                            <td style={{...TD3,fontWeight:oud?400:600,color:oud?subtekst:tekst,whiteSpace:"nowrap"}}>{s}</td>
+                            <td style={{...TD3,textAlign:"center"}}>
+                              <input style={{padding:"1px 3px",border:"1px solid #c8e6c9",borderRadius:2,fontSize:11,width:42,textAlign:"center",background:"#fafffe"}} type="text" placeholder="—"
+                                value={getIntern(gw,s)}
+                                onChange={function(e){setIntern(gw,s,e.target.value);}}
+                              />
+                            </td>
+                            <td style={{...TD3,textAlign:"center"}}>
+                              <input className="sb" type="number" min="0" max="100"
+                                value={getKiem(gw.naam,s)}
+                                onFocus={function(e){e.target.select();}}
+                                onChange={function(e){setKiem(gw.naam,s,e.target.value);}}
+                              />
+                            </td>
+                            {fusten.map(function(f){return (
+                              <React.Fragment key={f.naam}>
+                                <td style={{...TD3,borderLeft:"2px solid #c8e6c9"}}>
+                                  <input className="sb" type="number" min="0" placeholder="—"
+                                    value={getDuur(gw.naam,s,f.naam,"uitzaai")}
+                                    onFocus={function(e){e.target.select();}}
+                                    onChange={function(e){setDuur(gw.naam,s,f.naam,"uitzaai",e.target.value);}}
+                                  />
+                                </td>
+                                <td style={TD3}>
+                                  <input className="sb" type="number" min="0" placeholder="—"
+                                    value={getDuur(gw.naam,s,f.naam,"inboet")}
+                                    onFocus={function(e){e.target.select();}}
+                                    onChange={function(e){setDuur(gw.naam,s,f.naam,"inboet",e.target.value);}}
+                                  />
+                                </td>
+                              </React.Fragment>
+                            );})}
+                            <td style={{...TD3,borderLeft:"2px solid #c8e6c9"}}>
+                              <input className="sb" type="number" step="0.01" min="0" placeholder="—"
+                                value={getInkoop(gw,s)}
+                                onFocus={function(e){e.target.select();}}
+                                onChange={function(e){setInkoop(gw,s,e.target.value);}}
+                              />
+                            </td>
+                            <td style={{...TD3,textAlign:"center"}}>
+                              <input type="checkbox"
+                                checked={getOud(gw,s)}
+                                onChange={function(e){setOud(gw,s,e.target.checked);}}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

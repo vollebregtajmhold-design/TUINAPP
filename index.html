@@ -833,6 +833,15 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
         ? <input style={{...inp(100),fontSize:11}} type="date" value={r.datumInvoer||""} onChange={e=>upd("datumInvoer",e.target.value)} />
         : <span style={{color:r.datumInvoer?tekst:"#bbb",fontSize:12}}>{r.datumInvoer||"—"}</span>}
       </td>
+      {/* BK — behandelkosten vinkje */}
+      <td style={{...cel,textAlign:"center",padding:"2px 3px"}}>
+        <input type="checkbox"
+          title="Behandelkosten meerekenen"
+          checked={r.behandelkosten!==false}
+          onChange={e=>upd("behandelkosten", e.target.checked)}
+          style={{cursor:"pointer",width:14,height:14,accentColor:groen}}
+        />
+      </td>
       {/* Acties */}
       <td style={{...cel,textAlign:"center",whiteSpace:"nowrap"}}>
         {bewerkbaar
@@ -881,11 +890,11 @@ function OrderDetail({ ges, kl, klanten, verpDef, gewassen, setSt, setTab, setDa
 {[
                   ["Gewas",125],["Soort",184],["Fust",90],
                   ["Trays",55],["Planten",70],["€/st",60],["Vast",70],["Verschil",60],
-                  ["Datum",95],["",32]
+                  ["Datum",95],["BK",24],["",32]
                 ].map(([h,w],i)=>(
-                  <th key={h} style={{...TH,padding:"3px 5px",fontSize:11,
+                  <th key={h+i} style={{...TH,padding:"3px 5px",fontSize:11,
                     textAlign:i>=3&&i<=7?"right":"left",
-                    minWidth:w,width:w}}>{h}</th>
+                    minWidth:w,width:w,title:h==="BK"?"Behandelkosten meerekenen":undefined}}>{h}</th>
                 ))}
             </tr>
           </thead>
@@ -1530,7 +1539,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
     });
 
     const kostenPerRegel = kl.kostenPerRegel!=null ? Number(kl.kostenPerRegel) : 0;
-    const aantalRegels = order.regels.length;
+    const aantalRegels = order.regels.filter(r=>r.behandelkosten!==false).length;
     const behandelkosten = kostenPerRegel * aantalRegels;
     const subTotaal = regels.reduce((s,x)=>s+x.bedrag,0);
     const subTotaalMetKosten = subTotaal + behandelkosten;
@@ -1620,7 +1629,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
     });
 
     const kostenPerRegel = kl.kostenPerRegel!=null ? Number(kl.kostenPerRegel) : 0;
-    const aantalRegels = order.regels.length;
+    const aantalRegels = order.regels.filter(r=>r.behandelkosten!==false).length;
     const behandelkosten = kostenPerRegel * aantalRegels;
     const subTotaal = regels.reduce((s,x)=>s+x.bedrag,0);
     const subTotaalMetKosten = subTotaal + behandelkosten;
@@ -2395,8 +2404,8 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
                   ? <div style={{color:subtekst,fontSize:12,padding:16,textAlign:"center"}}>Nog geen regels</div>
                   : <table style={{fontSize:12,width:"100%"}}>
                       <thead>
-                        {[["Gewas",125],["Soort",184],["Fust",90],["Trays",55],["Planten",70],["€/st",60],["Vast",70],["Verschil",60],["Datum",95],["",32]].map(([h,w],i)=>(
-                          <th key={h} style={{...TH,padding:"3px 5px",fontSize:11,textAlign:i>=3&&i<=7?"right":"left",minWidth:w,width:w}}>{h}</th>
+                        {[["Gewas",125],["Soort",184],["Fust",90],["Trays",55],["Planten",70],["€/st",60],["Vast",70],["Verschil",60],["Datum",95],["BK",24],["",32]].map(([h,w],i)=>(
+                          <th key={h+i} style={{...TH,padding:"3px 5px",fontSize:11,textAlign:i>=3&&i<=7?"right":"left",minWidth:w,width:w,title:h==="BK"?"Behandelkosten meerekenen":undefined}}>{h}</th>
                         ))}
                       </thead>
                       <tbody>{data.regels.map(r=>(

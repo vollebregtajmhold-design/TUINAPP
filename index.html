@@ -959,12 +959,18 @@ function WeekGroep({ wk, weekOrders, klanten, ges, verpDef, onOpen, onKopie, pla
                 <div style={{fontSize:10,color:subtekst,marginTop:1}}>{o.orderNr} · {plantenTotaal(o.regels).toLocaleString()} pl.</div>
               </div>
               <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
-                <span style={{fontSize:10,fontWeight:600,background:S_BG[o.status],color:S_KLEUR[o.status],borderRadius:20,padding:"1px 6px"}}>{S_LABEL[o.status]}</span>
-                {o.bevestigingNr&&!o.bevestigingGemaild&&(
-                  <span style={{fontSize:9,fontWeight:600,background:"#fef9c3",color:"#b45309",borderRadius:20,padding:"1px 6px"}}>⚠️ niet gemaild</span>
+                {o.bevestigingNr
+                  ? <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#7c3aed",color:"#fff",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,gap:8,minWidth:120}}>
+                      <span>✅ #{o.bevestigingNr} · wk {weekLabel(o.leverdatum)}</span>
+                      <span style={{fontWeight:400,opacity:0.85}}>{o.bevestigdOp||(o.bevestigingGemaild?new Date(o.bevestigingGemaild).toLocaleDateString("nl-NL"):"—")}</span>
+                    </div>
+                  : <span style={{fontSize:10,fontWeight:600,background:S_BG[o.status],color:S_KLEUR[o.status],borderRadius:20,padding:"1px 6px"}}>{S_LABEL[o.status]}</span>
+                }
+                {!o.bevestigingNr&&!o.seizoensGemaild&&(
+                  <span style={{fontSize:9,color:"#9ca3af",fontStyle:"italic"}}>eerst mailen</span>
                 )}
-                {o.bevestigingNr&&o.bevestigingGemaild&&(
-                  <span style={{fontSize:9,fontWeight:600,background:lichtGroen,color:groen,borderRadius:20,padding:"1px 6px"}}>📧 gemaild</span>
+                {!o.bevestigingNr&&o.seizoensGemaild&&(
+                  <span style={{fontSize:9,fontWeight:600,background:"#ede9fe",color:"#7c3aed",borderRadius:20,padding:"1px 6px"}}>📧 klaar voor bevestiging</span>
                 )}
                 {o.factuurNr&&!o.betaaldOp&&(
                   <span style={{fontSize:9,fontWeight:600,background:"#fef3c7",color:"#b45309",borderRadius:20,padding:"1px 6px"}}>🧾 open</span>
@@ -1270,6 +1276,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
   const [delId,setDelId]=useState(null); const [filtS,setFiltS]=useState(""); const [filtK,setFiltK]=useState(0);
   const [kopO,setKopO]=useState(null); const [kopODat,setKopODat]=useState(defWeek.datum);
   const [kopR,setKopR]=useState(null); const [kopRDoel,setKopRDoel]=useState("");
+  const [kopRKlant,setKopRKlant]=useState(""); const [kopRWk,setKopRWk]=useState("");
   const [tab,setTab]=useState("lijst");
   const [twk,setTwk]=useState(()=>{const n=new Date();return `${String(getJaar(n)).slice(-2)}${String(getWeekNr(n)+1).padStart(2,"0")}`;});
   const [zoek,setZoek]=useState("");
@@ -2153,19 +2160,34 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
                     </div>
                     <input style={{...gs.input,padding:"3px 5px",fontSize:12,width:"100%"}} placeholder="Notitie..." value={data.notitie} onChange={e=>setData({...data,notitie:e.target.value})} />
                     <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:2}}>
-                      <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                        <button style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",flex:1}}
-                          onClick={()=>{
-                            if(!data.klantId||!data.leverdatum||data.regels.length===0) return;
-                            const bestaandeNrs=orders.filter(o=>o.bevestigingNr).map(o=>Number(o.bevestigingNr)||0);
-                            const volgendNr=bestaandeNrs.length>0?Math.max(...bestaandeNrs)+1:1;
-                            const regelsMetVast=data.regels.map(r=>{const vd2=verpDef.find(v=>v.naam===r.verpakking);return {...r,vastPlanten:(vd2?.aantal||0)*r.aantal};});
-                            const bevestigd={...data,status:"bevestigd",regels:regelsMetVast,bevestigingNr:String(volgendNr).padStart(4,"0")};
-                            if(data.id){setOrders(orders.map(o=>o.id===data.id?bevestigd:o));setGes(bevestigd);}
-                            else{const nr=data.eigenOrderNr?.trim()||maakOrderNr(data.klantId,data.leverdatum,orders,null);const n={...bevestigd,id:Date.now(),orderNr:nr};setOrders([...orders,n]);setGes(n);}
-                            setForm(false);
-                          }}>✅ Bevestigen</button>
-                        {data.bevestigingNr&&<span style={{background:"#ede9fe",color:"#7c3aed",borderRadius:4,padding:"3px 6px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>#{data.bevestigingNr}</span>}
+                      <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
+                        {(()=>{
+                          const kanBevestigen = !!(data.seizoensGemaild || data.bevestigingNr);
+                          const wk = weekLabel(data.leverdatum);
+                          return (<>
+                            <button style={{background:kanBevestigen?"#7c3aed":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:kanBevestigen?"pointer":"not-allowed",flex:1}}
+                              title={!kanBevestigen?"Eerst seizoensmatrix mailen naar klant":"Bevestigen"}
+                              onClick={()=>{
+                                if(!kanBevestigen||!data.klantId||!data.leverdatum||data.regels.length===0) return;
+                                const bestaandeNrs=orders.filter(o=>o.bevestigingNr).map(o=>Number(o.bevestigingNr)||0);
+                                const volgendNr=bestaandeNrs.length>0?Math.max(...bestaandeNrs)+1:1;
+                                const regelsMetVast=data.regels.map(r=>{const vd2=verpDef.find(v=>v.naam===r.verpakking);return {...r,vastPlanten:(vd2?.aantal||0)*r.aantal};});
+                                const bevestigdOp=new Date().toLocaleDateString("nl-NL");
+                                const bevestigd={...data,status:"bevestigd",regels:regelsMetVast,bevestigingNr:String(volgendNr).padStart(4,"0"),bevestigdOp};
+                                if(data.id){setOrders(orders.map(o=>o.id===data.id?bevestigd:o));setGes(bevestigd);}
+                                else{const nr=data.eigenOrderNr?.trim()||maakOrderNr(data.klantId,data.leverdatum,orders,null);const n={...bevestigd,id:Date.now(),orderNr:nr};setOrders([...orders,n]);setGes(n);}
+                                setData(prev=>({...prev,...bevestigd}));
+                                setForm(false);
+                              }}>✅ Bevestigen</button>
+                            {data.bevestigingNr
+                              ? <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#7c3aed",color:"#fff",borderRadius:4,padding:"3px 6px",fontSize:10,fontWeight:700,gap:8,flex:1}}>
+                                  <span>#{data.bevestigingNr} · wk {wk}</span>
+                                  <span style={{fontWeight:400,fontSize:9,opacity:0.85}}>{data.bevestigdOp||(data.bevestigingGemaild?new Date(data.bevestigingGemaild).toLocaleDateString("nl-NL"):"—")}</span>
+                                </div>
+                              : !kanBevestigen&&<span style={{fontSize:9,color:"#9ca3af",fontStyle:"italic"}}>eerst mailen</span>
+                            }
+                          </>);
+                        })()}
                       </div>
 
                       {/* Pakbon — datum transport kiezen, dan aanmaken */}
@@ -2329,6 +2351,20 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
                         <button style={{...gs.knopPrimair,flex:1,padding:"4px",fontSize:11}} onClick={opslaan}>💾 Opslaan</button>
                         <button style={{...gs.knopSecundair,flex:1,padding:"4px",fontSize:11}} onClick={()=>setForm(false)}>✕ Sluiten</button>
                       </div>
+                      {data.bevestigingNr&&(
+                        <button title="Herbereken vastPlanten op basis van huidige trays × fust"
+                          style={{background:"#f0f7f4",color:groen,border:`1px solid ${groen}`,borderRadius:5,padding:"3px 6px",fontSize:11,cursor:"pointer",width:"100%",marginTop:4}}
+                          onClick={()=>{
+                            const bijgewerkt={...data,regels:data.regels.map(r=>{
+                              const vd=verpDef.find(v=>v.naam===r.verpakking);
+                              return {...r,vastPlanten:(vd?.aantal||0)*r.aantal};
+                            })};
+                            setData(bijgewerkt);
+                            if(bijgewerkt.id) setOrders(orders.map(o=>o.id===bijgewerkt.id?bijgewerkt:o));
+                          }}>
+                          🔄 Herbereken vastPlanten
+                        </button>
+                      )}
                       {data.bevestigingNr&&data.status==="bevestigd"&&klanten.find(k=>k.id===data.klantId)?.email&&(
                         <div style={{marginTop:4}}>
                           {data.bevestigingGemaild
@@ -2486,11 +2522,12 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
         <div style={{display:"flex",gap:8}}><button style={gs.knopPrimair} onClick={kopOUit}>📋 Kopiëren</button><button style={gs.knopSecundair} onClick={()=>setKopO(null)}>Annuleren</button></div>
       </div></div>)}
 
-      {kopR&&(<div style={gs.overlay}><div style={{...gs.modal,width:380}}>
+      {kopR&&(<div style={gs.overlay}><div style={{...gs.modal,width:400}}>
         <div style={gs.modalTitel}>📋 Regel kopiëren</div>
         <div style={{background:achtergrond,borderRadius:6,padding:8,marginBottom:12,fontSize:12}}>
           <strong>{kopR.regel.gewas}</strong> {kopR.regel.soort} · {kopR.regel.verpakking} · {kopR.regel.aantal}x
         </div>
+        {/* Toevoegen aan huidige order */}
         <div style={{display:"flex",gap:8,marginBottom:14}}>
           {(form||ges)&&<button style={{...gs.knopPrimair,flex:1}} onClick={()=>{
             if(form){kopRUit("HUIDIG");}
@@ -2502,18 +2539,35 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
             📋 Toevoegen aan {form?"huidige order":ges?.orderNr}
           </button>}
         </div>
-        <div style={gs.veldGroep}><label style={gs.label}>Of kopieer naar andere order</label>
-          <select style={gs.input} value={kopRDoel} onChange={e=>setKopRDoel(e.target.value)}>
-            <option value="">— Kies order —</option>
-            {orders.map(o=>{
-              const kl=klanten.find(k=>k.id===o.klantId);
-              const isHuidig = data?.id && o.id===data.id;
-              return <option key={o.id} value={o.id}>{isHuidig?"★ ":""}{o.orderNr} · {kl?.naam} · {weekLabel(o.leverdatum)}</option>;
-            })}
-          </select></div>
+        {/* 2-staps keuze: klant → week → order */}
+        <div style={gs.veldGroep}>
+          <label style={gs.label}>Of kopieer naar andere order</label>
+          <select style={{...gs.input,marginBottom:6}} value={kopRKlant} onChange={e=>{setKopRKlant(e.target.value);setKopRWk("");setKopRDoel("");}}>
+            <option value="">— Kies klant —</option>
+            {klanten.sort((a,b)=>a.naam.localeCompare(b.naam)).map(k=><option key={k.id} value={k.id}>{k.naam}</option>)}
+          </select>
+          {kopRKlant&&(()=>{
+            const klantOrders = orders.filter(o=>o.klantId===Number(kopRKlant));
+            const weken = [...new Set(klantOrders.map(o=>weekLabel(o.leverdatum)))].sort();
+            return <select style={{...gs.input,marginBottom:6}} value={kopRWk} onChange={e=>{setKopRWk(e.target.value);setKopRDoel("");}}>
+              <option value="">— Kies week —</option>
+              {weken.map(w=><option key={w}>{w}</option>)}
+            </select>;
+          })()}
+          {kopRWk&&(()=>{
+            const weekOrders = orders.filter(o=>o.klantId===Number(kopRKlant)&&weekLabel(o.leverdatum)===kopRWk);
+            return <select style={gs.input} value={kopRDoel} onChange={e=>setKopRDoel(e.target.value)}>
+              <option value="">— Kies order —</option>
+              {weekOrders.map(o=>{
+                const isHuidig = data?.id && o.id===data.id;
+                return <option key={o.id} value={o.id}>{isHuidig?"★ ":""}{o.orderNr}</option>;
+              })}
+            </select>;
+          })()}
+        </div>
         <div style={{display:"flex",gap:8}}>
           <button style={gs.knopPrimair} onClick={()=>kopRUit(kopRDoel)} disabled={!kopRDoel}>📋 Kopiëren</button>
-          <button style={gs.knopSecundair} onClick={()=>setKopR(null)}>Annuleren</button>
+          <button style={gs.knopSecundair} onClick={()=>{setKopR(null);setKopRKlant("");setKopRWk("");setKopRDoel("");}}>Annuleren</button>
         </div>
       </div></div>)}
 
@@ -2740,6 +2794,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
   const [matrixFust, setMatrixFust] = useState("");
   const [weergave,   setWeergave]   = useState("beide");
   const [printWerklijst, setPrintWerklijst] = useState(null);
+  const [printWegzetlijst, setPrintWegzetlijst] = useState(null);
   const [realisatie, setRealisatie] = useState(()=>laad("ta_realisatie", {}));
   useEffect(()=>bewaar("ta_realisatie",realisatie),[realisatie]);
   // Sla realisatie op in Firebase ook
@@ -2963,6 +3018,8 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                         <span>{isZaai?"🌰 Uitzaai":"🪴 Inboet"}</span>
                         <button style={{background:isZaai?"#1d4ed8":"#0891b2",color:"#fff",border:"none",borderRadius:4,padding:"1px 8px",cursor:"pointer",fontSize:10,fontWeight:600}}
                           onClick={()=>setPrintWerklijst({wk,blok,type:isZaai?"zaai":"inboet"})}>🖨️ Werklijst</button>
+                        {!isZaai&&<button style={{background:"#2d6a4f",color:"#fff",border:"none",borderRadius:4,padding:"1px 8px",cursor:"pointer",fontSize:10,fontWeight:600}}
+                          onClick={()=>setPrintWegzetlijst({wk,orders,klanten,gewassen,verpDef,teeltduur,kiemkracht})}>📋 Wegzetlijst</button>}
                       </div>
                       <table style={{width:"auto"}}>
                         <thead>
@@ -3135,6 +3192,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
         );
       })()}
       {printWerklijst&&<WerklijstPrint data={printWerklijst} bedrijf={bedrijf} onSluit={()=>setPrintWerklijst(null)} />}
+      {printWegzetlijst&&<WegzetlijstPrint data={printWegzetlijst} bedrijf={bedrijf} onSluit={()=>setPrintWegzetlijst(null)} />}
     </div>
   );
 }
@@ -3458,9 +3516,17 @@ function Bevestiging({ klanten, gewassen, orders, setOrders, verpDef, bedrijf })
       headers: {"Content-Type": "text/plain;charset=utf-8"},
       body: JSON.stringify({to_email: klant.email, onderwerp: onderwerp, bericht: "", html: berichtHtml})
     }).then(function() {
-      const logEntry = {datum: new Date().toLocaleString("nl-NL"), klant: klant.naam, email: klant.email, onderwerp: onderwerp, week: "seizoen"};
+      const gemaileWeken = klantOrders.map(o=>weekLabel(o.leverdatum));
+      const logEntry = {datum: new Date().toLocaleString("nl-NL"), klant: klant.naam, klantId: klant.id, email: klant.email, onderwerp: onderwerp, week: "seizoen", weken: gemaileWeken};
       const log = JSON.parse(localStorage.getItem("ta_maillog")||"[]");
       localStorage.setItem("ta_maillog", JSON.stringify([logEntry,...log].slice(0,50)));
+      // Markeer orders als seizoensmatrix gemaild
+      setOrders(function(prev){ return prev.map(function(o){
+        if(o.klantId===klant.id&&gemaileWeken.includes(weekLabel(o.leverdatum))&&o.status!=="geleverd"){
+          return {...o, seizoensGemaild: new Date().toISOString()};
+        }
+        return o;
+      });});
       setMailMatrixStatus("✅ Mail verstuurd naar "+klant.email);
       setTimeout(function(){setMailMatrixStatus("");}, 4000);
     }).catch(function(){setMailMatrixStatus("⚠️ Versturen mislukt");});
@@ -3875,8 +3941,8 @@ function MultiBevestigingPrint({ data, bedrijf, verpDef, onSluit }) {
 
           {/* Header */}
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
-            <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
-              {bedrijf?.logo&&<img src={bedrijf.logo} style={{maxHeight:60,maxWidth:100,objectFit:"contain",marginTop:2}} alt="logo"/>}
+            <div style={{display:"flex",gap:12,alignItems:"stretch"}}>
+              {bedrijf?.logo&&<img src={bedrijf.logo} style={{height:"auto",maxWidth:100,objectFit:"contain",alignSelf:"stretch"}} alt="logo"/>}
               <div>
                 <div style={{fontWeight:700,fontSize:15,color:"#2d6a4f",marginBottom:4}}>{bedrijf?.naam}</div>
                 <div>{bedrijf?.adres}</div>
@@ -3901,6 +3967,13 @@ function MultiBevestigingPrint({ data, bedrijf, verpDef, onSluit }) {
             <div style={{fontSize:11}}>
               <span>Weken: <strong>{weken.join(", ")}</strong></span>
             </div>
+          </div>
+
+          {/* Koptekst onder titelbalk */}
+          <div style={{fontSize:11,color:"#333",lineHeight:1.7,marginBottom:14,padding:"8px 12px",background:"#fffbe6",borderRadius:4,border:"1px solid #f59e0b"}}>
+            Wij berekenen per orderregel{klant?.kostenPerRegel>0?<> <strong>€ {Number(klant.kostenPerRegel).toFixed(2)}</strong></>:" een"} schakelkosten per kleur/mix.<br/>
+            Als vervanging van een staffelprijs tussen grote en kleine aantallen.<br/>
+            Prijzen zijn exclusief BTW en transportkosten.
           </div>
 
           {/* Matrix tabel — gesplitst in groepen van 8 weken */}
@@ -3966,15 +4039,22 @@ function MultiBevestigingPrint({ data, bedrijf, verpDef, onSluit }) {
             ));
           })()}
 
-          {/* Verwerkingskosten notitie */}
-          {klant?.kostenPerRegel>0&&(
-            <div style={{marginTop:10,padding:"7px 12px",background:"#f0f7f4",borderRadius:4,border:`1px solid ${rand}`,fontSize:11,color:"#444"}}>
-              Per orderregel berekenen wij <strong>€ {Number(klant.kostenPerRegel).toFixed(2)}</strong> verwerkingskosten.
+          {/* Slottekst */}
+          <div style={{marginTop:16,fontSize:11,color:"#333",lineHeight:1.7}}>
+            <div style={{fontWeight:700,color:"#2d6a4f",fontSize:12,marginBottom:4}}>WIJ DANKEN U VOOR UW BESTELLING</div>
+            <div style={{fontWeight:700,color:"#dc2626",marginBottom:10}}>! WILT U DEZE BEVESTIGING GOED CONTROLEREN !</div>
+            <div style={{marginBottom:6}}>Betaling binnen <strong>14 dagen</strong> na factuurdatum.</div>
+            <div style={{marginBottom:2}}>Al onze producten zijn MPS-GAP gecertificeerd. Nr. 805097</div>
+            <div style={{marginBottom:2}}>Zonder tegenbericht gaan wij ervan uit dat de hierboven genoemde gegevens volgens uw opdracht zijn.</div>
+            <div style={{marginBottom:8}}>Eventuele wijzigingen zijn tot 18 weken voor de afleverweek nog mogelijk.</div>
+            <div style={{fontSize:10,color:"#555",lineHeight:1.6}}>
+              Orderacceptatie onder voorbehoud tot na toetsing door kredietverzekeraar Interpolis.<br/>
+              Alle aanbiedingen, overeenkomsten en leveringen geschieden onder toepassing van de algemene voorwaarden van Plantum NL voor de verkoop en levering van planten en teeltmateriaal van sierteeltproducten. Gedeponeerd bij de KvK Rotterdam, kantoor Gouda, op 21 mei 2012. Op <span style={{color:"#1d4ed8"}}>www.vollebregtcyclamen.nl</span> zijn deze voorwaarden in te zien.
             </div>
-          )}
+          </div>
 
           {/* Footer */}
-          <div style={{borderTop:"1px solid #e0e0e0",paddingTop:8,fontSize:10,color:"#888",display:"flex",justifyContent:"space-between"}}>
+          <div style={{borderTop:"1px solid #e0e0e0",paddingTop:8,marginTop:12,fontSize:10,color:"#888",display:"flex",justifyContent:"space-between"}}>
             <span>{bedrijf?.naam} · {bedrijf?.adres}, {bedrijf?.postcode} {bedrijf?.plaats}</span>
             <span>IBAN: {bedrijf?.iban}</span>
           </div>
@@ -3987,6 +4067,174 @@ function MultiBevestigingPrint({ data, bedrijf, verpDef, onSluit }) {
 // ════════════════════════════════════════════════════════
 // WERKLIJST PRINT
 // ════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
+// WEGZETLIJST PRINT
+// ════════════════════════════════════════════════════════
+function WegzetlijstPrint({ data, bedrijf, onSluit }) {
+  const { wk, orders, klanten, gewassen, verpDef, teeltduur, kiemkracht } = data;
+  const vandaag = new Date().toLocaleDateString("nl-NL");
+
+  function getDuur(gewas, soort, fust, veld) {
+    return (teeltduur||[]).find(t=>
+      t.gewas?.toLowerCase()===gewas?.toLowerCase()&&
+      t.soort?.toLowerCase()===soort?.toLowerCase()&&
+      t.fust?.toLowerCase()===fust?.toLowerCase()
+    )?.[veld]??null;
+  }
+
+  // Vind orders waarvan de inboetweek = wk
+  // Per orderregel: inboetweek = leverweek - inboetduur
+  const rijen = [];
+  orders.filter(o=>o.status!=="geleverd").forEach(o=>{
+    const kl = klanten.find(k=>k.id===o.klantId)||{};
+    const leverWk = getWeekNr(o.leverdatum);
+    const leverJaar = getJaar(o.leverdatum);
+    o.regels.forEach(r=>{
+      const inboetWeken = getDuur(r.gewas, r.soort, r.verpakking, "inboet");
+      if(inboetWeken===null) return;
+      let inbWk = leverWk - inboetWeken;
+      let inbJaar = leverJaar;
+      if(inbWk<=0){inbWk+=52;inbJaar--;}
+      const inbLbl = String(inbJaar).slice(-2)+String(inbWk).padStart(2,"0");
+      if(inbLbl!==wk) return;
+      const gw = gewassen.find(g=>g.naam===r.gewas);
+      const internNr = (gw?.internNrs||{})[r.soort]||"";
+      const soortMet = r.soort+(internNr?" "+internNr:"");
+      rijen.push({
+        klantcode: kl.klantcode||kl.naam?.substring(0,6)||"?",
+        klantNaam: kl.naam||"?",
+        klantId: o.klantId,
+        gewas: r.gewas,
+        soort: soortMet,
+        verpakking: r.verpakking,
+        aantal: r.aantal,
+        afleverWeek: weekLabel(o.leverdatum),
+      });
+    });
+  });
+
+  // Groepeer per traymaat
+  const perTray = {};
+  rijen.forEach(r=>{
+    if(!perTray[r.verpakking]) perTray[r.verpakking]={tray:r.verpakking,rijen:[],totaal:0};
+    perTray[r.verpakking].rijen.push(r);
+    perTray[r.verpakking].totaal += r.aantal;
+  });
+
+  // Sorteer rijen per traymaat per klant
+  Object.values(perTray).forEach(t=>{
+    t.rijen.sort((a,b)=>a.klantNaam.localeCompare(b.klantNaam)||a.gewas.localeCompare(b.gewas)||a.soort.localeCompare(b.soort));
+  });
+
+  function printDoc() {
+    const el = document.getElementById("wegzet-print-inhoud");
+    const w = window.open("","_blank");
+    w.document.write(`<html><head><title>Wegzetlijst week ${wk}</title><style>
+      @page{size:A4 portrait;margin:10mm}
+      body{font-family:Arial,sans-serif;font-size:10px;color:#1a1a1a;margin:0}
+      table{border-collapse:collapse;width:100%}
+      th{background:#e8f5ee;color:#2d6a4f;padding:4px 6px;border:1px solid #c8e6c9;font-size:10px;font-weight:700;text-align:left}
+      td{padding:3px 6px;border:1px solid #ddd;font-size:10px}
+      .subtotaal td{background:#444!important;color:#fff!important;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      .pagina-break{page-break-before:always}
+      @media print{button{display:none}}
+    </style></head><body>${el.innerHTML}</body></html>`);
+    w.document.close();
+    setTimeout(()=>w.print(),400);
+  }
+
+  const traysGesorteerd = Object.keys(perTray).sort();
+
+  return (
+    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",zIndex:500,overflowY:"auto",padding:20}}>
+      <div style={{maxWidth:1000,margin:"0 auto",background:"#fff",borderRadius:8,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,0.3)"}}>
+        <div style={{display:"flex",gap:8,padding:"10px 16px",background:"#f0f7f4",borderBottom:`1px solid ${rand}`}}>
+          <button style={gs.knopPrimair} onClick={printDoc}>🖨️ Afdrukken / PDF</button>
+          <button style={gs.knopSecundair} onClick={onSluit}>✕ Sluiten</button>
+          <span style={{fontSize:12,color:subtekst,alignSelf:"center"}}>Week {wk} · {traysGesorteerd.length} traymaat/maten</span>
+        </div>
+
+        <div id="wegzet-print-inhoud" style={{padding:"20px 24px",fontFamily:"Arial,sans-serif",fontSize:10}}>
+          {traysGesorteerd.map((tray,ti)=>{
+            const t = perTray[tray];
+            // Groepeer per klant voor subtotalen
+            const perKlant = {};
+            t.rijen.forEach(r=>{
+              if(!perKlant[r.klantId]) perKlant[r.klantId]={naam:r.klantNaam,code:r.klantcode,rijen:[],totaal:0};
+              perKlant[r.klantId].rijen.push(r);
+              perKlant[r.klantId].totaal += r.aantal;
+            });
+
+            return (
+              <div key={tray} className={ti>0?"pagina-break":""} style={{marginBottom:24}}>
+                {/* Header */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,paddingBottom:6,borderBottom:"2px solid #2d6a4f"}}>
+                  <div style={{fontWeight:700,fontSize:16,color:"#2d6a4f"}}>
+                    Wegzetten inboetweek {wk} &nbsp;·&nbsp; {tray}
+                  </div>
+                  <div style={{fontWeight:700,fontSize:14}}>{t.totaal} trays</div>
+                  <div style={{fontSize:11,color:"#555"}}>{vandaag}</div>
+                </div>
+
+                {/* Tabel */}
+                <table>
+                  <thead>
+                    <tr>
+                      <th style={{minWidth:100,maxWidth:100}}>Klant</th>
+                      <th style={{minWidth:70,maxWidth:80}}>Serie</th>
+                      <th style={{minWidth:160}}>Kleur</th>
+                      <th style={{minWidth:50,textAlign:"right"}}>Aantal</th>
+                      <th style={{minWidth:50,textAlign:"right"}}></th>
+                      <th style={{minWidth:40}}></th>
+                      <th style={{minWidth:40}}></th>
+                      <th style={{minWidth:40}}></th>
+                      <th style={{minWidth:50}}>Init.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.values(perKlant).map((kd,ki)=>(
+                      <React.Fragment key={ki}>
+                        {kd.rijen.map((r,ri)=>(
+                          <tr key={ri} style={{background:ri%2===0?"#fff":"#f9fcfb"}}>
+                            <td style={{fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:100}}>{r.klantNaam}</td>
+                            <td style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:80}}>{r.gewas}</td>
+                            <td>{r.soort}</td>
+                            <td style={{textAlign:"right",fontWeight:600}}>{r.aantal}</td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                          </tr>
+                        ))}
+                        {/* Subtotaal per klant — donkere rij */}
+                        <tr className="subtotaal" style={{background:"#444",color:"#fff"}}>
+                          <td style={{color:"#fff",fontWeight:700,whiteSpace:"nowrap"}}>{kd.naam}</td>
+                          <td colSpan={2} style={{color:"#fff"}}></td>
+                          <td style={{textAlign:"right",color:"#fff",fontWeight:700}}>{kd.totaal}</td>
+                          <td style={{color:"#fff",fontWeight:700,textAlign:"right"}}>{kd.totaal}</td>
+                          <td></td><td></td><td></td>
+                          <td style={{color:"#fff"}}>✓</td>
+                        </tr>
+                      </React.Fragment>
+                    ))}
+                    {/* Totaalrij */}
+                    <tr style={{background:"#e8f5ee",fontWeight:700,borderTop:"2px solid #2d6a4f"}}>
+                      <td colSpan={3} style={{color:"#2d6a4f",fontWeight:700}}>Totaal {tray}</td>
+                      <td style={{textAlign:"right",color:"#2d6a4f",fontWeight:700}}>{t.totaal}</td>
+                      <td colSpan={5}></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function WerklijstPrint({ data, bedrijf, onSluit }) {
   const { wk, blok, type } = data;
   const isZaai = type === "zaai";

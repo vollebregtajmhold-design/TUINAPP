@@ -1275,7 +1275,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
     const p=prijzen.find(x=>x.klantId===Number(data.klantId)&&x.gewas===(k==="gewas"?v:r.gewas)&&x.soort===(k==="soort"?v:r.soort)&&x.verpakking===(k==="verpakking"?v:r.verpakking));
     if(p)r.prijs=p.prijs; setRegel(r);
   }
-  function regelAdd(){if(!regel.gewas||!regel.aantal)return;const vandaag=new Date().toISOString().split('T')[0];setData({...data,regels:[...data.regels,{...regel,id:Date.now(),datumInvoer:regel.datumInvoer||vandaag}]});setRegel(maakLegeRegel(data.klantId));}
+  function regelAdd(){if(!regel.gewas||!regel.aantal)return;const vandaag=new Date().toISOString().split('T')[0];const internNrRegel=(gewassen.find(g=>g.naam===regel.gewas)?.internNrs||{})[regel.soort]||"";setData({...data,regels:[...data.regels,{...regel,id:Date.now(),datumInvoer:regel.datumInvoer||vandaag,internNr:internNrRegel}]});setRegel(maakLegeRegel(data.klantId));}
   function maakOrderNr(klantId, leverdatum, bestaandeOrders, huidigId) {
     const kl = klanten.find(k=>k.id===Number(klantId));
     const code = (kl?.klantcode || kl?.naam?.substring(0,3) || "ORD").toUpperCase();
@@ -1342,7 +1342,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
       const bg = i%2===0?"#fff":"#f9fcfb";
       return "<tr style='background:"+bg+"'>"
         +"<td style='padding:5px 8px;border:1px solid #eee'>"+r.gewas+"</td>"
-        +"<td style='padding:5px 8px;border:1px solid #eee'>"+r.soort+"</td>"
+        +"<td style='padding:5px 8px;border:1px solid #eee'>"+r.soort+(r.internNr||((gewassen.find(g=>g.naam===r.gewas)?.internNrs||{})[r.soort]||"")?"<span style='font-size:9px;color:#888;margin-left:5px'>"+(r.internNr||((gewassen.find(g=>g.naam===r.gewas)?.internNrs||{})[r.soort]||""))+"</span>":"")+"</td>"
         +"<td style='padding:5px 8px;border:1px solid #eee'>"+r.verpakking+"</td>"
         +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right'>"+r.aantal+"</td>"
         +"<td style='padding:5px 8px;border:1px solid #eee'></td>"
@@ -1403,7 +1403,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
       +"<div style=\'background:#f0f7f4;border-radius:4px;padding:10px 18px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;font-size:13px\'>"
         +"<div><span style=\'color:#555;font-size:11px\'>Klant</span><br/><strong style=\'font-size:14px\'>"+kl.naam+"</strong></div>"
         +"<div style=\'text-align:center\'><span style=\'color:#555;font-size:11px\'>Pakbon</span><br/><strong style=\'font-size:14px\'>#"+(order.pakbonNr||"—")+"</strong></div>"
-        +"<div style=\'text-align:center\'><span style=\'color:#555;font-size:11px\'>Leverweek</span><br/><strong style=\'font-size:14px\'>"+leverWkDag+"</strong></div>"
+
         +"<div style=\'text-align:center\'><span style=\'color:#555;font-size:11px\'>Transport</span><br/><strong style=\'font-size:14px\'>"+transportStr+"</strong></div>"
         +(order.notitie?"<div style=\'text-align:right\'><span style=\'color:#555;font-size:11px\'>Notitie</span><br/><strong style=\'font-size:14px\'>"+order.notitie+"</strong></div>":"")
       +"</div>"
@@ -1458,43 +1458,61 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
     const totTrays = order.regels.reduce((s,r)=>s+r.aantal,0);
     const totPl = order.regels.reduce((s,r)=>{const vd=verpDef.find(v=>v.naam===r.verpakking);return s+(r.vastPlanten??((vd?.aantal||0)*r.aantal));},0);
 
-    const doc = "<!DOCTYPE html><html><head><meta charset=\'UTF-8\'>"
-      +"<style>@page{size:A4 portrait;margin:15mm} body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:0} table{border-collapse:collapse;width:100%} @media print{button{display:none}}</style></head><body>"
-      +"<div style=\'display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid #2d6a4f;\'>"
-        +"<div>"+logo+"<div style=\'margin-top:6px;font-size:13px;font-weight:700;color:#2d6a4f\'>"+bd.naam+"</div>"
-        +"<div style=\'font-size:10px;color:#666\'>"+bd.adres+", "+bd.postcode+" "+bd.plaats+"</div></div>"
-        +"<div style=\'text-align:right\'><div style=\'font-size:22px;font-weight:700;color:#2d6a4f\'>AFLEVERBON</div>"
-        +"<div style=\'font-size:12px;color:#555;margin-top:4px\'>Afleverbon: <strong>#"+(order.afleverNr||"—")+"</strong></div>"
-        +"<div style=\'font-size:11px;color:#555\'>Datum: "+vandaag+"</div></div>"
-      +"</div>"
-      +"<div style=\'background:#f0f7f4;border-radius:4px;padding:10px 18px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;\'>"
-        +"<div><span style=\'color:#555;font-size:11px\'>Klant</span><br/><strong style=\'font-size:15px\'>"+kl.naam+"</strong></div>"
-        +"<div style=\'text-align:center\'><span style=\'color:#555;font-size:11px\'>Leverweek</span><br/><strong style=\'font-size:15px\'>"+leverWkDag+"</strong></div>"
-        +"<div style=\'text-align:center\'><span style=\'color:#555;font-size:11px\'>Transport</span><br/><strong style=\'font-size:15px\'>"+transportStr+"</strong></div>"
-        +(order.notitie?"<div style=\'text-align:right\'><span style=\'color:#555;font-size:11px\'>Notitie</span><br/><strong style=\'font-size:13px\'>"+order.notitie+"</strong></div>":"")
-      +"</div>"
-      +"<p style=\'font-size:11px;color:#555;margin-bottom:10px\'>Geachte "+kl.naam+", hierbij ontvangt u de levering conform onderstaande specificatie.</p>"
-      +"<table><thead><tr>"
-        +"<th style=\'padding:7px 10px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left\'>Gewas</th>"
-        +"<th style=\'padding:7px 10px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left\'>Soort</th>"
-        +"<th style=\'padding:7px 10px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left\'>Fust</th>"
-        +"<th style=\'padding:7px 10px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right\'>Trays</th>"
-        +"<th style=\'padding:7px 10px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right\'>Planten</th>"
-      +"</tr></thead><tbody>"+regels+"</tbody>"
-      +"<tfoot><tr style=\'background:#e8f5ee;font-weight:700;\'>"
-        +"<td colspan=\'3\' style=\'padding:7px 10px;border:1px solid #c8e6c9;color:#2d6a4f;border-top:2px solid #2d6a4f\'>Totaal</td>"
-        +"<td style=\'padding:7px 10px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f;border-top:2px solid #2d6a4f\'>"+totTrays+"</td>"
-        +"<td style=\'padding:7px 10px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f;border-top:2px solid #2d6a4f\'>"+totPl.toLocaleString("nl-NL")+"</td>"
-      +"</tr></tfoot></table>"
-      +"<div style=\'margin-top:30px;padding:14px 18px;background:#f9fafb;border-radius:4px;border:1px solid #e2e8e4;\'>"
-        +"<div style=\'font-size:11px;color:#555;margin-bottom:16px\'>Gelieve onderstaande te ondertekenen voor ontvangst:</div>"
-        +"<div style=\'display:flex;gap:40px;\'>"
-          +"<div style=\'flex:1;border-top:1px solid #ccc;padding-top:4px;font-size:10px;color:#888\'>Ontvangen door</div>"
-          +"<div style=\'flex:1;border-top:1px solid #ccc;padding-top:4px;font-size:10px;color:#888\'>Datum ontvangst</div>"
-          +"<div style=\'flex:1;border-top:1px solid #ccc;padding-top:4px;font-size:10px;color:#888\'>Handtekening</div>"
+    const plantPaspoort = "<table style=\"border:1px solid #333;border-collapse:collapse;font-family:Arial,sans-serif;font-size:8px;\">"
+      +"<tr>"
+        +"<td style=\"border:1px solid #333;padding:3px 5px;text-align:center;line-height:1;color:#003399;font-size:10px;\">&#9733;&#9733;&#9733;<br/>&#9733;&nbsp;&#9733;<br/>&#9733;&#9733;&#9733;</td>"
+        +"<td style=\"border:1px solid #333;padding:2px 6px;font-weight:700;font-size:9px;color:#003399;vertical-align:middle;\">Plant Passport</td>"
+      +"</tr>"
+      +"<tr>"
+        +"<td colspan=\"2\" style=\"border:1px solid #333;padding:2px 5px;\">A: Cyclamen &nbsp;&nbsp; C: 4480</td>"
+      +"</tr>"
+      +"<tr>"
+        +"<td colspan=\"2\" style=\"border:1px solid #333;padding:2px 5px;\">B: NL-683298836 &nbsp;&nbsp; D: NL</td>"
+      +"</tr>"
+    +"</table>";
+    const doc = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\">"
+      +"<style>@page{size:A4 portrait;margin:15mm} body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:0} table.data{border-collapse:collapse;width:100%} @media print{button{display:none}}</style></head><body>"
+      +"<div style=\"position:relative;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid #2d6a4f;\">"
+        +"<div style=\"position:absolute;top:0;right:0;\">"
+          +plantPaspoort
+        +"</div>"
+        +"<div>"+logo+"<div style=\"margin-top:6px;font-size:13px;font-weight:700;color:#2d6a4f\">"+bd.naam+"</div>"
+        +"<div style=\"font-size:10px;color:#666\">"+bd.adres+", "+bd.postcode+" "+bd.plaats+"</div></div>"
+        +"<div style=\"text-align:center;margin-top:10px;\">"
+          +"<div style=\"font-size:22px;font-weight:700;color:#2d6a4f\">AFLEVERBON</div>"
+          +"<div style=\"font-size:12px;color:#555;margin-top:4px\">Afleverbon: <strong>#"+(order.afleverNr||"—")+"</strong></div>"
+          +"<div style=\"font-size:11px;color:#555\">Datum: "+vandaag+"</div>"
         +"</div>"
       +"</div>"
-      +"<div style=\'margin-top:16px;font-size:10px;color:#aaa;text-align:center\'>"+bd.naam+" · "+bd.adres+", "+bd.postcode+" "+bd.plaats+(bd.iban?" · IBAN: "+bd.iban:"")+"</div>"
+      +"<div style=\"background:#f0f7f4;border-radius:4px;padding:10px 18px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;\">"
+        +"<div><span style=\"color:#555;font-size:11px\">Klant</span><br/><strong style=\"font-size:15px\">"+kl.naam+"</strong></div>"
+        +"<div style=\"text-align:center\"><span style=\"color:#555;font-size:11px\">Transport</span><br/><strong style=\"font-size:15px\">"+transportStr+"</strong></div>"
+        +(order.notitie?"<div style=\"text-align:right\"><span style=\"color:#555;font-size:11px\">Notitie</span><br/><strong style=\"font-size:13px\">"+order.notitie+"</strong></div>":"")
+      +"</div>"
+      +"<p style=\"font-size:11px;color:#555;margin-bottom:10px\">Geachte "+kl.naam+", hierbij ontvangt u de levering conform onderstaande specificatie.</p>"
+      +"<table class=\"data\"><thead><tr>"
+        +"<th style=\"padding:7px 10px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left\">Gewas</th>"
+        +"<th style=\"padding:7px 10px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left\">Soort</th>"
+        +"<th style=\"padding:7px 10px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left\">Fust</th>"
+        +"<th style=\"padding:7px 10px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right\">Trays</th>"
+        +"<th style=\"padding:7px 10px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right\">Planten</th>"
+      +"</tr></thead><tbody>"+regels+"</tbody>"
+      +"<tfoot><tr style=\"background:#e8f5ee;font-weight:700;\">"
+        +"<td colspan=\"3\" style=\"padding:7px 10px;border:1px solid #c8e6c9;color:#2d6a4f;border-top:2px solid #2d6a4f\">Totaal</td>"
+        +"<td style=\"padding:7px 10px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f;border-top:2px solid #2d6a4f\">"+totTrays+"</td>"
+        +"<td style=\"padding:7px 10px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f;border-top:2px solid #2d6a4f\">"+totPl.toLocaleString("nl-NL")+"</td>"
+      +"</tr></tfoot></table>"
+      +"<div style=\"margin-top:24px;font-size:10px;color:#333;line-height:1.9;\">"
+        +"<div><strong>HANDTEKENING:</strong></div>"
+        +"<div>&nbsp;-</div>"
+        +"<div>Jonge plantenadministratie: Arie van Dam</div>"
+        +"<div>youngplants@vollebregtcyclamen.nl &nbsp; WhatsApp 06-82228069</div>"
+        +"<div>&nbsp;-</div>"
+        +"<div>EU Kwaliteit Naktuinbouw NL-683298836; MPS-GAP 805097</div>"
+        +"<div>&nbsp;-</div>"
+        +"<div style=\"font-size:9px;color:#555\">Alle aanbiedingen, overeenkomsten en leveringen geschieden onder toepassing van de Algemene voorwaarden voor Sierteelt en Voedingstuinbouw Opkweek van Plantum NL. Gedeponeerd bij de K.v.K. Rotterdam, kantoor Gouda, 21 mei 2012.</div>"
+        +"<div style=\"font-size:9px;color:#1d4ed8\">Op www.vollebregtcyclamen.nl zijn deze voorwaarden in te zien.</div>"
+      +"</div>"
       +"</body></html>";
 
     const w = window.open("","_blank");
@@ -1686,7 +1704,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
       const vd = verpDef.find(v=>v.naam===r.verpakking);
       const pl = r.vastPlanten??((vd?.aantal||0)*r.aantal);
       return "<tr><td style='padding:5px 8px;border:1px solid #eee'>"+r.gewas+"</td>"
-        +"<td style='padding:5px 8px;border:1px solid #eee'>"+r.soort+"</td>"
+        +"<td style='padding:5px 8px;border:1px solid #eee'>"+r.soort+(r.internNr||((gewassen.find(g=>g.naam===r.gewas)?.internNrs||{})[r.soort]||"")?"<span style='font-size:9px;color:#888;margin-left:5px'>"+(r.internNr||((gewassen.find(g=>g.naam===r.gewas)?.internNrs||{})[r.soort]||""))+"</span>":"")+"</td>"
         +"<td style='padding:5px 8px;border:1px solid #eee'>"+r.verpakking+"</td>"
         +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right'>"+(r.prijs?"€"+Number(r.prijs).toFixed(3):"—")+"</td>"
         +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right'>"+r.aantal+"</td>"
@@ -2602,7 +2620,7 @@ function Teeltduur({ gewassen, verpDef, teeltduur, setTeeltduur }) {
 function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkracht, bedrijf }) {
   const [filtStatus, setFiltStatus] = useState("alle");
   const [filtKlant,  setFiltKlant]  = useState(0);
-  const [filtVan, setFiltVan] = useState(()=>{const n=new Date();return String(getJaar(n)).slice(-2)+String(getWeekNr(n)+1).padStart(2,"0");});
+  const [filtVan, setFiltVan] = useState("");
   const [filtTot, setFiltTot] = useState("");
   const [aantalWeken, setAantalWeken] = useState(5);
   const [matrixFust, setMatrixFust] = useState("");
@@ -2705,7 +2723,8 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
           : (kiem>0 ? Math.ceil(trays/kiem) : trays);
         const zaaiKey = r.gewas+"||"+r.soort+"||"+zaaiFust;
         if(!planning[zaaiLabel]) planning[zaaiLabel]={zaai:{},inboet:{}};
-        if(!planning[zaaiLabel].zaai[zaaiKey]) planning[zaaiLabel].zaai[zaaiKey]={gewas:r.gewas,soort:r.soort,fust:zaaiFust,trays:0,zaaiTrays:0,kiem:Math.round(kiem*100),leverWeek:leverLabel};
+        const internNrZaai=(gewassen.find(g=>g.naam===r.gewas)?.internNrs||{})[r.soort]||"";
+        if(!planning[zaaiLabel].zaai[zaaiKey]) planning[zaaiLabel].zaai[zaaiKey]={gewas:r.gewas,soort:r.soort,fust:zaaiFust,trays:0,zaaiTrays:0,kiem:Math.round(kiem*100),leverWeek:leverLabel,internNr:internNrZaai};
         planning[zaaiLabel].zaai[zaaiKey].trays += trays;
         planning[zaaiLabel].zaai[zaaiKey].zaaiTrays += zaaiTrays;
       }
@@ -2717,20 +2736,10 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
         if(inboetWk <= 0) { inboetJaar--; inboetWk += 52; }
         const inboetLabel = `${String(inboetJaar).slice(-2)}${String(inboetWk).padStart(2,"0")}`;
         if(!planning[inboetLabel]) planning[inboetLabel]={zaai:{},inboet:{}};
-        const is65ib = fustL.includes("65")||fustL.includes("66");
-        const zaaiTraysIb = is65ib
-          ? Math.ceil(Math.ceil(trays/kiem)/4)
-          : (kiem>0 ? Math.ceil(trays/kiem) : trays);
-        const uitzaaiWekenIb = getDuur(r.gewas, r.soort, r.verpakking, "uitzaai");
-        const verschilWeken = (uitzaaiWekenIb!==null && inboetWeken!==null) ? (uitzaaiWekenIb - inboetWeken) : 0;
-        let startZaaiWk = inboetWk - verschilWeken;
-        let startZaaiJaar = inboetJaar;
-        if(startZaaiWk <= 0) { startZaaiJaar--; startZaaiWk += 52; }
-        const startZaaiLabel = String(startZaaiJaar).slice(-2)+String(startZaaiWk).padStart(2,"0");
-        if(!planning[inboetLabel].inboet[rijKey]) planning[inboetLabel].inboet[rijKey]={gewas:r.gewas,soort:r.soort,fust:r.verpakking,trays:0,inboetTrays:0,zaaiTrays:0,zaaiWeek:startZaaiLabel,kiem:Math.round(kiem*100),leverWeek:leverLabel};
+        const internNrInboet=(gewassen.find(g=>g.naam===r.gewas)?.internNrs||{})[r.soort]||"";
+        if(!planning[inboetLabel].inboet[rijKey]) planning[inboetLabel].inboet[rijKey]={gewas:r.gewas,soort:r.soort,fust:r.verpakking,trays:0,inboetTrays:0,kiem:Math.round(kiem*100),leverWeek:leverLabel,internNr:internNrInboet};
         planning[inboetLabel].inboet[rijKey].trays += trays;
         planning[inboetLabel].inboet[rijKey].inboetTrays += trays;
-        planning[inboetLabel].inboet[rijKey].zaaiTrays += zaaiTraysIb;
       }
     });
   });
@@ -2781,7 +2790,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
         <div style={{fontSize:10, color:subtekst, marginBottom:3}}>Van week</div>
         <select style={{...gs.input,fontSize:11,marginBottom:6}} value={filtVan} onChange={e=>setFiltVan(e.target.value)}>
           <option value="">Alle</option>
-          {Object.keys(planning).sort().map(w=><option key={w}>{w}</option>)}
+          {gesorteerdeWeken.map(w=><option key={w}>{w}</option>)}
         </select>
         <div style={{fontSize:10, color:subtekst, marginBottom:3}}>Tot week</div>
         <select style={{...gs.input,fontSize:11}} value={filtTot} onChange={e=>setFiltTot(e.target.value)}>
@@ -2840,15 +2849,8 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                     <div style={{border:`1px solid ${rand}`,borderTop:"none",marginBottom:2}}>
                       <div style={{background:kleurBg,padding:"3px 10px",fontSize:11,fontWeight:700,color:kleurTxt,display:"flex",alignItems:"center",gap:8}}>
                         <span>{isZaai?"🌰 Uitzaai":"🪴 Inboet"}</span>
-                        {(()=>{
-                          const fusten=[...new Set((isZaai?Object.values(blok.zaai):Object.values(blok.inboet)).map(r=>r.fust))];
-                          return fusten.map(fust=>(
-                            <button key={fust} style={{background:isZaai?"#1d4ed8":"#0891b2",color:"#fff",border:"none",borderRadius:4,padding:"1px 8px",cursor:"pointer",fontSize:10,fontWeight:600,marginRight:3}}
-                              onClick={()=>setPrintWerklijst({wk,blok,type:isZaai?"zaai":"inboet",fustFilter:fust})}>
-                              🖨️ {fust}
-                            </button>
-                          ));
-                        })()}
+                        <button style={{background:isZaai?"#1d4ed8":"#0891b2",color:"#fff",border:"none",borderRadius:4,padding:"1px 8px",cursor:"pointer",fontSize:10,fontWeight:600}}
+                          onClick={()=>setPrintWerklijst({wk,blok,type:isZaai?"zaai":"inboet"})}>🖨️ Werklijst</button>
                       </div>
                       <table style={{width:"auto"}}>
                         <thead>
@@ -3838,7 +3840,6 @@ function MultiBevestigingPrint({ data, bedrijf, verpDef, onSluit }) {
 function WerklijstPrint({ data, bedrijf, onSluit }) {
   const { wk, blok, type, fustFilter } = data;
   const isZaai = type === "zaai";
-  // Filter op het specifieke fust
   const alleRijen = Object.values(isZaai ? blok.zaai : blok.inboet);
   const rijen = fustFilter ? alleRijen.filter(r=>r.fust===fustFilter) : alleRijen;
   const vandaag = new Date().toLocaleDateString("nl-NL");
@@ -3849,10 +3850,7 @@ function WerklijstPrint({ data, bedrijf, onSluit }) {
   const totaalInboet = rijen.reduce((s,r)=>s+(r.inboetTrays||0),0);
   const totaalZaai   = rijen.reduce((s,r)=>s+(r.zaaiTrays||0),0);
   const fustNr = fustFilter ? fustFilter.replace(/[^0-9]/g,"") : "";
-  const titelDit = isZaai
-    ? `Zaailijst ${fustNr} voor week ${zaaiWeekNr}`
-    : `Inboetlijst ${fustNr} voor week ${zaaiWeekNr}`;
-  // Startzaaiweek voor inboet
+  const titelDit = isZaai ? `Zaailijst ${fustNr} voor week ${zaaiWeekNr}` : `Inboetlijst ${fustNr} voor week ${zaaiWeekNr}`;
   const zaaiWkSet = [...new Set(rijen.map(r=>r.zaaiWeek||"").filter(Boolean))].sort();
   const startZaaiNr = zaaiWkSet.length>0 ? parseInt(zaaiWkSet[0].slice(2)) : zaaiWeekNr;
 
@@ -3864,9 +3862,9 @@ function WerklijstPrint({ data, bedrijf, onSluit }) {
       body{font-family:Arial,sans-serif;font-size:10px;color:#1a1a1a;padding:0;margin:0}
       h1{font-size:15px;font-weight:700;margin:0 0 2px 0}
       table{border-collapse:collapse;width:100%}
-      th{padding:5px 6px;border:1px solid #ccc;font-size:10px;font-weight:700;text-align:left;background:#e8e8e8;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-      td{padding:5px 6px;border:1px solid #ddd;font-size:10px;vertical-align:middle}
-      tr:nth-child(even) td:not(.zwart):not(.grijs){background:#f8f8f8}
+      th{padding:4px 5px;border:1px solid #ccc;font-size:10px;font-weight:700;text-align:left;background:#e8e8e8;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      td{padding:4px 5px;border:1px solid #ddd;font-size:10px;vertical-align:middle}
+      tr:nth-child(even) td{background:#f8f8f8}
       .zwart{background:#333!important;color:#fff!important;font-weight:700;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact}
       .grijs{background:#d8d8d8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
       @media print{.no-print{display:none}}
@@ -3882,36 +3880,33 @@ function WerklijstPrint({ data, bedrijf, onSluit }) {
           <button style={{background:"#2d6a4f",color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:14,fontWeight:600}} onClick={printDoc}>🖨️ Afdrukken / PDF</button>
           <button style={{background:"#fff",color:"#1b1b1b",border:"1px solid #e2e8e4",borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:14}} onClick={onSluit}>✕ Sluiten</button>
         </div>
-        <div id="wl-print-inhoud" style={{padding:"18px 24px",fontFamily:"Arial, sans-serif",fontSize:10}}>
-          {/* Header */}
+        <div id="wl-print-inhoud" style={{padding:"14px 20px",fontFamily:"Arial, sans-serif",fontSize:10}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:5}}>
             <h1 style={{fontSize:15,fontWeight:700,margin:0}}>{titelDit}</h1>
             <div style={{textAlign:"right",fontSize:10,color:"#555"}}>{vandaag}</div>
           </div>
-          {/* Infobalk */}
-          <div style={{display:"flex",gap:12,marginBottom:8,fontSize:10,fontWeight:700}}>
+          <div style={{display:"flex",gap:10,marginBottom:7,fontSize:10,fontWeight:700}}>
             {isZaai?(<>
-              <div style={{background:"#f0f0f0",border:"1px solid #bbb",padding:"3px 12px",borderRadius:3}}>ZAAIWEEK: {zaaiWeekNr}</div>
-              <div style={{background:"#333",color:"#fff",padding:"3px 12px",borderRadius:3}}>UIT CEL: WEEK {uitCelWeek}</div>
+              <div style={{background:"#f0f0f0",border:"1px solid #bbb",padding:"2px 10px",borderRadius:3}}>ZAAIWEEK: {zaaiWeekNr}</div>
+              <div style={{background:"#333",color:"#fff",padding:"2px 10px",borderRadius:3}}>UIT CEL: WEEK {uitCelWeek}</div>
             </>):(<>
-              <div style={{background:"#f0f0f0",border:"1px solid #bbb",padding:"3px 12px",borderRadius:3}}>VOOR EINDWEEK: {eindWeekNr}</div>
-              <div style={{background:"#f0f0f0",border:"1px solid #bbb",padding:"3px 12px",borderRadius:3}}>UIT ZAAIWEEK: {startZaaiNr}</div>
+              <div style={{background:"#f0f0f0",border:"1px solid #bbb",padding:"2px 10px",borderRadius:3}}>VOOR EINDWEEK: {eindWeekNr}</div>
+              <div style={{background:"#f0f0f0",border:"1px solid #bbb",padding:"2px 10px",borderRadius:3}}>UIT ZAAIWEEK: {startZaaiNr}</div>
             </>)}
           </div>
-          {/* Tabel */}
           <table style={{borderCollapse:"collapse",width:"100%"}}>
             <thead>
               <tr>
-                <th style={{padding:"5px 6px",border:"1px solid #ccc",background:"#e8e8e8",textAlign:"left",width:80,fontSize:10}}>Serie</th>
-                <th style={{padding:"5px 6px",border:"1px solid #ccc",background:"#e8e8e8",textAlign:"left",fontSize:10}}>Kleur</th>
-                <th style={{padding:"5px 6px",border:"1px solid #ccc",background:"#e8e8e8",textAlign:"right",width:50,fontSize:10,fontWeight:700}}>
+                <th style={{padding:"4px 5px",border:"1px solid #ccc",background:"#e8e8e8",textAlign:"left",width:65,fontSize:10}}>Serie</th>
+                <th style={{padding:"4px 5px",border:"1px solid #ccc",background:"#e8e8e8",textAlign:"left",fontSize:10}}>Kleur</th>
+                <th style={{padding:"4px 5px",border:"1px solid #ccc",background:"#e8e8e8",textAlign:"right",width:45,fontSize:10,fontWeight:700}}>
                   {isZaai ? totaalZaai : totaalInboet}
                 </th>
-                <th style={{padding:"5px 6px",border:"1px solid #ccc",background:"#e8e8e8",textAlign:"left",width:70,fontSize:10}}>Gedaan</th>
-                <th style={{padding:"5px 6px",border:"1px solid #ccc",background:"#e8e8e8",width:80,fontSize:10}}></th>
+                <th style={{padding:"4px 5px",border:"1px solid #ccc",background:"#e8e8e8",textAlign:"left",fontSize:10}}>Gedaan</th>
+                <th style={{padding:"4px 5px",border:"1px solid #ccc",background:"#e8e8e8",fontSize:10}}></th>
                 {!isZaai&&<>
-                  <th style={{padding:"5px 6px",border:"1px solid #555",background:"#333",color:"#fff",textAlign:"center",width:55,fontSize:9,WebkitPrintColorAdjust:"exact",printColorAdjust:"exact"}}>Zaai<br/>wk {startZaaiNr}</th>
-                  <th style={{padding:"5px 6px",border:"1px solid #bbb",background:"#d8d8d8",width:50,WebkitPrintColorAdjust:"exact",printColorAdjust:"exact"}}></th>
+                  <th style={{padding:"4px 5px",border:"1px solid #555",background:"#333",color:"#fff",textAlign:"center",width:50,fontSize:9,WebkitPrintColorAdjust:"exact",printColorAdjust:"exact"}}>Zaai<br/>wk {startZaaiNr}</th>
+                  <th style={{padding:"4px 5px",border:"1px solid #bbb",background:"#d8d8d8",width:45,WebkitPrintColorAdjust:"exact",printColorAdjust:"exact"}}></th>
                 </>}
               </tr>
             </thead>
@@ -3920,14 +3915,16 @@ function WerklijstPrint({ data, bedrijf, onSluit }) {
                 const aantalNodig=isZaai?(r.zaaiTrays||0):(r.inboetTrays||0);
                 return (
                   <tr key={i}>
-                    <td style={{padding:"5px 6px",border:"1px solid #ddd",background:i%2===0?"#fff":"#f8f8f8",fontStyle:"italic",fontSize:10}}>{r.gewas}</td>
-                    <td style={{padding:"5px 6px",border:"1px solid #ddd",background:i%2===0?"#fff":"#f8f8f8",fontSize:10}}>{r.soort}</td>
-                    <td style={{padding:"5px 6px",border:"1px solid #ddd",background:i%2===0?"#fff":"#f8f8f8",textAlign:"right",fontWeight:700,fontSize:11}}>{aantalNodig}</td>
-                    <td style={{padding:"5px 6px",border:"1px solid #ddd",background:i%2===0?"#fff":"#f8f8f8"}}></td>
-                    <td style={{padding:"5px 6px",border:"1px solid #ddd",background:i%2===0?"#fff":"#f8f8f8"}}></td>
+                    <td style={{padding:"3px 5px",border:"1px solid #ddd",background:i%2===0?"#fff":"#f8f8f8",fontStyle:"italic",fontSize:10}}>{r.gewas}</td>
+                    <td style={{padding:"3px 5px",border:"1px solid #ddd",background:i%2===0?"#fff":"#f8f8f8",fontSize:10}}>
+                      {r.soort}{r.internNr&&<span style={{fontSize:9,color:"#888",marginLeft:4,fontWeight:600}}> {r.internNr}</span>}
+                    </td>
+                    <td style={{padding:"3px 5px",border:"1px solid #ddd",background:i%2===0?"#fff":"#f8f8f8",textAlign:"right",fontWeight:700,fontSize:11}}>{aantalNodig}</td>
+                    <td style={{padding:"3px 5px",border:"1px solid #ddd",background:i%2===0?"#fff":"#f8f8f8",minWidth:60}}></td>
+                    <td style={{padding:"3px 5px",border:"1px solid #ddd",background:i%2===0?"#fff":"#f8f8f8",minWidth:40}}></td>
                     {!isZaai&&<>
-                      <td style={{padding:"5px 6px",border:"1px solid #555",background:"#333",color:"#fff",textAlign:"right",fontWeight:700,fontSize:11,WebkitPrintColorAdjust:"exact",printColorAdjust:"exact"}}>{r.zaaiTrays||0}</td>
-                      <td style={{padding:"5px 6px",border:"1px solid #bbb",background:"#d8d8d8",WebkitPrintColorAdjust:"exact",printColorAdjust:"exact"}}></td>
+                      <td style={{padding:"3px 5px",border:"1px solid #555",background:"#333",color:"#fff",textAlign:"right",fontWeight:700,fontSize:11,WebkitPrintColorAdjust:"exact",printColorAdjust:"exact"}}>{r.zaaiTrays||0}</td>
+                      <td style={{padding:"3px 5px",border:"1px solid #bbb",background:"#d8d8d8",WebkitPrintColorAdjust:"exact",printColorAdjust:"exact"}}></td>
                     </>}
                   </tr>
                 );
@@ -3935,20 +3932,19 @@ function WerklijstPrint({ data, bedrijf, onSluit }) {
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={2} style={{padding:"5px 6px",border:"1px solid #bbb",background:"#d0d0d0",fontWeight:700,borderTop:"2px solid #333",fontSize:10}}>Totaal</td>
-                <td style={{padding:"5px 6px",border:"1px solid #bbb",background:"#d0d0d0",textAlign:"right",fontWeight:700,borderTop:"2px solid #333",fontSize:11}}>
+                <td colSpan={2} style={{padding:"4px 5px",border:"1px solid #bbb",background:"#d0d0d0",fontWeight:700,borderTop:"2px solid #333",fontSize:10}}>Totaal</td>
+                <td style={{padding:"4px 5px",border:"1px solid #bbb",background:"#d0d0d0",textAlign:"right",fontWeight:700,borderTop:"2px solid #333",fontSize:11}}>
                   {isZaai ? totaalZaai : totaalInboet}
                 </td>
-                <td colSpan={2} style={{padding:"5px 6px",border:"1px solid #bbb",background:"#d0d0d0",borderTop:"2px solid #333"}}></td>
+                <td colSpan={2} style={{padding:"4px 5px",border:"1px solid #bbb",background:"#d0d0d0",borderTop:"2px solid #333"}}></td>
                 {!isZaai&&<>
-                  <td style={{padding:"5px 6px",border:"1px solid #555",background:"#333",color:"#fff",textAlign:"right",fontWeight:700,borderTop:"2px solid #333",fontSize:11,WebkitPrintColorAdjust:"exact",printColorAdjust:"exact"}}>{totaalZaai}</td>
-                  <td style={{padding:"5px 6px",border:"1px solid #bbb",background:"#d8d8d8",borderTop:"2px solid #333",WebkitPrintColorAdjust:"exact",printColorAdjust:"exact"}}></td>
+                  <td style={{padding:"4px 5px",border:"1px solid #555",background:"#333",color:"#fff",textAlign:"right",fontWeight:700,borderTop:"2px solid #333",fontSize:11,WebkitPrintColorAdjust:"exact",printColorAdjust:"exact"}}>{totaalZaai}</td>
+                  <td style={{padding:"4px 5px",border:"1px solid #bbb",background:"#d8d8d8",borderTop:"2px solid #333",WebkitPrintColorAdjust:"exact",printColorAdjust:"exact"}}></td>
                 </>}
               </tr>
             </tfoot>
           </table>
-          {/* Handtekening */}
-          <div style={{display:"flex",gap:40,marginTop:18,paddingTop:8,borderTop:"1px solid #e0e0e0"}}>
+          <div style={{display:"flex",gap:40,marginTop:16,paddingTop:8,borderTop:"1px solid #e0e0e0"}}>
             <div style={{flex:1,borderTop:"1px solid #bbb",paddingTop:3,fontSize:9,color:"#888"}}>Uitgevoerd door</div>
             <div style={{flex:1,borderTop:"1px solid #bbb",paddingTop:3,fontSize:9,color:"#888"}}>Gecontroleerd door</div>
             <div style={{flex:1,borderTop:"1px solid #bbb",paddingTop:3,fontSize:9,color:"#888"}}>Datum uitvoering</div>

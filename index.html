@@ -1409,13 +1409,19 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
     const doc = "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
       +"<style>@page{size:A4 portrait;margin:15mm} body{font-family:Arial,sans-serif;font-size:11px;color:#222;margin:0} table{border-collapse:collapse;width:100%} @media print{button{display:none}}</style></head><body>"
       +"<div style='display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #2d6a4f'>"
-        +"<div>"+logo+"<div style='margin-top:6px;font-size:13px;font-weight:700;color:#2d6a4f'>"+bd.naam+"</div><div style='font-size:10px;color:#666'>"+bd.adres+", "+bd.postcode+" "+bd.plaats+"</div></div>"
-        +"<div style='text-align:center'>"
-          +"<div style='font-size:22px;font-weight:700;color:#2d6a4f'>PAKBON <span style=\'font-size:14px\'>#"+(order.pakbonNr||"—")+"</span></div>"
-          +"<div style='font-size:20px;font-weight:700;color:#1d4ed8;margin-top:4px'>"+karTekst+"</div>"
-          +"<div style='font-size:13px;color:#1d4ed8;margin-top:2px'>"+karDetail+"</div>"
+        +"<div style='display:flex;gap:10px;align-items:flex-start'>"+logo+"<div>"
+          +"<div style='font-size:13px;font-weight:700;color:#2d6a4f'>"+bd.naam+"</div>"
+          +"<div style='font-size:10px;color:#555'>"+bd.adres+", "+bd.postcode+" "+bd.plaats+"</div>"
+          +"<div style='font-size:10px;color:#555'>Tel: "+bd.telefoon+"</div>"
+          +"<div style='font-size:10px;color:#555'>"+bd.email+"</div>"
+          +(bd.iban?"<div style='font-size:10px;color:#555'>IBAN: "+bd.iban+"</div>":"")
+        +"</div></div>"
+        +"<div style='text-align:right'>"
+          +"<div style='font-size:22px;font-weight:700;color:#2d6a4f'>PAKBON <span style='font-size:14px'>#"+(order.pakbonNr||"—")+"</span></div>"
+          +"<div style='font-size:11px;color:#555;margin-top:4px'>Datum: "+vandaag+"</div>"
+          +"<div style='font-size:18px;font-weight:700;color:#1d4ed8;margin-top:6px'>"+karTekst+"</div>"
+          +"<div style='font-size:12px;color:#1d4ed8'>"+karDetail+"</div>"
         +"</div>"
-        +"<div style='text-align:right;font-size:11px;color:#555'><div>Datum: "+vandaag+"</div></div>"
       +"</div>"
       +"<div style=\'background:#f0f7f4;border-radius:4px;padding:10px 18px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;font-size:13px\'>"
         +"<div><span style=\'color:#555;font-size:11px\'>Klant</span><br/><strong style=\'font-size:14px\'>"+kl.naam+"</strong></div>"
@@ -1477,12 +1483,21 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
 
     const doc = "<!DOCTYPE html><html><head><meta charset=\'UTF-8\'>"
       +"<style>@page{size:A4 portrait;margin:15mm} body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:0} table{border-collapse:collapse;width:100%} @media print{button{display:none}}</style></head><body>"
-      +"<div style=\'display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid #2d6a4f;\'>"
-        +"<div>"+logo+"<div style=\'margin-top:6px;font-size:13px;font-weight:700;color:#2d6a4f\'>"+bd.naam+"</div>"
-        +"<div style=\'font-size:10px;color:#666\'>"+bd.adres+", "+bd.postcode+" "+bd.plaats+"</div></div>"
-        +"<div style=\'text-align:right\'><div style=\'font-size:22px;font-weight:700;color:#2d6a4f\'>AFLEVERBON</div>"
-        +"<div style=\'font-size:12px;color:#555;margin-top:4px\'>Afleverbon: <strong>#"+(order.afleverNr||"—")+"</strong></div>"
-        +"<div style=\'font-size:11px;color:#555\'>Datum: "+vandaag+"</div></div>"
+      +"<div style='display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid #2d6a4f;'>"
+        +"<div style='display:flex;gap:10px;align-items:flex-start'>"+logo+"<div>"
+        +"<div style='font-size:13px;font-weight:700;color:#2d6a4f'>"+bd.naam+"</div>"
+        +"<div style='font-size:10px;color:#555'>"+bd.adres+", "+bd.postcode+" "+bd.plaats+"</div>"
+        +"<div style='font-size:10px;color:#555'>Tel: "+bd.telefoon+"</div>"
+        +"<div style='font-size:10px;color:#555'>"+bd.email+"</div>"
+        +(bd.iban?"<div style='font-size:10px;color:#555'>IBAN: "+bd.iban+"</div>":"")
+        +"</div></div>"
+        +"<div style='text-align:right'>"
+        +"<div style='font-size:22px;font-weight:700;color:#2d6a4f'>AFLEVERBON</div>"
+        +"<div style='font-size:12px;color:#555;margin-top:4px'>Afleverbon: <strong>#"+(order.afleverNr||"—")+"</strong></div>"
+        +"<div style='font-size:11px;color:#555'>Klant: <strong>"+kl.naam+"</strong></div>"
+        +"<div style='font-size:11px;color:#555'>Leverweek: <strong>"+leverWkDag+"</strong></div>"
+        +"<div style='font-size:11px;color:#555'>Datum: "+vandaag+"</div>"
+        +"</div>"
       +"</div>"
       +"<div style=\'background:#f0f7f4;border-radius:4px;padding:10px 18px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;\'>"
         +"<div><span style=\'color:#555;font-size:11px\'>Klant</span><br/><strong style=\'font-size:15px\'>"+kl.naam+"</strong></div>"
@@ -1522,6 +1537,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
   function drukFactuur(order) {
     const kl = klanten.find(k=>k.id===order.klantId)||{};
     const bd = bedrijf||{};
+    const logo = bd.logo?"<img src='"+bd.logo+"' style='max-height:50px;max-width:120px;object-fit:contain'/>":"";
     const vandaag = new Date().toLocaleDateString("nl-NL",{day:"2-digit",month:"long",year:"numeric"});
     const btwPct = bd.btwPct??21;
     const termijn = kl.betalingstermijn||bd.betalingstermijn||30;
@@ -1558,27 +1574,32 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
     }).join("");
 
     const doc = "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
-      +"<style>@page{size:A4 portrait;margin:0} body{font-family:Arial,sans-serif;font-size:10px;color:#222;margin:0;padding:0} table{border-collapse:collapse;width:100%} @media print{button{display:none}}</style></head><body>"
-      +"<div style='background:#2d6a4f;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center'>"
-        +"<div><div style='font-size:16px;font-weight:700'>VOLLEBREGT CYCLAMEN</div>"
-        +"<div style='font-size:8px;opacity:0.85;margin-top:2px'>"+(bd.adres||"")+" &middot; "+(bd.postcode||"")+" "+(bd.plaats||"")+"</div></div>"
-        +"<div style='text-align:right;font-size:8px;opacity:0.85'><div>"+(bd.telefoon||"")+"</div><div>"+(bd.email||"")+"</div>"
-        +(bd.kvk?"<div>KVK: "+bd.kvk+"</div>":"")+(bd.btw?"<div>BTW: "+bd.btw+"</div>":"")+"</div>"
-      +"</div>"
-      +"<div style='padding:16px 20px'>"
-      +"<div style='display:flex;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #2d6a4f'>"
-        +"<div><div style='font-size:8px;color:#888;margin-bottom:3px'>Aan:</div>"
-        +"<div style='font-size:12px;font-weight:700'>"+(kl.naam||"")+"</div>"
-        +(kl.adres?"<div style='font-size:8px;color:#555'>"+kl.adres+"</div>":"")
-        +((kl.postcode||kl.plaats)?"<div style='font-size:8px;color:#555'>"+(kl.postcode||"")+" "+(kl.plaats||"")+"</div>":"")
-        +(kl.btwnummer?"<div style='font-size:8px;color:#888;margin-top:4px'>BTW: "+kl.btwnummer+"</div>":"")+"</div>"
+      +"<style>@page{size:A4 portrait;margin:15mm} body{font-family:Arial,sans-serif;font-size:10px;color:#222;margin:0;padding:0} table{border-collapse:collapse;width:100%} @media print{button{display:none}}</style></head><body>"
+      +"<div style='display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #2d6a4f'>"
+        +"<div style='display:flex;gap:10px;align-items:flex-start'>"+logo+"<div>"
+          +"<div style='font-size:13px;font-weight:700;color:#2d6a4f'>"+(bd.naam||"")+"</div>"
+          +"<div style='font-size:10px;color:#555'>"+(bd.adres||"")+", "+(bd.postcode||"")+" "+(bd.plaats||"")+"</div>"
+          +"<div style='font-size:10px;color:#555'>Tel: "+(bd.telefoon||"")+"</div>"
+          +"<div style='font-size:10px;color:#555'>"+(bd.email||"")+"</div>"
+          +(bd.iban?"<div style='font-size:10px;color:#555'>IBAN: "+bd.iban+"</div>":"")
+          +(bd.kvk?"<div style='font-size:10px;color:#555'>KVK: "+bd.kvk+"</div>":"")
+          +(bd.btw?"<div style='font-size:10px;color:#555'>BTW: "+bd.btw+"</div>":"")
+        +"</div></div>"
         +"<div style='text-align:right'>"
-        +"<div style='font-size:20px;font-weight:700;color:#2d6a4f'>FACTUUR</div>"
-        +"<div style='font-size:10px;color:#555;margin-top:4px'>Factuurnr: <strong>#"+(order.factuurNr||"—")+"</strong></div>"
-        +"<div style='font-size:9px;color:#555'>Datum: "+vandaag+"</div>"
-        +"<div style='font-size:9px;color:#dc2626;font-weight:700'>Vervaldatum: "+vervalStr+"</div>"
-        +"<div style='font-size:9px;color:#555'>Leverweek: "+weekLabel(order.leverdatum)+"</div>"
-        +(order.pakbonNr?"<div style='font-size:9px;color:#555'>Pakbon: #"+order.pakbonNr+"</div>":"")+"</div>"
+          +"<div style='font-size:20px;font-weight:700;color:#2d6a4f'>FACTUUR</div>"
+          +"<div style='font-size:10px;color:#555;margin-top:4px'>Factuurnr: <strong>#"+(order.factuurNr||"—")+"</strong></div>"
+          +"<div style='font-size:10px;color:#555'>Datum: "+vandaag+"</div>"
+          +"<div style='font-size:10px;color:#dc2626;font-weight:700'>Vervaldatum: "+vervalStr+"</div>"
+          +"<div style='font-size:10px;color:#555'>Leverweek: "+weekLabel(order.leverdatum)+"</div>"
+          +(order.pakbonNr?"<div style='font-size:10px;color:#555'>Pakbon: #"+order.pakbonNr+"</div>":"")
+        +"</div>"
+      +"</div>"
+      +"<div style='margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #e2e8e4'>"
+        +"<div style='font-size:8px;color:#888;margin-bottom:3px'>Aan:</div>"
+        +"<div style='font-size:12px;font-weight:700'>"+(kl.naam||"")+"</div>"
+        +(kl.adres?"<div style='font-size:10px;color:#555'>"+kl.adres+"</div>":"")
+        +((kl.postcode||kl.plaats)?"<div style='font-size:10px;color:#555'>"+(kl.postcode||"")+" "+(kl.plaats||"")+"</div>":"")
+        +(kl.btwnummer?"<div style='font-size:10px;color:#888;margin-top:2px'>BTW: "+kl.btwnummer+"</div>":"")
       +"</div>"
       +"<table style='margin-bottom:14px'><thead><tr>"
         +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Soort</th>"
@@ -1601,12 +1622,6 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
         +"IBAN <strong>"+(bd.iban||"")+"</strong> t.n.v. <strong>"+(bd.naam||"Vollebregt Cyclamen")+"</strong>, "
         +"o.v.v. factuurnummer <strong>#"+(order.factuurNr||"")+"</strong>."
       +"</div>"
-      +"</div>"
-      +"<div style='background:#f0f7f4;padding:6px 20px;font-size:7px;color:#888;display:flex;justify-content:space-between;border-top:1px solid #c8e6c9'>"
-        +"<span>"+(bd.naam||"")+" &middot; "+(bd.adres||"")+" "+(bd.postcode||"")+" "+(bd.plaats||"")+"</span>"
-        +(bd.iban?"<span>IBAN: "+bd.iban+"</span>":"")
-        +(bd.btw?"<span>BTW: "+bd.btw+"</span>":"")
-      +"</div>"
       +"</body></html>";
 
     const w=window.open("","_blank");
@@ -1616,6 +1631,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
   function drukProForma(order) {
     const kl = klanten.find(k=>k.id===order.klantId)||{};
     const bd = bedrijf||{};
+    const logo = bd.logo?"<img src='"+bd.logo+"' style='max-height:50px;max-width:120px;object-fit:contain'/>":"";
     const vandaag = new Date().toLocaleDateString("nl-NL",{day:"2-digit",month:"long",year:"numeric"});
     const btwPct = bd.btwPct??21;
 
@@ -1648,26 +1664,31 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
     }).join("");
 
     const doc = "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
-      +"<style>@page{size:A4 portrait;margin:0} body{font-family:Arial,sans-serif;font-size:10px;color:#222;margin:0;padding:0} table{border-collapse:collapse;width:100%} @media print{button{display:none}}</style></head><body>"
-      +"<div style='background:#6b7280;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center'>"
-        +"<div><div style='font-size:16px;font-weight:700'>VOLLEBREGT CYCLAMEN</div>"
-        +"<div style='font-size:8px;opacity:0.85;margin-top:2px'>"+(bd.adres||"")+" &middot; "+(bd.postcode||"")+" "+(bd.plaats||"")+"</div></div>"
-        +"<div style='text-align:right;font-size:8px;opacity:0.85'><div>"+(bd.telefoon||"")+"</div><div>"+(bd.email||"")+"</div>"
-        +(bd.kvk?"<div>KVK: "+bd.kvk+"</div>":"")+(bd.btw?"<div>BTW: "+bd.btw+"</div>":"")+"</div>"
-      +"</div>"
-      +"<div style='padding:16px 20px'>"
-      +"<div style='display:flex;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #6b7280'>"
-        +"<div><div style='font-size:8px;color:#888;margin-bottom:3px'>Aan:</div>"
-        +"<div style='font-size:12px;font-weight:700'>"+(kl.naam||"")+"</div>"
-        +(kl.adres?"<div style='font-size:8px;color:#555'>"+kl.adres+"</div>":"")
-        +((kl.postcode||kl.plaats)?"<div style='font-size:8px;color:#555'>"+(kl.postcode||"")+" "+(kl.plaats||"")+"</div>":"")
-        +(kl.btwnummer?"<div style='font-size:8px;color:#888;margin-top:4px'>BTW: "+kl.btwnummer+"</div>":"")+"</div>"
+      +"<style>@page{size:A4 portrait;margin:15mm} body{font-family:Arial,sans-serif;font-size:10px;color:#222;margin:0;padding:0} table{border-collapse:collapse;width:100%} @media print{button{display:none}}</style></head><body>"
+      +"<div style='display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #6b7280'>"
+        +"<div style='display:flex;gap:10px;align-items:flex-start'>"+logo+"<div>"
+          +"<div style='font-size:13px;font-weight:700;color:#2d6a4f'>"+(bd.naam||"")+"</div>"
+          +"<div style='font-size:10px;color:#555'>"+(bd.adres||"")+", "+(bd.postcode||"")+" "+(bd.plaats||"")+"</div>"
+          +"<div style='font-size:10px;color:#555'>Tel: "+(bd.telefoon||"")+"</div>"
+          +"<div style='font-size:10px;color:#555'>"+(bd.email||"")+"</div>"
+          +(bd.iban?"<div style='font-size:10px;color:#555'>IBAN: "+bd.iban+"</div>":"")
+          +(bd.kvk?"<div style='font-size:10px;color:#555'>KVK: "+bd.kvk+"</div>":"")
+          +(bd.btw?"<div style='font-size:10px;color:#555'>BTW: "+bd.btw+"</div>":"")
+        +"</div></div>"
         +"<div style='text-align:right'>"
-        +"<div style='font-size:20px;font-weight:700;color:#6b7280'>PRO FORMA FACTUUR</div>"
-        +"<div style='font-size:9px;color:#888;margin-top:6px;font-style:italic'>Dit is geen officiële factuur</div>"
-        +"<div style='font-size:9px;color:#555;margin-top:4px'>Datum: "+vandaag+"</div>"
-        +"<div style='font-size:9px;color:#555'>Leverweek: "+weekLabel(order.leverdatum)+"</div>"
-        +(order.pakbonNr?"<div style='font-size:9px;color:#555'>Pakbon: #"+order.pakbonNr+"</div>":"")+"</div>"
+          +"<div style='font-size:20px;font-weight:700;color:#6b7280'>PRO FORMA FACTUUR</div>"
+          +"<div style='font-size:10px;color:#888;margin-top:4px;font-style:italic'>Dit is geen officiële factuur</div>"
+          +"<div style='font-size:10px;color:#555;margin-top:4px'>Datum: "+vandaag+"</div>"
+          +"<div style='font-size:10px;color:#555'>Leverweek: "+weekLabel(order.leverdatum)+"</div>"
+          +(order.pakbonNr?"<div style='font-size:10px;color:#555'>Pakbon: #"+order.pakbonNr+"</div>":"")
+        +"</div>"
+      +"</div>"
+      +"<div style='margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #e2e8e4'>"
+        +"<div style='font-size:8px;color:#888;margin-bottom:3px'>Aan:</div>"
+        +"<div style='font-size:12px;font-weight:700'>"+(kl.naam||"")+"</div>"
+        +(kl.adres?"<div style='font-size:10px;color:#555'>"+kl.adres+"</div>":"")
+        +((kl.postcode||kl.plaats)?"<div style='font-size:10px;color:#555'>"+(kl.postcode||"")+" "+(kl.plaats||"")+"</div>":"")
+        +(kl.btwnummer?"<div style='font-size:10px;color:#888;margin-top:2px'>BTW: "+kl.btwnummer+"</div>":"")
       +"</div>"
       +"<table style='margin-bottom:14px'><thead><tr>"
         +"<th style='padding:6px 8px;background:#e5e7eb;color:#374151;border:1px solid #d1d5db;text-align:left'>Soort</th>"
@@ -1688,12 +1709,6 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
       +"<div style='margin-top:20px;padding:10px 14px;background:#f9fafb;border-radius:4px;border:1px solid #e5e7eb;font-size:9px;color:#6b7280;font-style:italic'>"
         +"Dit document is een pro forma factuur en heeft geen betalingsverplichting. "
         +"Na levering ontvangt u de officiële factuur."
-      +"</div>"
-      +"</div>"
-      +"<div style='background:#f3f4f6;padding:6px 20px;font-size:7px;color:#9ca3af;display:flex;justify-content:space-between;border-top:1px solid #e5e7eb'>"
-        +"<span>"+(bd.naam||"")+" &middot; "+(bd.adres||"")+" "+(bd.postcode||"")+" "+(bd.plaats||"")+"</span>"
-        +(bd.iban?"<span>IBAN: "+bd.iban+"</span>":"")
-        +(bd.btw?"<span>BTW: "+bd.btw+"</span>":"")
       +"</div>"
       +"</body></html>";
 
@@ -1826,6 +1841,7 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
         +"<td style='padding:6px 8px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f'>"+totTrays+"</td>"
         +"<td style='padding:6px 8px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f'>"+totPl.toLocaleString("nl-NL")+"</td>"
       +"</tr></tfoot></table>"
+      +(kl.kostenPerRegel>0?"<p style='margin-top:8px;padding:6px 10px;background:#f0f7f4;border-radius:4px;font-size:11px;color:#444'>Per orderregel berekenen wij <strong>€ "+Number(kl.kostenPerRegel).toFixed(2)+"</strong> verwerkingskosten.</p>":"")
       +"<p style='margin-top:20px;color:#555;font-size:11px'>Met vriendelijke groet,<br/><strong>"+bd.naam+"</strong><br/>"+bd.telefoon+"<br/>"+bd.email+"</p>"
       +"</body></html>";
 
@@ -3836,11 +3852,16 @@ function MultiBevestigingPrint({ data, bedrijf, verpDef, onSluit }) {
 
   return (
     <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",zIndex:500,overflowY:"auto",padding:20}}>
-      <div style={{maxWidth:820,margin:"0 auto",background:"#fff",borderRadius:8,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,0.3)"}}>
+      <div style={{maxWidth:900,margin:"0 auto",background:"#fff",borderRadius:8,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,0.3)"}}>
 
         {/* Knoppen */}
         <div style={{display:"flex",gap:8,padding:"10px 16px",background:"#f0f7f4",borderBottom:"1px solid #e2e8e4"}}>
-          <button style={{background:"#2d6a4f",color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:14,fontWeight:600}} onClick={()=>window.print()}>🖨️ Afdrukken / PDF</button>
+          <button style={{background:"#2d6a4f",color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:14,fontWeight:600}} onClick={()=>{
+            const el=document.getElementById("multi-print-inhoud");
+            const w=window.open("","_blank");
+            w.document.write("<html><head><title>Bevestiging "+klant?.naam+"</title><style>@page{size:A4 portrait;margin:12mm} body{font-family:Arial,sans-serif;font-size:9px;color:#1a1a1a;margin:0;padding:0} table{border-collapse:collapse;width:100%} th{background:#e8f5ee;color:#2d6a4f;font-weight:700;padding:3px 5px;border:1px solid #c8e6c9;font-size:8px} td{padding:3px 5px;border:1px solid #e0e0e0;font-size:8px} img{max-height:50px;max-width:90px;object-fit:contain} @media print{button{display:none}}</style></head><body>"+el.innerHTML+"</body></html>");
+            w.document.close();setTimeout(()=>w.print(),300);
+          }}>🖨️ Afdrukken / PDF</button>
           <button style={{background:"#1d4ed8",color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:14,fontWeight:600}} onClick={()=>{
             const el=document.getElementById("multi-print-inhoud");
             const w=window.open("","_blank");
@@ -3851,17 +3872,20 @@ function MultiBevestigingPrint({ data, bedrijf, verpDef, onSluit }) {
         </div>
 
         {/* Document */}
-        <div id="multi-print-inhoud" style={{padding:"24px 32px",fontFamily:"Arial, sans-serif",fontSize:11,color:"#1a1a1a"}}>
+        <div id="multi-print-inhoud" style={{padding:"24px 28px",fontFamily:"Arial, sans-serif",fontSize:11,color:"#1a1a1a",overflowX:"hidden"}}>
 
           {/* Header */}
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:20}}>
-            <div>
-              <div style={{fontWeight:700,fontSize:15,color:"#2d6a4f",marginBottom:4}}>{bedrijf?.naam}</div>
-              <div>{bedrijf?.adres}</div>
-              <div>{bedrijf?.postcode} {bedrijf?.plaats}</div>
-              <div style={{marginTop:4}}>Tel: {bedrijf?.telefoon}</div>
-              <div>E-mail: {bedrijf?.email}</div>
-              {bedrijf?.iban&&<div style={{marginTop:4}}>IBAN: {bedrijf.iban}</div>}
+            <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
+              {bedrijf?.logo&&<img src={bedrijf.logo} style={{maxHeight:60,maxWidth:100,objectFit:"contain",marginTop:2}} alt="logo"/>}
+              <div>
+                <div style={{fontWeight:700,fontSize:15,color:"#2d6a4f",marginBottom:4}}>{bedrijf?.naam}</div>
+                <div>{bedrijf?.adres}</div>
+                <div>{bedrijf?.postcode} {bedrijf?.plaats}</div>
+                <div style={{marginTop:4}}>Tel: {bedrijf?.telefoon}</div>
+                <div>E-mail: {bedrijf?.email}</div>
+                {bedrijf?.iban&&<div style={{marginTop:4}}>IBAN: {bedrijf.iban}</div>}
+              </div>
             </div>
             <div style={{textAlign:"right"}}>
               <div style={{fontWeight:700,fontSize:14,marginBottom:4}}>{klant?.naam}</div>
@@ -3875,50 +3899,80 @@ function MultiBevestigingPrint({ data, bedrijf, verpDef, onSluit }) {
           {/* Titel */}
           <div style={{background:"#e8f5ee",padding:"8px 14px",borderRadius:4,marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div style={{fontWeight:700,fontSize:14,color:"#2d6a4f"}}>ORDERBEVESTIGING</div>
-            <div style={{display:"flex",gap:16,fontSize:11}}>
-              {bevNrs&&<span>Bev.nr: <strong>{bevNrs}</strong></span>}
+            <div style={{fontSize:11}}>
               <span>Weken: <strong>{weken.join(", ")}</strong></span>
             </div>
           </div>
 
-          {/* Matrix tabel */}
-          <table style={{borderCollapse:"collapse",width:"100%",marginBottom:16}}>
-            <thead>
-              <tr>
-                <th style={cL}>Gewas</th>
-                <th style={cL}>Soort</th>
-                <th style={cL}>Fust</th>
-                <th style={{...cH,width:55}}>€/pl.</th>
-                {weken.map(wk=><th key={wk} style={{...cH,width:70}}>{wk}</th>)}
-                <th style={{...cH,width:70}}>Totaal</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rijen.map((r,i)=>(
-                <tr key={i} style={{background:i%2===0?"#fff":"#f9fcfb"}}>
-                  <td style={cDL}>{r.gewas}</td>
-                  <td style={cDL}>{r.soort}</td>
-                  <td style={cDL}>{r.verpakking}</td>
-                  <td style={{...cD,color:"#2d6a4f"}}>€{r.prijs?Number(r.prijs).toFixed(3):"—"}</td>
-                  {weken.map(wk=>(
-                    <td key={wk} style={{...cD,fontWeight:r.weken[wk]?600:400,color:r.weken[wk]?"#1b1b1b":"#ccc"}}>
-                      {r.weken[wk]?r.weken[wk].toLocaleString("nl-NL"):"—"}
-                    </td>
-                  ))}
-                  <td style={{...cD,fontWeight:700,color:"#2d6a4f"}}>{rijTotaal(r).toLocaleString("nl-NL")}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr style={{background:"#e8f5ee",fontWeight:700}}>
-                <td colSpan={4} style={{...cL,borderTop:"2px solid #2d6a4f"}}>Totaal planten</td>
-                {weken.map(wk=>(
-                  <td key={wk} style={{...cH,borderTop:"2px solid #2d6a4f"}}>{weekTotaal(wk).toLocaleString("nl-NL")}</td>
-                ))}
-                <td style={{...cH,borderTop:"2px solid #2d6a4f"}}>{grootTotaal.toLocaleString("nl-NL")}</td>
-              </tr>
-            </tfoot>
-          </table>
+          {/* Matrix tabel — gesplitst in groepen van 8 weken */}
+          {(()=>{
+            const GROEP = 8;
+            const weekGroepen = [];
+            for(let i=0; i<weken.length; i+=GROEP) weekGroepen.push(weken.slice(i,i+GROEP));
+            return weekGroepen.map((groep, gi)=>(
+              <div key={gi} style={{marginBottom:gi<weekGroepen.length-1?20:0}}>
+                {weekGroepen.length>1&&(
+                  <div style={{fontSize:10,fontWeight:700,color:groen,marginBottom:4,textTransform:"uppercase",letterSpacing:0.5}}>
+                    Weken {groep[0]} – {groep[groep.length-1]}
+                  </div>
+                )}
+                <table style={{borderCollapse:"collapse",width:"100%",marginBottom:4,tableLayout:"fixed"}}>
+                  <colgroup>
+                    <col style={{width:90}}/>
+                    <col style={{width:110}}/>
+                    <col style={{width:60}}/>
+                    <col style={{width:48}}/>
+                    {groep.map(wk=><col key={wk} style={{width:58}}/>)}
+                    <col style={{width:62}}/>
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th style={{...cL,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Gewas</th>
+                      <th style={{...cL,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Soort</th>
+                      <th style={{...cL,whiteSpace:"nowrap"}}>Fust</th>
+                      <th style={{...cH,width:48}}>€/pl.</th>
+                      {groep.map(wk=><th key={wk} style={{...cH,width:58}}>{wk}</th>)}
+                      <th style={{...cH,width:62,background:"#c8e6c9"}}>Totaal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rijen.map((r,i)=>(
+                      <tr key={i} style={{background:i%2===0?"#fff":"#f9fcfb"}}>
+                        <td style={{...cDL,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.gewas}</td>
+                        <td style={{...cDL,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.soort}</td>
+                        <td style={{...cDL,whiteSpace:"nowrap"}}>{r.verpakking}</td>
+                        <td style={{...cD,color:"#2d6a4f"}}>€{r.prijs?Number(r.prijs).toFixed(3):"—"}</td>
+                        {groep.map(wk=>(
+                          <td key={wk} style={{...cD,fontWeight:r.weken[wk]?600:400,color:r.weken[wk]?"#1b1b1b":"#ccc"}}>
+                            {r.weken[wk]?r.weken[wk].toLocaleString("nl-NL"):"—"}
+                          </td>
+                        ))}
+                        <td style={{...cD,fontWeight:700,color:"#2d6a4f",background:"#f0fff4"}}>{rijTotaal(r).toLocaleString("nl-NL")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot style={{display: gi===weekGroepen.length-1?"":"none"}}>
+                    <tr style={{background:"#e8f5ee",fontWeight:700}}>
+                      <td colSpan={4} style={{...cL,borderTop:"2px solid #2d6a4f"}}>Totaal planten</td>
+                      {groep.map(wk=>(
+                        <td key={wk} style={{...cH,borderTop:"2px solid #2d6a4f"}}>{weekTotaal(wk).toLocaleString("nl-NL")}</td>
+                      ))}
+                      <td style={{...cH,borderTop:"2px solid #2d6a4f",background:"#c8e6c9"}}>
+                        {grootTotaal.toLocaleString("nl-NL")}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            ));
+          })()}
+
+          {/* Verwerkingskosten notitie */}
+          {klant?.kostenPerRegel>0&&(
+            <div style={{marginTop:10,padding:"7px 12px",background:"#f0f7f4",borderRadius:4,border:`1px solid ${rand}`,fontSize:11,color:"#444"}}>
+              Per orderregel berekenen wij <strong>€ {Number(klant.kostenPerRegel).toFixed(2)}</strong> verwerkingskosten.
+            </div>
+          )}
 
           {/* Footer */}
           <div style={{borderTop:"1px solid #e0e0e0",paddingTop:8,fontSize:10,color:"#888",display:"flex",justifyContent:"space-between"}}>
@@ -4493,7 +4547,7 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
 // ════════════════════════════════════════════════════════
 // HOOFD APP
 // ════════════════════════════════════════════════════════
-function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef }) {
+function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef, traykosten, setTraykosten }) {
   const [b, setB] = useState({...bedrijf});
   const [mailUrl, setMailUrl] = useState(()=>{ try{ return localStorage.getItem('ta_mailUrl')||'https://script.google.com/macros/s/AKfycby5SF6Sx9DPmFNBO_hb1ztwmdHApE19DIinmm7rs_CEJQdpQO8HLPuEI9Y4dvIUAMOi/exec'; }catch(e){ return ''; } });
   const [fustNaam, setFustNaam] = useState("");
@@ -4547,6 +4601,63 @@ function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef }) {
           {fustBewerk&&<button style={gs.knopSecundair} onClick={()=>{setFustBewerk(null);setFustNaam("");setFustAantal("");}}>✕</button>}
         </div>
       </div>
+
+      {/* Traykosten */}
+      {(()=>{
+        const ALLE_TRAYS = [
+          {naam:"Zaaitray 264", zaai:true},
+          {naam:"Zaaitray 180", zaai:true},
+          {naam:"Tray 65",  zaai:false},
+          {naam:"Tray 179", zaai:false},
+          {naam:"Tray 260", zaai:false},
+        ];
+        const [tk, setTk] = useState(()=>traykosten||laad("ta_traykosten",{}));
+        const [opgeslagenOk, setOpgeslagenOk] = useState("");
+        return (
+          <div style={{...gs.sectie,marginBottom:16}}>
+            <div style={gs.sectieLabel}>🧺 Traykosten (€ per 1000 planten)</div>
+            <div style={{fontSize:11,color:subtekst,marginBottom:10,lineHeight:1.6}}>
+              Kosten per tray type, uitgedrukt per 1000 planten. Wordt meegenomen in het margeoverzicht.<br/>
+              Per orderregel worden <strong>2 trays</strong> meegeteld: de zaaitray + de aflevertray.
+            </div>
+            <table style={{width:"auto",borderCollapse:"collapse",marginBottom:10}}>
+              <thead><tr>
+                <th style={{...TH,textAlign:"left",minWidth:140}}>Tray</th>
+                <th style={{...TH,width:60}}>Type</th>
+                <th style={{...TH,textAlign:"right",minWidth:100}}>€ / 1000 pl.</th>
+              </tr></thead>
+              <tbody>
+                {ALLE_TRAYS.map((t,i)=>(
+                  <tr key={t.naam} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                    <td style={{...TD,fontWeight:600}}>{t.naam}</td>
+                    <td style={{...TD,fontSize:11,color:subtekst}}>{t.zaai?"zaai":"aflevering"}</td>
+                    <td style={{...TD,textAlign:"right"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:4,justifyContent:"flex-end"}}>
+                        <span style={{fontSize:11,color:subtekst}}>€</span>
+                        <input style={{...gs.input,width:80,textAlign:"right",padding:"3px 6px",fontSize:12,
+                          background:(tk[t.naam]!=null&&tk[t.naam]!=="")?"#f0fff8":"#fff"}}
+                          type="number" min="0" step="0.01" placeholder="—"
+                          value={tk[t.naam]??""} onFocus={e=>e.target.select()}
+                          onChange={e=>setTk({...tk,[t.naam]:e.target.value===""?"":Number(e.target.value)})}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <button style={gs.knopPrimair} onClick={()=>{
+                bewaar("ta_traykosten", tk);
+                setTraykosten(tk);
+                setOpgeslagenOk("✅ Opgeslagen");
+                setTimeout(()=>setOpgeslagenOk(""),2000);
+              }}>💾 Traykosten opslaan</button>
+              {opgeslagenOk&&<span style={{fontSize:12,color:groen}}>{opgeslagenOk}</span>}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Bedrijfsgegevens */}
       <div style={gs.sectie}>
@@ -4943,6 +5054,7 @@ function App() {
   const [kiemkracht,setKiemkracht] = useState(()=>laad("ta_kiemkracht", []));
   const [teeltduur,setTeeltduur]   = useState(()=>laad("ta_teeltduur", []));
   const [zaadinkoop,setZaadinkoop] = useState(()=>laad("ta_zaadinkoop", []));
+  const [traykosten,setTraykosten] = useState(()=>laad("ta_traykosten", {}));
   const [bedrijf,setBedrijf]   = useState(()=>laad("ta_bedrijf", {
     naam:"Uw Bedrijfsnaam BV", adres:"Straatnaam 1", postcode:"1234 AB", plaats:"Plaats",
     telefoon:"010-1234567", email:"info@uwbedrijf.nl", website:"", iban:"NL00 BANK 0000 0000 00",
@@ -4973,6 +5085,7 @@ function App() {
       ta_zaadinkoop: laad("ta_zaadinkoop", []),
       ta_bedrijf:    laad("ta_bedrijf", {}),
       ta_realisatie: laad("ta_realisatie", {}),
+      ta_traykosten: laad("ta_traykosten", {}),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
     const url = URL.createObjectURL(blob);
@@ -5075,6 +5188,7 @@ function App() {
   useEffect(()=>{ if(!geladen) return; bewaar("ta_verp",verpDef); fbSaveAll("verpakkingen",verpDef).then(()=>setSyncStatus(localStorage.getItem('ta_quota_exceeded')?"💾 Lokaal":"☁️ Opgeslagen")).catch(()=>{}); },[verpDef,geladen]);
   useEffect(()=>{ if(!geladen) return; bewaar("ta_zaadinkoop",zaadinkoop); fbSaveAll("zaadinkoop",zaadinkoop).then(()=>setSyncStatus(localStorage.getItem('ta_quota_exceeded')?"💾 Lokaal":"☁️ Opgeslagen")).catch(()=>{}); },[zaadinkoop,geladen]);
   useEffect(()=>{ if(!geladen) return; bewaar("ta_bedrijf",bedrijf); },[bedrijf,geladen]);
+  useEffect(()=>{ if(!geladen) return; bewaar("ta_traykosten",traykosten); },[traykosten,geladen]);
   useEffect(()=>{ if(!geladen) return; bewaar("ta_teeltduur",teeltduur); fbSaveAll("teeltduur",teeltduur).then(()=>setSyncStatus(localStorage.getItem('ta_quota_exceeded')?"💾 Lokaal":"☁️ Opgeslagen")).catch(()=>{}); },[teeltduur,geladen]);
   useEffect(()=>{ if(!geladen) return; bewaar("ta_kiemkracht",kiemkracht); fbSaveAll("kiemkracht",kiemkracht).then(()=>setSyncStatus(localStorage.getItem('ta_quota_exceeded')?"💾 Lokaal":"☁️ Opgeslagen")).catch(()=>{}); },[kiemkracht,geladen]);
 
@@ -5266,7 +5380,8 @@ function App() {
       {pagina==="prijzen"      && <Prijzen     klanten={klanten} gewassen={gewassen} prijzen={prijzen} setPrijzen={setPrijzen} verpDef={verpDef} />}
       {pagina==="overzichten"  && <div style={{padding:16,overflowY:"auto",height:"calc(100vh - 50px)"}}><MatrixFilterPaneel klanten={klanten} gewassen={gewassen} orders={orders} verpDef={verpDef} weken={weekOpties()} /></div>}
       {pagina==="mailing" && <MailingPagina klanten={klanten} orders={orders} />}
-      {pagina==="margeoverzicht" && <MargeOverzicht klanten={klanten} gewassen={gewassen} prijzen={prijzen} verpDef={verpDef} kiemkracht={kiemkracht} />}
+      {pagina==="margeoverzicht" && <MargeOverzicht klanten={klanten} gewassen={gewassen} prijzen={prijzen} verpDef={verpDef} kiemkracht={kiemkracht} traykosten={traykosten} setTraykosten={setTraykosten} />}
+      {pagina==="omzetoverzicht" && <OmzetOverzicht klanten={klanten} gewassen={gewassen} orders={orders} verpDef={verpDef} />}
       {pagina==="factuuroverzicht" && <FactuurOverzicht klanten={klanten} orders={orders} verpDef={verpDef} bedrijf={bedrijf} setOrders={setOrders} />}
       {pagina==="afleveroverzicht" && <AfleverOverzicht klanten={klanten} orders={orders} />}
       {pagina==="transport"    && <TransportPagina klanten={klanten} orders={orders} bedrijf={bedrijf} verpDef={verpDef} />}
@@ -5277,7 +5392,7 @@ function App() {
       {pagina==="kiemkracht"   && <Kiemkracht gewassen={gewassen} kiemkracht={kiemkracht} setKiemkracht={setKiemkracht} />}
       {pagina==="inkoop"       && <Inkoopprijzen gewassen={gewassen} setGewassen={setGewassen} />}
       {pagina==="verpakkingen" && <Verpakkingen verpDef={verpDef} setVerpDef={setVerpDef} />}
-      {pagina==="instellingen"  && <Instellingen bedrijf={bedrijf} setBedrijf={setBedrijf} gewassen={gewassen} setGewassen={setGewassen} orders={orders} setOrders={setOrders} prijzen={prijzen} setPrijzen={setPrijzen} kiemkracht={kiemkracht} setKiemkracht={setKiemkracht} teeltduur={teeltduur} setTeeltduur={setTeeltduur} verpDef={verpDef} setVerpDef={setVerpDef} />}
+      {pagina==="instellingen"  && <Instellingen bedrijf={bedrijf} setBedrijf={setBedrijf} gewassen={gewassen} setGewassen={setGewassen} orders={orders} setOrders={setOrders} prijzen={prijzen} setPrijzen={setPrijzen} kiemkracht={kiemkracht} setKiemkracht={setKiemkracht} teeltduur={teeltduur} setTeeltduur={setTeeltduur} verpDef={verpDef} setVerpDef={setVerpDef} traykosten={traykosten} setTraykosten={setTraykosten} />}
     </div>
   );
 }
@@ -6111,9 +6226,201 @@ function AfleverOverzicht({ klanten, orders }) {
 
 
 // ════════════════════════════════════════════════════════
+// OMZET OVERZICHT — per klant en per gewas per jaar
+// ════════════════════════════════════════════════════════
+function OmzetOverzicht({ klanten, gewassen, orders, verpDef }) {
+  const [weergave, setWeergave] = useState("euro"); // euro | planten
+  const [filtStatus, setFiltStatus] = useState("bevestigd_geleverd");
+
+  // Relevante orders filteren
+  const relevanteOrders = orders.filter(o=>{
+    if(filtStatus==="bevestigd_geleverd") return o.status==="bevestigd"||o.status==="geleverd";
+    if(filtStatus==="geleverd") return o.status==="geleverd";
+    return true;
+  });
+
+  // Alle jaren uit orders halen
+  const alleJaren = [...new Set(relevanteOrders.map(o=>getJaar(o.leverdatum)))].sort();
+
+  // Planten per regel
+  function plantenRegel(r) {
+    const vd = verpDef.find(v=>v.naam===r.verpakking);
+    return r.vastPlanten??((vd?.aantal||0)*r.aantal);
+  }
+
+  // Omzet per regel (planten * prijs)
+  function omzetRegel(r) {
+    const pl = plantenRegel(r);
+    return pl * Number(r.prijs||0);
+  }
+
+  // ── TABEL 1: per klant ──
+  const perKlant = {};
+  relevanteOrders.forEach(o=>{
+    const jaar = getJaar(o.leverdatum);
+    const kl = klanten.find(k=>k.id===o.klantId);
+    if(!kl) return;
+    if(!perKlant[kl.id]) perKlant[kl.id]={naam:kl.naam,jaren:{}};
+    o.regels.forEach(r=>{
+      if(!perKlant[kl.id].jaren[jaar]) perKlant[kl.id].jaren[jaar]={euro:0,planten:0};
+      perKlant[kl.id].jaren[jaar].euro += omzetRegel(r);
+      perKlant[kl.id].jaren[jaar].planten += plantenRegel(r);
+    });
+  });
+  const klantRijen = Object.values(perKlant).sort((a,b)=>a.naam.localeCompare(b.naam));
+
+  // ── TABEL 2: per gewas ──
+  const perGewas = {};
+  relevanteOrders.forEach(o=>{
+    const jaar = getJaar(o.leverdatum);
+    o.regels.forEach(r=>{
+      if(!perGewas[r.gewas]) perGewas[r.gewas]={naam:r.gewas,jaren:{}};
+      if(!perGewas[r.gewas].jaren[jaar]) perGewas[r.gewas].jaren[jaar]={euro:0,planten:0};
+      perGewas[r.gewas].jaren[jaar].euro += omzetRegel(r);
+      perGewas[r.gewas].jaren[jaar].planten += plantenRegel(r);
+    });
+  });
+  const gewasRijen = Object.values(perGewas).sort((a,b)=>a.naam.localeCompare(b.naam));
+
+  // Totaal per jaar
+  function jaarTotaalKlant(jaar) {
+    return klantRijen.reduce((s,r)=>s+(r.jaren[jaar]?.[weergave==="euro"?"euro":"planten"]||0),0);
+  }
+  function jaarTotaalGewas(jaar) {
+    return gewasRijen.reduce((s,r)=>s+(r.jaren[jaar]?.[weergave==="euro"?"euro":"planten"]||0),0);
+  }
+  function rijTotaal(rij) {
+    return alleJaren.reduce((s,j)=>s+(rij.jaren[j]?.[weergave==="euro"?"euro":"planten"]||0),0);
+  }
+  function grootTotaal(rijen) {
+    return alleJaren.reduce((s,j)=>s+rijen.reduce((s2,r)=>s2+(r.jaren[j]?.[weergave==="euro"?"euro":"planten"]||0),0),0);
+  }
+
+  function fmt(v) {
+    if(!v) return <span style={{color:"#ddd"}}>—</span>;
+    if(weergave==="euro") return "€ "+v.toLocaleString("nl-NL",{minimumFractionDigits:0,maximumFractionDigits:0});
+    return v.toLocaleString("nl-NL");
+  }
+
+  const TH4 = {padding:"5px 8px",background:"#e8f5ee",color:groen,fontWeight:700,fontSize:11,border:`1px solid ${rand}`,textAlign:"right",whiteSpace:"nowrap"};
+  const THL = {...TH4,textAlign:"left"};
+  const TD4 = {padding:"5px 8px",fontSize:12,border:`1px solid ${rand}`,textAlign:"right"};
+  const TDL = {...TD4,textAlign:"left"};
+
+  function Tabel({rijen, titel, jaarTotaalFn}) {
+    return (
+      <div style={{marginBottom:28}}>
+        <div style={{fontSize:13,fontWeight:700,color:groen,marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}}>{titel}</div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{borderCollapse:"collapse",minWidth:400}}>
+            <thead>
+              <tr>
+                <th style={{...THL,minWidth:160}}>{titel==="Per klant"?"Klant":"Gewas"}</th>
+                {alleJaren.map(j=><th key={j} style={{...TH4,minWidth:90}}>{j}</th>)}
+                <th style={{...TH4,minWidth:100,background:"#c8e6c9"}}>Totaal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rijen.map((r,i)=>{
+                const tot = rijTotaal(r);
+                return (
+                  <tr key={r.naam} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                    <td style={{...TDL,fontWeight:600}}>{r.naam}</td>
+                    {alleJaren.map(j=>{
+                      const v = r.jaren[j]?.[weergave==="euro"?"euro":"planten"]||0;
+                      // Kleur: hoogste jaar krijgt lichtgroen
+                      const max = Math.max(...alleJaren.map(jj=>r.jaren[jj]?.[weergave==="euro"?"euro":"planten"]||0));
+                      const isMax = v>0&&v===max&&alleJaren.length>1;
+                      return (
+                        <td key={j} style={{...TD4,fontWeight:v?500:300,color:v?"#1b1b1b":"#ddd",background:isMax?"#f0fff4":"transparent"}}>
+                          {fmt(v)}
+                        </td>
+                      );
+                    })}
+                    <td style={{...TD4,fontWeight:700,color:groen,background:"#f0fff4"}}>{fmt(tot)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr style={{background:"#e8f5ee",fontWeight:700}}>
+                <td style={{...THL,borderTop:`2px solid ${groen}`}}>Totaal</td>
+                {alleJaren.map(j=>(
+                  <td key={j} style={{...TD4,borderTop:`2px solid ${groen}`,color:groen,fontWeight:700}}>{fmt(jaarTotaalFn(j))}</td>
+                ))}
+                <td style={{...TD4,borderTop:`2px solid ${groen}`,color:groen,fontWeight:700,background:"#c8e6c9"}}>{fmt(grootTotaal(rijen))}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{padding:16,overflowY:"auto",height:"calc(100vh - 50px)"}}>
+      {/* Toolbar */}
+      <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:16,flexWrap:"wrap"}}>
+        <h2 style={{fontSize:15,fontWeight:700,color:groen,margin:0}}>💶 Omzetoverzicht</h2>
+        {/* Weergave */}
+        <div style={{display:"flex",gap:2,background:"#f0f0f0",borderRadius:6,padding:2}}>
+          {[["euro","€ Omzet"],["planten","Planten"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setWeergave(v)}
+              style={{padding:"4px 12px",border:"none",borderRadius:5,cursor:"pointer",fontSize:12,
+                background:weergave===v?groen:"transparent",color:weergave===v?wit:subtekst,fontWeight:weergave===v?700:400}}>
+              {l}
+            </button>
+          ))}
+        </div>
+        {/* Status filter */}
+        <div style={{display:"flex",gap:2,background:"#f0f0f0",borderRadius:6,padding:2}}>
+          {[["bevestigd_geleverd","Bevestigd + Geleverd"],["geleverd","Alleen geleverd"],["alle","Alle"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setFiltStatus(v)}
+              style={{padding:"4px 12px",border:"none",borderRadius:5,cursor:"pointer",fontSize:12,
+                background:filtStatus===v?groen:"transparent",color:filtStatus===v?wit:subtekst,fontWeight:filtStatus===v?700:400}}>
+              {l}
+            </button>
+          ))}
+        </div>
+        <span style={{fontSize:11,color:subtekst}}>{alleJaren.length} jaar/jaren · {relevanteOrders.length} orders</span>
+      </div>
+
+      {alleJaren.length===0
+        ? <div style={{textAlign:"center",color:subtekst,padding:60}}>
+            <div style={{fontSize:40,marginBottom:10}}>💶</div>
+            <div>Geen orders gevonden</div>
+          </div>
+        : <>
+            <Tabel rijen={klantRijen} titel="Per klant" jaarTotaalFn={jaarTotaalKlant} />
+            <Tabel rijen={gewasRijen} titel="Per gewas" jaarTotaalFn={jaarTotaalGewas} />
+          </>
+      }
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════
 // MARGE OVERZICHT — inkoop vs verkoop per soort per klant
 // ════════════════════════════════════════════════════════
-function MargeOverzicht({ klanten, gewassen, prijzen, verpDef, kiemkracht }) {
+function MargeOverzicht({ klanten, gewassen, prijzen, verpDef, kiemkracht, traykosten, setTraykosten }) {
+  // Traykosten ophalen
+  const tk = traykosten||{};
+
+  // Koppeling aflevertray → zaaitray
+  function getZaaitray(fust) {
+    const f = fust?.toLowerCase()||"";
+    if(f.includes("65")||f.includes("66")||f.includes("260")||f.includes("264")) return "Zaaitray 264";
+    if(f.includes("179")||f.includes("180")) return "Zaaitray 180";
+    return "Zaaitray 264";
+  }
+
+  // Traykosten per 1000 planten voor een aflevertray (zaai + aflevering)
+  function getTraykosten1000(fust) {
+    const zaaitray = getZaaitray(fust);
+    const kostenZaai = tk[zaaitray]!=null ? Number(tk[zaaitray]) : 0;
+    const kostenAflevering = tk[fust]!=null ? Number(tk[fust]) : 0;
+    return kostenZaai + kostenAflevering;
+  }
   // Alle beschikbare traysizes
   const alleFusten = verpDef.filter(v=>!v.naam.toLowerCase().includes("zaai"))
     .map(v=>v.naam).sort();
@@ -6136,9 +6443,18 @@ function MargeOverzicht({ klanten, gewassen, prijzen, verpDef, kiemkracht }) {
       const inkoopPer1000 = (gw.inkoopPrijzen||{})[s];
       // Kiemkracht ophalen voor deze soort
       const kiem = kiemkracht.find(k=>k.gewas===gw.naam&&k.soort===s);
-      const kiemPct = kiem?.kiemkracht || 90; // standaard 90%
-      // Inkoop per plant = prijs per 1000 zaden / 1000 / (kiemkracht/100)
-      const inkoopPrijs = inkoopPer1000 ? (inkoopPer1000 / 1000 / (kiemPct/100)) : null;
+      const kiemPct = kiem?.waarde || 90;
+      // Inkoop zaad per plant = prijs per 1000 zaden / 1000 / (kiemkracht/100)
+      const inkoopZaadPerPlant = inkoopPer1000 ? (inkoopPer1000 / 1000 / (kiemPct/100)) : null;
+      // Traykosten per plant = (zaaitray + aflevertray) kosten per 1000 / 1000
+      const traykostenPer1000 = getTraykosten1000(selFust);
+      const traykostenPerPlant = traykostenPer1000 / 1000;
+      // Totale kostprijs per plant
+      const heeftZaad = inkoopZaadPerPlant !== null;
+      const heeftTray = traykostenPer1000 > 0;
+      const inkoopPrijs = (heeftZaad || heeftTray)
+        ? (inkoopZaadPerPlant||0) + traykostenPerPlant
+        : null;
       // Verzamel verkoop per klant
       const verkopen = {};
       actieveKlanten.forEach(kl=>{
@@ -6157,7 +6473,7 @@ function MargeOverzicht({ klanten, gewassen, prijzen, verpDef, kiemkracht }) {
         ? Math.max(...Object.values(verkopen).map(vp=>(vp-inkoopPrijs)*1000))
         : null;
 
-      rijen.push({gewas:gw.naam, soort:s, inkoop:inkoopPrijs||null, inkoopPer1000:inkoopPer1000||null, kiemPct, verkopen, maxMarge, minMarge, maxVerschil});
+      rijen.push({gewas:gw.naam, soort:s, inkoop:inkoopPrijs||null, inkoopZaad:inkoopZaadPerPlant||null, inkoopPer1000:inkoopPer1000||null, traykostenPer1000, kiemPct, verkopen, maxMarge, minMarge, maxVerschil});
     });
   });
 
@@ -6258,7 +6574,9 @@ function MargeOverzicht({ klanten, gewassen, prijzen, verpDef, kiemkracht }) {
                   <th style={{...TH3,textAlign:"left",position:"sticky",left:0,zIndex:2,background:"#e8f5ee"}}>Gewas</th>
                   <th style={{...TH3,textAlign:"left",position:"sticky",left:80,zIndex:2,background:"#e8f5ee"}}>Soort</th>
                   <th style={{...TH3,background:"#f0f7f4",color:subtekst}}>Kiem%</th>
-                  <th style={{...TH3,background:"#f0f7f4",color:subtekst}}>€/pl inkoop</th>
+                  <th style={{...TH3,background:"#fff8e1",color:"#b45309"}}>Zaad/pl</th>
+                  <th style={{...TH3,background:"#fff8e1",color:"#b45309"}}>Tray/pl</th>
+                  <th style={{...TH3,background:"#fef3c7",color:"#92400e",fontWeight:700}}>Kostprijs/pl</th>
                   {actieveKlanten.map(kl=>(
                     <th key={kl.id} colSpan={2} style={{...TH3,borderLeft:`2px solid ${rand}`}}>
                       {kl.naam}
@@ -6269,8 +6587,10 @@ function MargeOverzicht({ klanten, gewassen, prijzen, verpDef, kiemkracht }) {
                 <tr>
                   <th style={{...TH3,position:"sticky",left:0,zIndex:2}}></th>
                   <th style={{...TH3,position:"sticky",left:90,zIndex:2}}></th>
-                  <th style={{...TH3,background:"#f0f7f4",color:subtekst,fontSize:8}}></th>
-                  <th style={{...TH3,background:"#f0f7f4",color:subtekst,fontSize:8}}>berekend</th>
+                  <th style={{...TH3,background:"#f0f7f4",fontSize:8}}></th>
+                  <th style={{...TH3,background:"#fff8e1",fontSize:8}}>zaad+kiem</th>
+                  <th style={{...TH3,background:"#fff8e1",fontSize:8}}>zaai+aflever</th>
+                  <th style={{...TH3,background:"#fef3c7",fontSize:8}}>totaal</th>
                   {actieveKlanten.map(kl=>(
                     <React.Fragment key={kl.id}>
                       <th style={{...TH3,fontSize:9,borderLeft:`2px solid ${rand}`}}>Verkoop €</th>
@@ -6288,7 +6608,13 @@ function MargeOverzicht({ klanten, gewassen, prijzen, verpDef, kiemkracht }) {
                     <td style={{...TD3,color:subtekst,background:"#fafffe",textAlign:"center"}}>
                       {r.kiemPct?r.kiemPct+"%":"—"}
                     </td>
-                    <td style={{...TD3,color:subtekst,background:"#fafffe"}}>
+                    <td style={{...TD3,color:"#b45309",background:"#fffbeb"}}>
+                      {r.inkoopZaad?"€"+Number(r.inkoopZaad).toFixed(4):"—"}
+                    </td>
+                    <td style={{...TD3,color:"#b45309",background:"#fffbeb"}}>
+                      {r.traykostenPer1000>0?"€"+(r.traykostenPer1000/1000).toFixed(4):"—"}
+                    </td>
+                    <td style={{...TD3,color:"#92400e",fontWeight:700,background:"#fef9c3"}}>
                       {r.inkoop?"€"+Number(r.inkoop).toFixed(4):"—"}
                     </td>
                     {actieveKlanten.map(kl=>{

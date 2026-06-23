@@ -124,39 +124,110 @@ function weekOpties() {
 function laad(k, def) { try { const v=localStorage.getItem(k); return v?JSON.parse(v):def; } catch { return def; } }
 function bewaar(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 
-// ─── FIREBASE SYNC ──────────────────────────────────────
+
+// ════════════════════════════════════════════════════════
+// FIREBASE REALTIME SYNC v2
+// ════════════════════════════════════════════════════════
+// Elk record als apart Firestore document.
+// onSnapshot luisteraars voor realtime multi-user sync.
+// LocalStorage als offline cache / fallback.
+// ════════════════════════════════════════════════════════
+
 const FB_CONFIG = {
   apiKey: "AIzaSyDLt-2fiDoYLA4FVt0zdE3o6jH6soDj7s0",
   projectId: "tuinapp-f4631",
   appId: "1:1088314866846:web:171e975bf42f4ea17b0f8f",
 };
 
-let _fbDb = null;
+let _db = null;
+let _fbMods = null;
 let _fbReady = false;
-let _fbLoading = false;
-const _fbQueue = [];
 
-function loadFirebase() {
-  if(_fbReady || _fbLoading) return;
-  _fbLoading = true;
-  const s1 = document.createElement('script');
-  s1.type = 'module';
-  s1.textContent = `
-    import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-    const app = getApps().length ? getApps()[0] : initializeApp(${JSON.stringify(FB_CONFIG)});
-    const db = getFirestore(app);
-    window._fbDb = db;
-    window._fbSetDoc = setDoc;
-    window._fbDoc = doc;
-    window._fbGetDoc = getDoc;
+async function initFB() {
+  if (_fbReady) return;
+  try {
+    const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    const fb = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const app = getApps().length ? getApps()[0] : initializeApp(FB_CONFIG);
+    _db = fb.getFirestore(app);
+    _fbMods = fb;
+    _fbReady = true;
     window._fbReady = true;
-    window.dispatchEvent(new Event('fbReady'));
-  `;
-  document.head.appendChild(s1);
+    window.dispatchEvent(new Event("fbReady"));
+  } catch(e) {
+    console.warn("Firebase init fout:", e.message);
+  }
 }
 
-loadFirebase();
+function fbC(col) { return _fbMods.collection(_db, "tuinapp_v2", col); }
+function fbD(col, id) { return _fbMods.doc(_db, "tuinapp_v2", col, String(id)); }
+function fbDS(naam) { return _fbMods.doc(_db, "tuinapp_v2", "stamdata", naam); }
+
+async function fbSave(col, id, data) {
+  if (!_fbReady) return;
+  try { await _fbMods.setDoc(fbD(col, id), {...data, _ts: Date.now()}); }
+  catch(e) { console.warn("fbSave:", col, e.message); }
+}
+
+async function fbDel(col, id) {
+  if (!_fbReady) return;
+  try { await _fbMods.deleteDoc(fbD(col, id)); }
+  catch(e) { console.warn("fbDel:", col, e.message); }
+}
+
+const _sdTimers = {};
+function fbSaveStam(naam, data, delay=1500) {
+  clearTimeout(_sdTimers[naam]);
+  _sdTimers[naam] = setTimeout(async () => {
+    if (!_fbReady) return;
+    try { await _fbMods.setDoc(fbDS(naam), {data: JSON.stringify(data), _ts: Date.now()}); }
+    catch(e) { console.warn("fbSaveStam:", naam, e.message); }
+  }, delay);
+}
+
+function fbListen(col, cb) {
+  if (!_fbReady) return ()=>{};
+  return _fbMods.onSnapshot(fbC(col), snap => {
+    const items = [];
+    snap.forEach(d => { const x={...d.data()}; delete x._ts; items.push(x); });
+    cb(items);
+  }, e => console.warn("fbListen:", col, e.message));
+}
+
+function fbListenStam(naam, cb) {
+  if (!_fbReady) return ()=>{};
+  return _fbMods.onSnapshot(fbDS(naam), snap => {
+    if (snap.exists()) { try { cb(JSON.parse(snap.data().data)); } catch(e){} }
+  }, e => console.warn("fbListenStam:", naam, e.message));
+}
+
+async function migreerV2(sets) {
+  if (!_fbReady || localStorage.getItem("ta_migrated_v2")) return;
+  const COLS = {klanten:"klanten", gewassen:"gewassen", prijzen:"prijzen", orders:"orders"};
+  const STAM = ["verp","kiemkracht","teeltduur","zaadinkoop","bedrijf","traykosten","leveranciers"];
+  try {
+    for (const [key, col] of Object.entries(COLS)) {
+      const items = sets[key] || [];
+      const BATCH = 400;
+      for (let i=0; i<items.length; i+=BATCH) {
+        const batch = _fbMods.writeBatch(_db);
+        items.slice(i,i+BATCH).forEach(item => {
+          batch.set(_fbMods.doc(_db,"tuinapp_v2",col,String(item.id)), {...item, _ts:Date.now()});
+        });
+        await batch.commit();
+      }
+    }
+    for (const naam of STAM) {
+      if (sets[naam] !== undefined)
+        await _fbMods.setDoc(fbDS(naam), {data: JSON.stringify(sets[naam]), _ts: Date.now()});
+    }
+    localStorage.setItem("ta_migrated_v2","1");
+    console.log("✅ Migratie v2 klaar");
+  } catch(e) { console.warn("Migratie fout:", e.message); }
+}
+
+initFB();
+
 
 const fbTimers = {};
 
@@ -5835,13 +5906,137 @@ function App() {
   const [orders,setOrders]     = useState(()=>laad("ta_orders",   SO));
   const [verpDef,setVerpDef]   = useState(()=>zorgVerpDef(laad("ta_verp", VERPAKKINGEN_DEF)));
   const [syncStatus,setSyncStatus] = useState("⏳ Verbinden...");
+  const [fbOk,setFbOk]         = useState(false);
+  const _prevKlanten  = React.useRef([]);
+  const _prevOrders   = React.useRef([]);
+  const _prevGewassen = React.useRef([]);
+  const _prevPrijzen  = React.useRef([]);
+  const _unsubs       = React.useRef([]);
+
+  
+  // ── FIREBASE SYNC STATE ────────────────────────────────
+  const [fbOk,setFbOk]         = useState(false);
+  const _prevKlanten  = React.useRef([]);
+  const _prevOrders   = React.useRef([]);
+  const _prevGewassen = React.useRef([]);
+  const _prevPrijzen  = React.useRef([]);
+  const _unsubs       = React.useRef([]);
+
+  // ── FIREBASE INIT + REALTIME LISTENERS ─────────────────
+  useEffect(() => {
+    async function start() {
+      // Snel lokaal laden
+      const lk=laad("ta_klanten",SK); if(lk.length) setKlanten(lk);
+      const lg=laad("ta_gewassen",SG); if(lg.length) setGewassen(lg);
+      const lp=laad("ta_prijzen",SP); if(lp.length) setPrijzen(lp);
+      const lo=laad("ta_orders",SO); if(lo.length) setOrders(lo);
+      setVerpDef(zorgVerpDef(laad("ta_verp",VERPAKKINGEN_DEF)));
+      setKiemkracht(laad("ta_kiemkracht",[]));
+      setTeeltduur(laad("ta_teeltduur",[]));
+      setZaadinkoop(laad("ta_zaadinkoop",[]));
+      setBedrijf(laad("ta_bedrijf",{naam:"",adres:"",postcode:"",plaats:"",telefoon:"",email:"",iban:""}));
+      setTraykosten(laad("ta_traykosten",{}));
+      setLeveranciers(laad("ta_leveranciers",[]));
+      _prevKlanten.current  = laad("ta_klanten",SK);
+      _prevOrders.current   = laad("ta_orders",SO);
+      _prevGewassen.current = laad("ta_gewassen",SG);
+      _prevPrijzen.current  = laad("ta_prijzen",SP);
+      setGeladen(true);
+      setSyncStatus("💾 Lokaal geladen");
+
+      // Firebase verbinden
+      await initFB();
+      if (!_fbReady) { setSyncStatus("⚠️ Firebase niet bereikbaar — lokaal opgeslagen"); return; }
+      setFbOk(true);
+      setSyncStatus("☁️ Firebase verbonden");
+
+      // Eenmalige migratie
+      if (!localStorage.getItem("ta_migrated_v2")) {
+        setSyncStatus("⏳ Eenmalige migratie...");
+        await migreerV2({
+          klanten:laad("ta_klanten",SK), gewassen:laad("ta_gewassen",SG),
+          prijzen:laad("ta_prijzen",SP), orders:laad("ta_orders",SO),
+          verp:zorgVerpDef(laad("ta_verp",VERPAKKINGEN_DEF)),
+          kiemkracht:laad("ta_kiemkracht",[]), teeltduur:laad("ta_teeltduur",[]),
+          zaadinkoop:laad("ta_zaadinkoop",[]), bedrijf:laad("ta_bedrijf",{}),
+          traykosten:laad("ta_traykosten",{}), leveranciers:laad("ta_leveranciers",[]),
+        });
+        setSyncStatus("☁️ Gesynchroniseerd");
+      }
+
+      // Realtime listeners
+      const u = [];
+      u.push(fbListen("klanten", items => {
+        if(items.length){_prevKlanten.current=items;setKlanten(items);bewaar("ta_klanten",items);}
+        setSyncStatus("☁️ Live");
+      }));
+      u.push(fbListen("gewassen", items => {
+        if(items.length){_prevGewassen.current=items;setGewassen(items);bewaar("ta_gewassen",items);}
+      }));
+      u.push(fbListen("prijzen", items => {
+        if(items.length){_prevPrijzen.current=items;setPrijzen(items);bewaar("ta_prijzen",items);}
+      }));
+      u.push(fbListen("orders", items => {
+        if(items.length){_prevOrders.current=items;setOrders(items);bewaar("ta_orders",items);}
+      }));
+      u.push(fbListenStam("verp", data=>{const v=zorgVerpDef(data);setVerpDef(v);bewaar("ta_verp",v);}));
+      u.push(fbListenStam("kiemkracht", data=>{setKiemkracht(data);bewaar("ta_kiemkracht",data);}));
+      u.push(fbListenStam("teeltduur",  data=>{setTeeltduur(data); bewaar("ta_teeltduur",data);}));
+      u.push(fbListenStam("zaadinkoop", data=>{setZaadinkoop(data);bewaar("ta_zaadinkoop",data);}));
+      u.push(fbListenStam("bedrijf",    data=>{setBedrijf(data);   bewaar("ta_bedrijf",data);}));
+      u.push(fbListenStam("traykosten", data=>{setTraykosten(data);bewaar("ta_traykosten",data);}));
+      u.push(fbListenStam("leveranciers",data=>{setLeveranciers(data);bewaar("ta_leveranciers",data);}));
+      _unsubs.current = u;
+    }
+    start();
+    return () => { _unsubs.current.forEach(u => u && u()); };
+  }, []);
+
+  // ── SCHRIJF NAAR FIREBASE ───────────────────────────────
+  useEffect(()=>{
+    if(!geladen||!fbOk) return;
+    bewaar("ta_klanten",klanten);
+    klanten.forEach(k=>fbSave("klanten",k.id,k));
+    const ids=new Set(klanten.map(k=>String(k.id)));
+    _prevKlanten.current.forEach(k=>{if(!ids.has(String(k.id)))fbDel("klanten",k.id);});
+    _prevKlanten.current=klanten;
+  },[klanten]);
 
   useEffect(()=>{
-    function onFbReady(){ setSyncStatus("☁️ Firebase verbonden"); }
-    window.addEventListener("fbReady", onFbReady);
-    if(window._fbReady) setSyncStatus("☁️ Firebase verbonden");
-    return ()=>window.removeEventListener("fbReady", onFbReady);
-  },[]);
+    if(!geladen||!fbOk) return;
+    bewaar("ta_gewassen",gewassen);
+    gewassen.forEach(g=>fbSave("gewassen",g.id,g));
+    const ids=new Set(gewassen.map(g=>String(g.id)));
+    _prevGewassen.current.forEach(g=>{if(!ids.has(String(g.id)))fbDel("gewassen",g.id);});
+    _prevGewassen.current=gewassen;
+  },[gewassen]);
+
+  useEffect(()=>{
+    if(!geladen||!fbOk) return;
+    bewaar("ta_prijzen",prijzen);
+    prijzen.forEach(p=>fbSave("prijzen",p.id,p));
+    const ids=new Set(prijzen.map(p=>String(p.id)));
+    _prevPrijzen.current.forEach(p=>{if(!ids.has(String(p.id)))fbDel("prijzen",p.id);});
+    _prevPrijzen.current=prijzen;
+  },[prijzen]);
+
+  useEffect(()=>{
+    if(!geladen||!fbOk) return;
+    bewaar("ta_orders",orders);
+    orders.forEach(o=>fbSave("orders",o.id,o));
+    const ids=new Set(orders.map(o=>String(o.id)));
+    _prevOrders.current.forEach(o=>{if(!ids.has(String(o.id)))fbDel("orders",o.id);});
+    _prevOrders.current=orders;
+  },[orders]);
+
+  useEffect(()=>{if(!geladen)return;bewaar("ta_verp",verpDef);if(fbOk)fbSaveStam("verp",verpDef);},[verpDef]);
+  useEffect(()=>{if(!geladen)return;bewaar("ta_kiemkracht",kiemkracht);if(fbOk)fbSaveStam("kiemkracht",kiemkracht);},[kiemkracht]);
+  useEffect(()=>{if(!geladen)return;bewaar("ta_teeltduur",teeltduur);if(fbOk)fbSaveStam("teeltduur",teeltduur);},[teeltduur]);
+  useEffect(()=>{if(!geladen)return;bewaar("ta_zaadinkoop",zaadinkoop);if(fbOk)fbSaveStam("zaadinkoop",zaadinkoop);},[zaadinkoop]);
+  useEffect(()=>{if(!geladen)return;bewaar("ta_bedrijf",bedrijf);if(fbOk)fbSaveStam("bedrijf",bedrijf);},[bedrijf]);
+  useEffect(()=>{if(!geladen)return;bewaar("ta_traykosten",traykosten);if(fbOk)fbSaveStam("traykosten",traykosten);},[traykosten]);
+  useEffect(()=>{if(!geladen)return;bewaar("ta_leveranciers",leveranciers);if(fbOk)fbSaveStam("leveranciers",leveranciers);},[leveranciers]);
+
   const [geladen,setGeladen]   = useState(false);
   const [backupHerinnering,setBackupHerinnering] = useState(false);
   const [scriptHerinnering,setScriptHerinnering] = useState(false);
@@ -5958,18 +6153,9 @@ function App() {
   }, []);
 
   // Sla op naar Firebase + localStorage bij elke wijziging (alleen na init)
-  useEffect(()=>{ if(!geladen) return; bewaar("ta_klanten",klanten); fbSaveAll("klanten",klanten).then(()=>setSyncStatus(localStorage.getItem('ta_quota_exceeded')?"💾 Lokaal":"☁️ Opgeslagen")).catch(()=>{}); },[klanten,geladen]);
-  useEffect(()=>{ if(!geladen) return; bewaar("ta_gewassen",gewassen); fbSaveAll("gewassen",gewassen).then(()=>setSyncStatus(localStorage.getItem('ta_quota_exceeded')?"💾 Lokaal":"☁️ Opgeslagen")).catch(()=>{}); },[gewassen,geladen]);
-  useEffect(()=>{ if(!geladen) return; bewaar("ta_prijzen",prijzen); fbSaveAll("prijzen",prijzen).then(()=>setSyncStatus(localStorage.getItem('ta_quota_exceeded')?"💾 Lokaal":"☁️ Opgeslagen")).catch(()=>{}); },[prijzen,geladen]);
-  useEffect(()=>{ if(!geladen) return; bewaar("ta_orders",orders); fbSaveAll("orders",orders).then(()=>setSyncStatus(localStorage.getItem('ta_quota_exceeded')?"💾 Lokaal":"☁️ Opgeslagen")).catch(()=>{}); },[orders,geladen]);
-  useEffect(()=>{ if(!geladen) return; bewaar("ta_verp",verpDef); fbSaveAll("verpakkingen",verpDef).then(()=>setSyncStatus(localStorage.getItem('ta_quota_exceeded')?"💾 Lokaal":"☁️ Opgeslagen")).catch(()=>{}); },[verpDef,geladen]);
-  useEffect(()=>{ if(!geladen) return; bewaar("ta_zaadinkoop",zaadinkoop); fbSaveAll("zaadinkoop",zaadinkoop).then(()=>setSyncStatus(localStorage.getItem('ta_quota_exceeded')?"💾 Lokaal":"☁️ Opgeslagen")).catch(()=>{}); },[zaadinkoop,geladen]);
   useEffect(()=>{ if(!geladen) return; bewaar("ta_bedrijf",bedrijf); },[bedrijf,geladen]);
   useEffect(()=>{ if(!geladen) return; bewaar("ta_traykosten",traykosten); },[traykosten,geladen]);
   useEffect(()=>{ if(!geladen) return; bewaar("ta_leveranciers",leveranciers); },[leveranciers,geladen]);
-  useEffect(()=>{ if(!geladen) return; bewaar("ta_teeltduur",teeltduur); fbSaveAll("teeltduur",teeltduur).then(()=>setSyncStatus(localStorage.getItem('ta_quota_exceeded')?"💾 Lokaal":"☁️ Opgeslagen")).catch(()=>{}); },[teeltduur,geladen]);
-  useEffect(()=>{ if(!geladen) return; bewaar("ta_kiemkracht",kiemkracht); fbSaveAll("kiemkracht",kiemkracht).then(()=>setSyncStatus(localStorage.getItem('ta_quota_exceeded')?"💾 Lokaal":"☁️ Opgeslagen")).catch(()=>{}); },[kiemkracht,geladen]);
-
   function reset(){
     if(!window.confirm("Alle data wissen? Dit verwijdert ook de Firebase data!"))return;
     ["ta_klanten","ta_gewassen","ta_prijzen","ta_orders","ta_verp"].forEach(k=>localStorage.removeItem(k));
@@ -6105,7 +6291,12 @@ function App() {
           )}
         </div>
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>
-          <span style={{color:"rgba(255,255,255,0.65)",fontSize:11}}>{syncStatus}</span>
+          <span style={{
+      color: syncStatus.startsWith("☁️")?"#90EE90":
+             syncStatus.startsWith("⚠️")?"#FFD700":"rgba(255,255,255,0.65)",
+      fontSize:11,
+      fontWeight: syncStatus.startsWith("☁️ Live")?"700":"400"
+    }}>{syncStatus}</span>
           {backupHerinnering&&(
             <span style={{background:"#fef3c7",color:"#92400e",borderRadius:5,padding:"3px 9px",fontSize:11,fontWeight:700}}>
               ⚠️ Backup maken!

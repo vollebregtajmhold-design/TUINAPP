@@ -125,67 +125,62 @@ function laad(k, def) { try { const v=localStorage.getItem(k); return v?JSON.par
 function bewaar(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 
 // ─── FIREBASE SYNC ──────────────────────────────────────
-// Config — vul in vanuit Firebase console
 const FB_CONFIG = {
   apiKey: "AIzaSyDLt-2fiDoYLA4FVt0zdE3o6jH6soDj7s0",
   projectId: "tuinapp-f4631",
   appId: "1:1088314866846:web:171e975bf42f4ea17b0f8f",
 };
 
-let db = null;
-let fbInitialized = false;
+let _fbDb = null;
+let _fbReady = false;
+let _fbLoading = false;
+const _fbQueue = [];
 
-async function initFb() {
-  if(fbInitialized) return db;
-  if(!FB_CONFIG.apiKey || !FB_CONFIG.projectId) return null;
-  try {
-    const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
-    const { getFirestore, doc, setDoc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-    const app = getApps().length ? getApps()[0] : initializeApp(FB_CONFIG);
-    db = getFirestore(app);
-    db._setDoc = setDoc; db._doc = doc; db._getDoc = getDoc;
-    fbInitialized = true;
-    return db;
-  } catch(e) { console.warn("Firebase init mislukt:", e); return null; }
+function loadFirebase() {
+  if(_fbReady || _fbLoading) return;
+  _fbLoading = true;
+  const s1 = document.createElement('script');
+  s1.type = 'module';
+  s1.textContent = `
+    import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    const app = getApps().length ? getApps()[0] : initializeApp(${JSON.stringify(FB_CONFIG)});
+    const db = getFirestore(app);
+    window._fbDb = db;
+    window._fbSetDoc = setDoc;
+    window._fbDoc = doc;
+    window._fbGetDoc = getDoc;
+    window._fbReady = true;
+    window.dispatchEvent(new Event('fbReady'));
+  `;
+  document.head.appendChild(s1);
 }
 
-// Debounce timers per collectie
+loadFirebase();
+
 const fbTimers = {};
 
-// Schrijf met debounce — max 1x per 10 seconden per collectie
 async function fbSaveAll(col, items) {
   clearTimeout(fbTimers[col]);
   fbTimers[col] = setTimeout(async ()=>{
-    const db = await initFb();
-    if(!db) return;
+    if(!window._fbReady) return;
     try {
       const data = JSON.stringify(items);
-      // Sla alles op als één document (1 write ipv N writes)
-      await db._setDoc(db._doc(db, "tuinapp", col), {data, ts: Date.now()});
-      localStorage.removeItem("ta_fb_error_"+col);
+      await window._fbSetDoc(window._fbDoc(window._fbDb, "tuinapp", col), {data, ts: Date.now()});
     } catch(e) {
-      localStorage.setItem("ta_fb_error_"+col, e.message);
-      console.warn("Firebase write mislukt voor", col, e);
+      console.warn("Firebase write mislukt:", col, e.message);
     }
-  }, 10000); // 10 seconden debounce
+  }, 10000);
 }
 
-// Lees alleen bij eerste load — daarna altijd localStorage
 async function fbLoadAll(col) {
-  // Altijd localStorage als primaire bron
   const lokaal = localStorage.getItem("ta_"+col);
-  if(lokaal) return null; // localStorage heeft data, gebruik die
-
-  // Alleen Firebase raadplegen als localStorage leeg is
-  const db = await initFb();
-  if(!db) return null;
+  if(lokaal) return null;
+  if(!window._fbReady) return null;
   try {
-    const snap = await db._getDoc(db._doc(db, "tuinapp", col));
-    if(snap.exists()) {
-      const items = JSON.parse(snap.data().data);
-      return items;
-    }
-  } catch(e) { console.warn("Firebase read mislukt voor", col, e); }
+    const snap = await window._fbGetDoc(window._fbDoc(window._fbDb, "tuinapp", col));
+    if(snap.exists()) return JSON.parse(snap.data().data);
+  } catch(e) { console.warn("Firebase read mislukt:", col, e.message); }
   return null;
 }
 
@@ -5839,7 +5834,14 @@ function App() {
   const [prijzen,setPrijzen]   = useState(()=>laad("ta_prijzen",  SP));
   const [orders,setOrders]     = useState(()=>laad("ta_orders",   SO));
   const [verpDef,setVerpDef]   = useState(()=>zorgVerpDef(laad("ta_verp", VERPAKKINGEN_DEF)));
-  const [syncStatus,setSyncStatus] = useState("⏳ Verbinden met Firebase...");
+  const [syncStatus,setSyncStatus] = useState("⏳ Verbinden...");
+
+  useEffect(()=>{
+    function onFbReady(){ setSyncStatus("☁️ Firebase verbonden"); }
+    window.addEventListener("fbReady", onFbReady);
+    if(window._fbReady) setSyncStatus("☁️ Firebase verbonden");
+    return ()=>window.removeEventListener("fbReady", onFbReady);
+  },[]);
   const [geladen,setGeladen]   = useState(false);
   const [backupHerinnering,setBackupHerinnering] = useState(false);
   const [scriptHerinnering,setScriptHerinnering] = useState(false);

@@ -125,9 +125,69 @@ function laad(k, def) { try { const v=localStorage.getItem(k); return v?JSON.par
 function bewaar(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 
 // ─── FIREBASE SYNC ──────────────────────────────────────
-async function fbSaveAll(col, items) { /* alleen localStorage */ }
+// Config — vul in vanuit Firebase console
+const FB_CONFIG = {
+  apiKey: "AIzaSyDLt-2fiDoYLA4FVt0zdE3o6jH6soDj7s0",
+  projectId: "tuinapp-f4631",
+  appId: "1:1088314866846:web:171e975bf42f4ea17b0f8f",
+};
 
-async function fbLoadAll(col) { return null; }
+let db = null;
+let fbInitialized = false;
+
+async function initFb() {
+  if(fbInitialized) return db;
+  if(!FB_CONFIG.apiKey || !FB_CONFIG.projectId) return null;
+  try {
+    const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    const { getFirestore, doc, setDoc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const app = getApps().length ? getApps()[0] : initializeApp(FB_CONFIG);
+    db = getFirestore(app);
+    db._setDoc = setDoc; db._doc = doc; db._getDoc = getDoc;
+    fbInitialized = true;
+    return db;
+  } catch(e) { console.warn("Firebase init mislukt:", e); return null; }
+}
+
+// Debounce timers per collectie
+const fbTimers = {};
+
+// Schrijf met debounce — max 1x per 10 seconden per collectie
+async function fbSaveAll(col, items) {
+  clearTimeout(fbTimers[col]);
+  fbTimers[col] = setTimeout(async ()=>{
+    const db = await initFb();
+    if(!db) return;
+    try {
+      const data = JSON.stringify(items);
+      // Sla alles op als één document (1 write ipv N writes)
+      await db._setDoc(db._doc(db, "tuinapp", col), {data, ts: Date.now()});
+      localStorage.removeItem("ta_fb_error_"+col);
+    } catch(e) {
+      localStorage.setItem("ta_fb_error_"+col, e.message);
+      console.warn("Firebase write mislukt voor", col, e);
+    }
+  }, 10000); // 10 seconden debounce
+}
+
+// Lees alleen bij eerste load — daarna altijd localStorage
+async function fbLoadAll(col) {
+  // Altijd localStorage als primaire bron
+  const lokaal = localStorage.getItem("ta_"+col);
+  if(lokaal) return null; // localStorage heeft data, gebruik die
+
+  // Alleen Firebase raadplegen als localStorage leeg is
+  const db = await initFb();
+  if(!db) return null;
+  try {
+    const snap = await db._getDoc(db._doc(db, "tuinapp", col));
+    if(snap.exists()) {
+      const items = JSON.parse(snap.data().data);
+      return items;
+    }
+  } catch(e) { console.warn("Firebase read mislukt voor", col, e); }
+  return null;
+}
 
 const SK = [
   { id:1, naam:"Bolk", klantcode:"BOL", adres:"Molenweg 12", postcode:"5000 AB", plaats:"Tilburg", telefoon:"013-1234567", email:"bolk@voorbeeld.nl", btwnummer:"NL123456789B01", kvk:"12345678", contactpersonen:[{naam:"Jan Bolk",functie:"Inkoper",telefoon:"06-11223344",email:"jan@bolk.nl"}] },
@@ -2365,6 +2425,21 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
                           </>);
                         })()}
                       </div>
+                      {/* Markeer als verzonden — direct onder bevestigen */}
+                      {data.bevestigingNr&&(
+                        data.bevestigingGemaild
+                          ? <div style={{background:"#f0fff4",border:"1px solid #c8e6c9",borderRadius:5,padding:"4px 8px",fontSize:10,color:"#16a34a",textAlign:"center",marginTop:2}}>
+                              ✅ Verzonden {new Date(data.bevestigingGemaild).toLocaleDateString("nl-NL")}
+                              <button style={{marginLeft:6,background:"transparent",border:"none",color:"#9ca3af",cursor:"pointer",fontSize:9,textDecoration:"underline"}}
+                                onClick={()=>{const b={...data,bevestigingGemaild:null};setData(b);if(b.id)setOrders(orders.map(o=>o.id===b.id?b:o));}}>
+                                ↩
+                              </button>
+                            </div>
+                          : <button style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:5,padding:"5px 6px",fontSize:11,fontWeight:700,cursor:"pointer",width:"100%",marginTop:2}}
+                              onClick={()=>{const b={...data,bevestigingGemaild:new Date().toISOString()};setData(b);if(b.id)setOrders(orders.map(o=>o.id===b.id?b:o));}}>
+                              📧 Markeer als verzonden
+                            </button>
+                      )}
 
                       {/* Pakbon — datum transport kiezen, dan aanmaken */}
                       <div style={{display:"flex",flexDirection:"column",gap:3}}>
@@ -2553,36 +2628,12 @@ function Orders({ klanten, gewassen, prijzen, orders, setOrders, verpDef, bedrij
                           🔄 Herbereken vastPlanten
                         </button>
                       )}
-                      {data.bevestigingNr&&data.status==="bevestigd"&&klanten.find(k=>k.id===data.klantId)?.email&&(
-                        <div style={{marginTop:4,display:"flex",flexDirection:"column",gap:4}}>
-                          {gewijzigd&&(
-                            <button style={{background:"#f59e0b",color:"#fff",border:"none",borderRadius:5,padding:"6px 8px",fontSize:11,fontWeight:700,cursor:"pointer",width:"100%",animation:"pulse 1.5s infinite"}}
-                              onClick={()=>{opslaan();window.dispatchEvent(new CustomEvent("naarBevestiging",{detail:{klantId:data.klantId}}));}}>
-                              ⚠️ Gewijzigd — herbevestig via Bevestigingen tab
-                            </button>
-                          )}
-                          {/* Status verzonden */}
-                          {data.bevestigingGemaild
-                            ? <div style={{background:"#f0fff4",border:"1px solid #c8e6c9",borderRadius:5,padding:"6px 8px",fontSize:11,color:"#16a34a",textAlign:"center"}}>
-                                ✅ Verzonden op {new Date(data.bevestigingGemaild).toLocaleDateString("nl-NL")}
-                                <button style={{display:"block",width:"100%",marginTop:4,background:"transparent",border:"1px solid #c8e6c9",color:"#6b7280",cursor:"pointer",fontSize:10,borderRadius:4,padding:"2px"}}
-                                  onClick={()=>{
-                                    if(!window.confirm("Verzendstatus ongedaan maken?")) return;
-                                    const b={...data,bevestigingGemaild:null};
-                                    setData(b);
-                                    if(b.id) setOrders(orders.map(o=>o.id===b.id?b:o));
-                                  }}>↩ Ongedaan maken</button>
-                              </div>
-                            : <button style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:5,padding:"8px 6px",fontSize:12,fontWeight:700,cursor:"pointer",width:"100%"}}
-                                onClick={()=>{
-                                  const b={...data,bevestigingGemaild:new Date().toISOString()};
-                                  setData(b);
-                                  if(b.id) setOrders(orders.map(o=>o.id===b.id?b:o));
-                                }}>
-                                📧 Markeer als verzonden
-                              </button>
-                          }
-                          {mailStatus&&<div style={{fontSize:10,color:mailStatus.startsWith("✅")?"#16a34a":"#f59e0b",textAlign:"center"}}>{mailStatus}</div>}
+                      {data.bevestigingNr&&data.status==="bevestigd"&&gewijzigd&&(
+                        <div style={{marginTop:4}}>
+                          <button style={{background:"#f59e0b",color:"#fff",border:"none",borderRadius:5,padding:"6px 8px",fontSize:11,fontWeight:700,cursor:"pointer",width:"100%",animation:"pulse 1.5s infinite"}}
+                            onClick={()=>{opslaan();window.dispatchEvent(new CustomEvent("naarBevestiging",{detail:{klantId:data.klantId}}));}}>
+                            ⚠️ Gewijzigd — herbevestig via Bevestigingen tab
+                          </button>
                         </div>
                       )}
                     </div>
@@ -3864,33 +3915,63 @@ function Bevestiging({ klanten, gewassen, orders, setOrders, verpDef, bedrijf, m
               </button>
             );
           })}
-          {/* Herdruk sectie */}
+          {/* Herdruk sectie met verzendstatus filter */}
           <div style={{marginTop:10,paddingTop:8,borderTop:`1px solid ${rand}`}}>
-            <div style={{fontSize:10,fontWeight:700,color:subtekst,marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>Herdruk</div>
-            {klanten.filter(k=>orders.some(o=>o.klantId===k.id&&o.bevestigingNr&&o.status!=="geleverd"))
-              .sort((a,b)=>a.naam.localeCompare(b.naam))
-              .map(k=>{
-                const actief=selKlant?.id===k.id&&herdruk;
-                return (
-                  <button key={k.id} onClick={()=>{setHerdruk(true);setSelKlant(k);setSelWeken(wekenVoorKlant(k.id));}}
-                    style={{width:"100%",textAlign:"left",padding:"5px 8px",marginBottom:3,
-                      border:`1px solid ${actief?"#1d4ed8":rand}`,borderRadius:6,cursor:"pointer",
-                      background:actief?"#eff6ff":wit}}>
-                    <div style={{fontWeight:700,fontSize:12,color:actief?"#1d4ed8":"#222"}}>{k.naam}</div>
-                    <div style={{fontSize:10,color:subtekst}}>{wekenVoorKlant(k.id).length} wk bevestigd</div>
-                  </button>
-                );
-              })}
+            {(()=>{
+              const [verzendFilter, setVerzendFilter] = React.useState("alle");
+              const bevestigdeKlanten = klanten.filter(k=>orders.some(o=>o.klantId===k.id&&o.bevestigingNr&&o.status!=="geleverd"))
+                .sort((a,b)=>a.naam.localeCompare(b.naam));
+              const gefilterd = bevestigdeKlanten.filter(k=>{
+                if(verzendFilter==="verzonden") return orders.some(o=>o.klantId===k.id&&o.bevestigingNr&&o.bevestigingGemaild&&o.status!=="geleverd");
+                if(verzendFilter==="niet") return orders.some(o=>o.klantId===k.id&&o.bevestigingNr&&!o.bevestigingGemaild&&o.status!=="geleverd");
+                return true;
+              });
+              const aantalNiet = bevestigdeKlanten.filter(k=>orders.some(o=>o.klantId===k.id&&o.bevestigingNr&&!o.bevestigingGemaild&&o.status!=="geleverd")).length;
+              return (<>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                  <div style={{fontSize:10,fontWeight:700,color:subtekst,textTransform:"uppercase",letterSpacing:0.5}}>Herdruk</div>
+                  <div style={{display:"flex",gap:3}}>
+                    {[["alle","Alle"],["niet","📄 Niet"],["verzonden","✅ Wel"]].map(([v,l])=>(
+                      <button key={v} onClick={()=>setVerzendFilter(v)}
+                        style={{padding:"1px 6px",borderRadius:10,border:"none",cursor:"pointer",fontSize:9,fontWeight:600,
+                          background:verzendFilter===v?(v==="niet"?"#f59e0b":groen):"#e5e7eb",
+                          color:verzendFilter===v?"#fff":subtekst}}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {aantalNiet>0&&verzendFilter==="alle"&&(
+                  <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:4,padding:"3px 8px",fontSize:10,color:"#c2410c",marginBottom:6,fontWeight:600}}>
+                    ⚠️ {aantalNiet} klant{aantalNiet!==1?"en":""} nog niet verzonden
+                  </div>
+                )}
+                {gefilterd.map(k=>{
+                  const actief=selKlant?.id===k.id&&herdruk;
+                  const heeftOnverzonden = orders.some(o=>o.klantId===k.id&&o.bevestigingNr&&!o.bevestigingGemaild&&o.status!=="geleverd");
+                  return (
+                    <button key={k.id} onClick={()=>{setHerdruk(true);setSelKlant(k);setSelWeken(wekenVoorKlant(k.id));}}
+                      style={{width:"100%",textAlign:"left",padding:"5px 8px",marginBottom:3,
+                        border:`1px solid ${actief?"#1d4ed8":heeftOnverzonden?"#fed7aa":rand}`,borderRadius:6,cursor:"pointer",
+                        background:actief?"#eff6ff":heeftOnverzonden?"#fff7ed":wit}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <div style={{fontWeight:700,fontSize:12,color:actief?"#1d4ed8":"#222"}}>{k.naam}</div>
+                        <span style={{fontSize:9,fontWeight:700,color:heeftOnverzonden?"#c2410c":"#16a34a"}}>
+                          {heeftOnverzonden?"📄 niet verzonden":"✅ verzonden"}
+                        </span>
+                      </div>
+                      <div style={{fontSize:10,color:subtekst}}>{wekenVoorKlant(k.id).length} wk bevestigd</div>
+                    </button>
+                  );
+                })}
+              </>);
+            })()}
           </div>
         </div>
         {selKlant&&(
           <div style={{padding:8,borderTop:`1px solid ${rand}`,display:"flex",flexDirection:"column",gap:4}}>
-            <button style={{...gs.knopPrimair,background:"#1d4ed8",width:"100%",fontSize:11}} onClick={()=>{
-              setPrintMatrix({klant:selKlant,orders:orders.filter(o=>o.klantId===selKlant.id&&o.status!=="geleverd")});
-            }}>🖨️ Seizoensmatrix</button>
-            <button style={{...gs.knopPrimair,background:"#16a34a",width:"100%",fontSize:11}} onClick={()=>{
-              mailSeizoensmatrix(selKlant, orders.filter(o=>o.klantId===selKlant.id&&o.status!=="geleverd"));
-            }}>📧 Mail seizoensmatrix</button>
+            <button style={{...gs.knopPrimair,background:"#9ca3af",width:"100%",fontSize:11,cursor:"not-allowed",opacity:0.6}} disabled title="Tijdelijk uitgeschakeld — gebruik Herdruk">🖨️ Seizoensmatrix</button>
+            <button style={{...gs.knopPrimair,background:"#9ca3af",width:"100%",fontSize:11,cursor:"not-allowed",opacity:0.6}} disabled title="Tijdelijk uitgeschakeld">📧 Mail seizoensmatrix</button>
             {mailMatrixStatus&&<div style={{fontSize:10,color:mailMatrixStatus.startsWith("✅")?"#16a34a":"#f59e0b",textAlign:"center"}}>{mailMatrixStatus}</div>}
           </div>
         )}

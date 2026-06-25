@@ -20,6 +20,19 @@
     input[type=number]::-webkit-inner-spin-button { opacity: 1; }
     .sb { padding:1px 3px;border:1px solid #c8e6c9;border-radius:2px;font-size:11px;width:40px;text-align:right;background:#fafffe; }
 </style>
+<script>
+(function(){
+  var pct = Number(localStorage.getItem("ta_fontpct") || 100);
+  if(pct !== 100) {
+    var s = document.createElement("style");
+    s.id = "ta-fontsize";
+    s.innerHTML = "body, select, input, button, textarea { font-size: " + (pct/100*14) + "px !important; }";
+    document.head.appendChild(s);
+  }
+})();
+</script>
+
+
 </head>
 <body>
 <div id="root"></div>
@@ -4726,6 +4739,205 @@ function WegzetlijstPrint({ data, bedrijf, onSluit }) {
     setTimeout(()=>w.print(),400);
   }
 
+  function buildStickerData() {
+    const stickerData = [];
+    Object.values(perTray).forEach(t => {
+      const perKlant = {};
+      t.rijen.forEach(r => {
+        if(!perKlant[r.klantId]) perKlant[r.klantId] = {
+          klantcode: r.klantcode,
+          klantNaam: r.klantNaam,
+          tray: t.tray,
+          trays: 0,
+          weken: new Set()
+        };
+        perKlant[r.klantId].trays += r.aantal;
+        perKlant[r.klantId].weken.add(r.afleverWeek);
+      });
+      Object.values(perKlant).forEach(kd => {
+        const aantalStickers = Math.ceil(kd.trays / 100);
+        for(let i = 0; i < aantalStickers; i++) {
+          stickerData.push({
+            klantcode: kd.klantcode,
+            week: [...kd.weken].sort().join(", "),
+            trays: kd.trays,
+            tray: kd.tray,
+            volgnr: aantalStickers > 1 ? (i+1)+"/"+aantalStickers : ""
+          });
+        }
+      });
+    });
+    return stickerData;
+  }
+
+  // ZPL genereren voor ZT410 — 50x20mm label (landscape = 200x80 dots @203dpi)
+  function maakZPL(s) {
+    // ZT410 @ 203dpi — portrait: 20mm breed = 160 dots, 50mm hoog = 400 dots
+    var regels = [
+      "^XA",
+      "^MMT",
+      "^PW160",
+      "^LL400",
+      "^LS0",
+      "^FO10,15^A0N,35,35^FD"+s.klantcode+"^FS",
+      "^FO10,60^A0N,25,25^FDWk "+s.week+"^FS",
+      "^FO10,100^A0N,30,30^FD"+s.trays+" tr^FS",
+      "^FO10,140^A0N,22,22^FD"+s.tray+"^FS"
+    ];
+    if(s.volgnr) { regels.push("^FO10,175^A0N,20,20^FD"+s.volgnr+"^FS"); }
+    regels.push("^XZ");
+    return regels.join("\n");
+  }
+
+  async function printViaBrowserPrint(zplLabels) {
+    try {
+      const disco = await fetch("https://localhost:9101/available", {signal: AbortSignal.timeout(3000)});
+      const d = await disco.json();
+      // Browser Print geeft array terug of object met .printer array
+      var printers = Array.isArray(d) ? d : (d.printer ? (Array.isArray(d.printer) ? d.printer : [d.printer]) : []);
+      if(!printers || printers.length === 0) return {ok:false, fout:"Geen printer gevonden in Browser Print"};
+      var printer = printers[0];
+      // Stuur elk label
+      for(var i=0; i<zplLabels.length; i++) {
+        var fd = new FormData();
+        fd.append("device", JSON.stringify(printer));
+        fd.append("data", zplLabels[i]);
+        await fetch("https://localhost:9101/write", {method:"POST", body:fd, signal:AbortSignal.timeout(5000)});
+      }
+      return {ok:true, naam: printer.name||printer.uid||"printer"};
+    } catch(e) {
+      return {ok:false, fout:e.message};
+    }
+  }
+
+  async function printViaPythonServer(zplLabels) {
+    const serverUrl = localStorage.getItem("ta_server_url")||"";
+    const printerIp = localStorage.getItem("ta_printer_ip")||"";
+    if(!serverUrl || !printerIp) return {ok:false, fout:"Geen server/printer IP ingesteld"};
+    try {
+      const r = await fetch(serverUrl+"/print_zpl", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({printer_ip: printerIp, labels: zplLabels}),
+        signal: AbortSignal.timeout(10000)
+      });
+      const d = await r.json();
+      return {ok: d.ok, fout: d.fout||""};
+    } catch(e) {
+      return {ok:false, fout:e.message};
+    }
+  }
+
+  async function printViaPrinter(stickerData) {
+    const zplLabels = stickerData.map(function(s){ return maakZPL(s); });
+    const methode = localStorage.getItem("ta_print_methode")||"browserprint";
+
+    if(methode === "browserprint") {
+      return await printViaBrowserPrint(zplLabels);
+    } else {
+      return await printViaPythonServer(zplLabels);
+    }
+  }
+
+  function printStickers() {
+    const stickerData = buildStickerData();
+
+    if(stickerData.length === 0) {
+      alert("Geen stickers te printen voor deze week.");
+      return;
+    }
+
+    // Probeer via printer te printen
+    const methode = localStorage.getItem("ta_print_methode")||"browserprint";
+    const serverUrl = localStorage.getItem("ta_server_url")||"";
+    const printerIp = localStorage.getItem("ta_printer_ip")||"";
+    const kanPrinten = methode==="browserprint" || (serverUrl && printerIp);
+    if(kanPrinten) {
+      printViaPrinter(stickerData).then(function(res) {
+        if(res.ok) alert("OK: "+stickerData.length+" sticker(s) verstuurd naar printer!");
+        else alert("Printen mislukt: "+(res.fout||"onbekende fout")+". Tip: controleer de print methode in Instellingen.");
+      });
+      return;
+    }
+
+    // Geen printer ingesteld: toon print preview
+    // 50x20mm stickers staand op A4
+    // A4 = 210x297mm, sticker 50x20mm
+    // 3 kolommen: (210 - 3*50) / 4 = 15mm marge
+    // Rijen per pagina: (297 - 20) / 22 = ~12 rijen
+    const stickerHtml = stickerData.map((s,i) => `
+      <div class="sticker">
+        <div class="klantcode">${s.klantcode}</div>
+        <div class="week">Wk ${s.week}</div>
+        <div class="trays">${s.trays}</div>
+        <div class="tray">${s.tray}</div>
+        ${s.volgnr ? `<div class="volgnr">${s.volgnr}</div>` : ""}
+      </div>
+    `).join("");
+
+    const doc = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+      <style>
+        @page { size: A4 portrait; margin: 8mm; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; }
+        .grid { display: flex; flex-wrap: wrap; gap: 3mm; }
+        .sticker {
+          width: 20mm; height: 50mm;
+          border: 0.5pt solid #999;
+          border-radius: 2mm;
+          padding: 2mm 1.5mm;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          align-items: center;
+          overflow: hidden;
+          position: relative;
+          text-align: center;
+        }
+        .klantcode {
+          font-size: 9pt;
+          font-weight: 900;
+          color: #000;
+          letter-spacing: 0.5pt;
+          line-height: 1.1;
+          word-break: break-all;
+        }
+        .week {
+          font-size: 7.5pt;
+          color: #333;
+          font-weight: 700;
+          line-height: 1.1;
+        }
+        .trays {
+          font-size: 10pt;
+          font-weight: 900;
+          color: #2d6a4f;
+          line-height: 1;
+        }
+        .tray {
+          font-size: 6.5pt;
+          color: #555;
+          line-height: 1.2;
+          word-break: break-word;
+        }
+        .volgnr {
+          font-size: 6pt;
+          color: #999;
+          line-height: 1;
+        }
+        @media print { button { display: none; } }
+      </style>
+    </head><body>
+      <div style="margin-bottom:8mm;font-size:10pt;color:#555">
+        Stickers week ${wk} &nbsp;·&nbsp; ${stickerData.length} stickers
+      </div>
+      <div class="grid">${stickerHtml}</div>
+    </body></html>`;
+
+    const w = window.open("", "_blank");
+    if(w) { w.document.open(); w.document.write(doc); w.document.close(); setTimeout(()=>w.print(), 400); }
+  }
+
   const traysGesorteerd = Object.keys(perTray).sort();
 
   return (
@@ -4733,6 +4945,7 @@ function WegzetlijstPrint({ data, bedrijf, onSluit }) {
       <div style={{maxWidth:1000,margin:"0 auto",background:"#fff",borderRadius:8,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,0.3)"}}>
         <div style={{display:"flex",gap:8,padding:"10px 16px",background:"#f0f7f4",borderBottom:`1px solid ${rand}`}}>
           <button style={gs.knopPrimair} onClick={printDoc}>🖨️ Afdrukken / PDF</button>
+          <button style={{...gs.knopPrimair,background:"#7c3aed"}} onClick={printStickers}>🏷️ Stickers printen</button>
           <button style={gs.knopSecundair} onClick={onSluit}>✕ Sluiten</button>
           <span style={{fontSize:12,color:subtekst,alignSelf:"center"}}>Week {wk} · {traysGesorteerd.length} traymaat/maten</span>
         </div>
@@ -5632,7 +5845,7 @@ function HerstelBackup() {
   );
 }
 
-function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef, traykosten, setTraykosten }) {
+function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef, traykosten, setTraykosten, arbeidskosten, setArbeidskosten }) {
   const [b, setB] = useState({...bedrijf});
   const [mailUrl, setMailUrl] = useState(()=>{ try{ return localStorage.getItem('ta_mailUrl')||'https://script.google.com/macros/s/AKfycby5SF6Sx9DPmFNBO_hb1ztwmdHApE19DIinmm7rs_CEJQdpQO8HLPuEI9Y4dvIUAMOi/exec'; }catch(e){ return ''; } });
   const [fustNaam, setFustNaam] = useState("");
@@ -5696,45 +5909,96 @@ function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef, traykosten, se
           {naam:"Tray 179", zaai:false},
           {naam:"Tray 260", zaai:false},
         ];
-        const [tk, setTk] = useState(()=>traykosten||laad("ta_traykosten",{}));
-        const [opgeslagenOk, setOpgeslagenOk] = useState("");
+        const [tk, setTk] = React.useState(()=>traykosten||laad("ta_traykosten",{}));
+        const [ak, setAk] = React.useState(()=>arbeidskosten||{});
+        const [opgeslagenOk, setOpgeslagenOk] = React.useState("");
+
+        function getAk(tray, hand) {
+          return ak[tray+"_"+hand]??""
+        }
+        function setAkVal(tray, hand, val) {
+          setAk(prev=>({...prev,[tray+"_"+hand]:val===""?"":Number(val)}));
+        }
+
+        const thS = {padding:"4px 8px",background:"#e8f5ee",color:groen,fontWeight:700,fontSize:11,
+          border:"1px solid #c8e6c9",textAlign:"right",whiteSpace:"nowrap"};
+        const thL = {...thS, textAlign:"left"};
+        const thH = {...thS, background:"#fef3c7", color:"#92400e"};
+
         return (
           <div style={{...gs.sectie,marginBottom:16}}>
-            <div style={gs.sectieLabel}>🧺 Traykosten (€ per 1000 planten)</div>
+            <div style={gs.sectieLabel}>🧺 Traykosten & Arbeidskosten (€ per 1000 planten)</div>
             <div style={{fontSize:11,color:subtekst,marginBottom:10,lineHeight:1.6}}>
-              Kosten per tray type, uitgedrukt per 1000 planten. Wordt meegenomen in het margeoverzicht.<br/>
+              Kosten per tray type + arbeidskosten per handeling, uitgedrukt per 1000 planten.<br/>
               Per orderregel worden <strong>2 trays</strong> meegeteld: de zaaitray + de aflevertray.
             </div>
-            <table style={{width:"auto",borderCollapse:"collapse",marginBottom:10}}>
-              <thead><tr>
-                <th style={{...TH,textAlign:"left",minWidth:140}}>Tray</th>
-                <th style={{...TH,width:60}}>Type</th>
-                <th style={{...TH,textAlign:"right",minWidth:100}}>€ / 1000 pl.</th>
-              </tr></thead>
-              <tbody>
-                {ALLE_TRAYS.map((t,i)=>(
-                  <tr key={t.naam} style={{background:i%2===0?wit:"#f9fcfb"}}>
-                    <td style={{...TD,fontWeight:600}}>{t.naam}</td>
-                    <td style={{...TD,fontSize:11,color:subtekst}}>{t.zaai?"zaai":"aflevering"}</td>
-                    <td style={{...TD,textAlign:"right"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:4,justifyContent:"flex-end"}}>
-                        <span style={{fontSize:11,color:subtekst}}>€</span>
-                        <input style={{...gs.input,width:80,textAlign:"right",padding:"3px 6px",fontSize:12,
-                          background:(tk[t.naam]!=null&&tk[t.naam]!=="")?"#f0fff8":"#fff"}}
-                          type="number" min="0" step="0.01" placeholder="—"
-                          value={tk[t.naam]??""} onFocus={e=>e.target.select()}
-                          onChange={e=>setTk({...tk,[t.naam]:e.target.value===""?"":Number(e.target.value)})}
-                        />
-                      </div>
-                    </td>
+            <div style={{overflowX:"auto"}}>
+              <table style={{borderCollapse:"collapse",width:"auto",marginBottom:10}}>
+                <thead>
+                  <tr>
+                    <th style={{...thL,minWidth:120}}>Tray</th>
+                    <th style={{...thS,width:60}}>Type</th>
+                    <th style={{...thS,minWidth:90}}>€ / 1000 pl.</th>
+                    <th style={{...thH,minWidth:90}}>Hand. 1</th>
+                    <th style={{...thH,minWidth:90}}>Hand. 2</th>
+                    <th style={{...thH,minWidth:90}}>Hand. 3</th>
+                    <th style={{...thH,minWidth:90,background:"#fde68a",color:"#78350f"}}>Totaal/1000</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {ALLE_TRAYS.map((t,i)=>{
+                    const h1 = ak[t.naam+"_h1"]!=null&&ak[t.naam+"_h1"]!==""?Number(ak[t.naam+"_h1"]):0;
+                    const h2 = ak[t.naam+"_h2"]!=null&&ak[t.naam+"_h2"]!==""?Number(ak[t.naam+"_h2"]):0;
+                    const h3 = ak[t.naam+"_h3"]!=null&&ak[t.naam+"_h3"]!==""?Number(ak[t.naam+"_h3"]):0;
+                    const trayk = tk[t.naam]!=null&&tk[t.naam]!==""?Number(tk[t.naam]):0;
+                    const totaal = trayk + h1 + h2 + h3;
+                    return (
+                      <tr key={t.naam} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                        <td style={{padding:"3px 8px",border:"1px solid #eee",fontWeight:600,fontSize:12}}>{t.naam}</td>
+                        <td style={{padding:"3px 8px",border:"1px solid #eee",fontSize:11,color:subtekst,textAlign:"center"}}>{t.zaai?"zaai":"aflevering"}</td>
+                        <td style={{padding:"3px 8px",border:"1px solid #eee",textAlign:"right"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:3,justifyContent:"flex-end"}}>
+                            <span style={{fontSize:11,color:subtekst}}>€</span>
+                            <input style={{...gs.input,width:70,textAlign:"right",padding:"2px 4px",fontSize:12,
+                              background:(tk[t.naam]!=null&&tk[t.naam]!=="")?"#f0fff8":"#fff"}}
+                              type="number" min="0" step="0.01" placeholder="—"
+                              value={tk[t.naam]??""} onFocus={e=>e.target.select()}
+                              onChange={e=>setTk({...tk,[t.naam]:e.target.value===""?"":Number(e.target.value)})}
+                            />
+                          </div>
+                        </td>
+                        {["h1","h2","h3"].map(h=>{
+                          const v = ak[t.naam+"_"+h];
+                          return (
+                            <td key={h} style={{padding:"3px 8px",border:"1px solid #eee",textAlign:"right",background:"#fffdf0"}}>
+                              <div style={{display:"flex",alignItems:"center",gap:3,justifyContent:"flex-end"}}>
+                                <span style={{fontSize:11,color:subtekst}}>€</span>
+                                <input style={{...gs.input,width:70,textAlign:"right",padding:"2px 4px",fontSize:12,
+                                  background:(v!=null&&v!=="")?"#fef9c3":"#fff"}}
+                                  type="number" min="0" step="0.01" placeholder="—"
+                                  value={v??""} onFocus={e=>e.target.select()}
+                                  onChange={e=>setAk(prev=>({...prev,[t.naam+"_"+h]:e.target.value===""?"":Number(e.target.value)}))}
+                                />
+                              </div>
+                            </td>
+                          );
+                        })}
+                        <td style={{padding:"3px 8px",border:"1px solid #eee",textAlign:"right",
+                          fontWeight:700,color:"#78350f",background:"#fef9c3",fontSize:12}}>
+                          {totaal>0?"€ "+totaal.toFixed(2):"—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
               <button style={gs.knopPrimair} onClick={()=>{
                 bewaar("ta_traykosten", tk);
                 setTraykosten(tk);
+                bewaar("ta_arbeidskosten", ak);
+                setArbeidskosten(ak);
                 setOpgeslagenOk("✅ Opgeslagen");
                 setTimeout(()=>setOpgeslagenOk(""),2000);
               }}>💾 Traykosten opslaan</button>
@@ -5744,7 +6008,7 @@ function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef, traykosten, se
         );
       })()}
 
-      {/* Bedrijfsgegevens */}
+            {/* Bedrijfsgegevens */}
       <div style={gs.sectie}>
         <div style={gs.sectieLabel}>Bedrijfsgegevens</div>
         {veld("Bedrijfsnaam","naam")}
@@ -5827,7 +6091,7 @@ function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef, traykosten, se
                   setTimeout(()=>setTestStatus(""),2000);
                 }}>💾</button>
                 <button style={{...gs.knopSecundair}} onClick={async ()=>{
-                  setTestStatus("⏳ Testen...");
+                  setTestStatus("Testen...");
                   const url = serverUrl.replace(/\/$/, "");
                   try {
                     const r = await fetch(url+"/ping", {signal: AbortSignal.timeout(3000)});
@@ -5860,6 +6124,111 @@ function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef, traykosten, se
       </div>
 
       <div style={gs.sectie}>
+        <div style={gs.sectieLabel}>🖨️ Zebra labelprinter (ZT410)</div>
+        {(()=>{
+          const [printerIp, setPrinterIp] = React.useState(()=>localStorage.getItem("ta_printer_ip")||"");
+          const [printerStatus, setPrinterStatus] = React.useState("");
+          return (
+            <div>
+              <div style={{fontSize:11,color:subtekst,marginBottom:8,lineHeight:1.6}}>
+                IP-adres van de ZT410 op het netwerk. De Python server stuurt ZPL labels door op poort 9100.<br/>
+                Bijv. <code style={{background:"#f0f0f0",padding:"1px 4px",borderRadius:3,fontSize:11}}>192.168.1.50</code>
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6}}>
+                <input style={{...gs.input,flex:1,fontFamily:"monospace"}}
+                  type="text" placeholder="192.168.1.50"
+                  value={printerIp} onChange={e=>setPrinterIp(e.target.value)} />
+                <button style={gs.knopPrimair} onClick={()=>{
+                  localStorage.setItem("ta_printer_ip", printerIp);
+                  setPrinterStatus("Opgeslagen");
+                  setTimeout(()=>setPrinterStatus(""),2000);
+                }}>💾</button>
+                <button style={gs.knopSecundair} onClick={async ()=>{
+                  const serverUrl = localStorage.getItem("ta_server_url")||"";
+                  if(!serverUrl){ setPrinterStatus("Eerst server URL instellen"); return; }
+                  if(!printerIp){ setPrinterStatus("Eerst printer IP invullen"); return; }
+                  setPrinterStatus("Testen...");
+                  try {
+                    const r = await fetch(serverUrl+"/printer_ping?ip="+encodeURIComponent(printerIp), {signal:AbortSignal.timeout(5000)});
+                    const d = await r.json();
+                    setPrinterStatus(d.ok ? "✅ Printer bereikbaar!" : "❌ Printer niet bereikbaar");
+                  } catch(e) { setPrinterStatus("❌ "+e.message); }
+                }}>🔌 Test</button>
+              </div>
+              {printerStatus&&<div style={{fontSize:12,fontWeight:600,
+                color:printerStatus.startsWith("✅")?"#16a34a":printerStatus.startsWith("❌")?"#dc2626":"#f59e0b"}}>
+                {printerStatus}
+              </div>}
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* ── PRINT METHODE ── */}
+      {(()=>{
+        const [methode, setMethode] = React.useState(()=>localStorage.getItem("ta_print_methode")||"browserprint");
+        const [testStatus, setTestStatus] = React.useState("");
+        return (
+          <div style={{...gs.sectie,marginBottom:16}}>
+            <div style={gs.sectieLabel}>🖨️ Print methode</div>
+            <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+              {[
+                ["browserprint","🦓 Zebra Browser Print","Gratis Zebra software op deze pc"],
+                ["python","🐍 Python server","Centrale server op het netwerk"],
+              ].map(([v,l,sub])=>(
+                <div key={v} onClick={()=>{ setMethode(v); localStorage.setItem("ta_print_methode",v); }}
+                  style={{flex:1,minWidth:180,padding:"10px 14px",border:`2px solid ${methode===v?groen:rand}`,
+                    borderRadius:8,cursor:"pointer",background:methode===v?"#f0fff4":wit}}>
+                  <div style={{fontWeight:700,fontSize:13,color:methode===v?groen:tekst}}>{l}</div>
+                  <div style={{fontSize:11,color:subtekst,marginTop:2}}>{sub}</div>
+                </div>
+              ))}
+            </div>
+            {methode==="browserprint"&&(
+              <div style={{fontSize:11,color:subtekst,lineHeight:1.7,marginBottom:8,padding:"8px 10px",background:"#f0f7f4",borderRadius:6}}>
+                <strong>Installatie Zebra Browser Print:</strong><br/>
+                1. Download via <strong>zebra.com/us/en/support-downloads/browser-print.html</strong><br/>
+                2. Installeer op deze pc (geen admin nodig)<br/>
+                3. Zorg dat de ZT410 via USB of netwerk verbonden is<br/>
+                4. Klik Test om te controleren
+              </div>
+            )}
+            {methode==="python"&&(
+              <div style={{fontSize:11,color:subtekst,lineHeight:1.7,marginBottom:8,padding:"8px 10px",background:"#f0f7f4",borderRadius:6}}>
+                Vul hierboven de server URL en printer IP in.<br/>
+                Python server moet draaien op de centrale pc.
+              </div>
+            )}
+            <button style={gs.knopSecundair} onClick={async ()=>{
+              setTestStatus("Testen...");
+              if(methode==="browserprint") {
+                try {
+                  const r = await fetch("https://localhost:9101/available", {signal:AbortSignal.timeout(3000)});
+                  const d = await r.json();
+                  var prs = Array.isArray(d) ? d : (d.printer ? (Array.isArray(d.printer) ? d.printer : [d.printer]) : []);
+                  if(prs.length > 0) setTestStatus("OK - Printer gevonden: "+(prs[0].name||prs[0].uid||"ZT410"));
+                  else setTestStatus("LET OP - Browser Print draait maar geen printer gevonden");
+                } catch(e) { setTestStatus("Browser Print niet actief - installeer de software"); }
+              } else {
+                const serverUrl = localStorage.getItem("ta_server_url")||"";
+                const printerIp = localStorage.getItem("ta_printer_ip")||"";
+                if(!serverUrl||!printerIp){ setTestStatus("⚠️ Vul server URL en printer IP in"); return; }
+                try {
+                  const r = await fetch(serverUrl+"/printer_ping?ip="+encodeURIComponent(printerIp), {signal:AbortSignal.timeout(5000)});
+                  const d = await r.json();
+                  setTestStatus(d.ok?"Printer bereikbaar via server!":"Printer niet bereikbaar");
+                } catch(e) { setTestStatus("Server niet bereikbaar"); }
+              }
+            }}>🔌 Test printverbinding</button>
+            {testStatus&&<div style={{marginTop:8,fontSize:12,fontWeight:600,
+              color:testStatus.startsWith("✅")?"#16a34a":testStatus.startsWith("❌")?"#dc2626":"#f59e0b"}}>
+              {testStatus}
+            </div>}
+          </div>
+        );
+      })()}
+
+      <div style={gs.sectie}>
         <div style={gs.sectieLabel}>📧 E-mail instellingen</div>
         <div style={{fontSize:12,color:subtekst,marginBottom:8,lineHeight:1.6}}>
           Plak hier de Google Apps Script webapp-URL voor het versturen van mails met PDF bijlage.
@@ -5874,6 +6243,47 @@ function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef, traykosten, se
           alert('✅ Mail URL opgeslagen');
         }}>💾 Mail URL opslaan</button>
       </div>
+      {/* ── LETTERGROOTTE ── */}
+      {(()=>{
+        const [pct, setPct] = React.useState(()=>Number(localStorage.getItem("ta_fontpct")||100));
+        function pas(v) {
+          setPct(v);
+          // Pas direct de stijl aan
+          var el = document.getElementById("ta-fontsize");
+          if(!el){ el = document.createElement("style"); el.id="ta-fontsize"; document.head.appendChild(el); }
+          el.innerHTML = "body, select, input, button, textarea { font-size: "+(v/100*14)+"px !important; }";
+        }
+        function sla(v) {
+          localStorage.setItem("ta_fontpct", v);
+        }
+        return (
+          <div style={{marginTop:24,padding:14,background:"#f0f7f4",border:"1px solid #c8e6c9",borderRadius:8,marginBottom:16}}>
+            <div style={{fontWeight:700,color:groen,fontSize:13,marginBottom:8}}>🔡 Lettergrootte</div>
+            <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+              <input type="range" min="80" max="160" step="5"
+                value={pct}
+                onChange={e=>pas(Number(e.target.value))}
+                style={{flex:1,minWidth:160,accentColor:groen}}
+              />
+              <span style={{fontWeight:700,color:groen,minWidth:40}}>{pct}%</span>
+              <button style={{...gs.knopPrimair,fontSize:12,padding:"5px 14px"}}
+                onClick={()=>{ sla(pct); alert("✅ Lettergrootte "+pct+"% opgeslagen! Herlaad de app om het overal te zien."); }}>
+                💾 Opslaan
+              </button>
+              <button style={{...gs.knopSecundair,fontSize:12,padding:"5px 10px"}}
+                onClick={()=>{ pas(100); sla(100); }}>Reset</button>
+            </div>
+            <div style={{marginTop:10,padding:"10px 14px",background:wit,border:`1px solid ${rand}`,borderRadius:6}}>
+              <span style={{color:groen,fontWeight:700,fontSize:pct/100*14+"px"}}>Preview: </span>
+              <span style={{fontSize:pct/100*14+"px"}}>Zo ziet de tekst eruit — klant, leverweek, prijs.</span>
+            </div>
+            <div style={{fontSize:11,color:subtekst,marginTop:6}}>
+              Standaard = 100% (14px). Wijziging is direct zichtbaar, na opslaan blijft het bij herladen.
+            </div>
+          </div>
+        );
+      })()}
+
       <button style={gs.knopPrimair} onClick={()=>setBedrijf({...b})}>💾 Opslaan</button>
 
       {/* PINCODE SECTIE */}
@@ -6028,6 +6438,31 @@ function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef, traykosten, se
               <button style={{...gs.knopPrimair,background:"#1d4ed8"}} onClick={downloadScript}>
                 📥 Script nu downloaden
               </button>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* MARGE PINCODE SECTIE */}
+      <div style={{marginTop:24,padding:14,background:"#f0f7f4",border:"1px solid #c8e6c9",borderRadius:8}}>
+        <div style={{fontWeight:700,color:groen,fontSize:13,marginBottom:6}}>💹 Marge pincode</div>
+        <div style={{fontSize:11,color:subtekst,marginBottom:12,lineHeight:1.6}}>
+          Aparte pincode voor het Margeoverzicht. Standaard: <strong>1234</strong>
+        </div>
+        {(()=>{
+          const [mpin, setMpin] = React.useState(()=>localStorage.getItem("ta_margepin")||"1234");
+          const [mpinOk, setMpinOk] = React.useState("");
+          return (
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              <input style={{...gs.input,width:120,letterSpacing:4,fontSize:16,textAlign:"center"}}
+                type="password" maxLength={8} placeholder="••••" value={mpin}
+                onChange={e=>{setMpin(e.target.value);setMpinOk("");}}
+              />
+              <button style={{...gs.knopPrimair,fontSize:12}} onClick={()=>{
+                localStorage.setItem("ta_margepin", mpin);
+                setMpinOk("✅ Opgeslagen");
+              }}>💾 Opslaan</button>
+              {mpinOk&&<span style={{fontSize:12,color:groen}}>{mpinOk}</span>}
             </div>
           );
         })()}
@@ -6670,8 +7105,13 @@ function App() {
     }
   }
 
+  const [margeUnlocked, setMargeUnlocked] = React.useState(false);
+  const [margePinPopup, setMargePinPopup] = React.useState(false);
+  const [margePinInvoer, setMargePinInvoer] = React.useState("");
+  const [margePinFout, setMargePinFout] = React.useState(false);
   const [pagina,setPagina]     = useState("orders");
   const [matrixDirect, setMatrixDirect] = useState(null);
+
   useEffect(()=>{
     function handler(e){ setPagina("bevestiging"); }
     function handlerMatrix(e){ setPagina("bevestiging"); setMatrixDirect(e.detail); }
@@ -6696,6 +7136,7 @@ function App() {
   const [teeltduur,setTeeltduur]   = useState(()=>laad("ta_teeltduur", []));
   const [zaadinkoop,setZaadinkoop] = useState(()=>laad("ta_zaadinkoop", []));
   const [traykosten,setTraykosten] = useState(()=>laad("ta_traykosten", {}));
+  const [arbeidskosten,setArbeidskosten] = useState(()=>laad("ta_arbeidskosten", {uitzaaien:0,verspenen:0,inboeten:0}));
   const [leveranciers,setLeveranciers] = useState(()=>laad("ta_leveranciers", []));
   const [bedrijf,setBedrijf]   = useState(()=>laad("ta_bedrijf", {
     naam:"Uw Bedrijfsnaam BV", adres:"Straatnaam 1", postcode:"1234 AB", plaats:"Plaats",
@@ -6829,6 +7270,7 @@ function App() {
   useEffect(()=>{if(!geladen)return;bewaar("ta_zaadinkoop",zaadinkoop);if(fbOk)fbSaveStam("zaadinkoop",zaadinkoop);},[zaadinkoop]);
   useEffect(()=>{if(!geladen)return;bewaar("ta_bedrijf",bedrijf);if(fbOk)fbSaveStam("bedrijf",bedrijf);},[bedrijf]);
   useEffect(()=>{if(!geladen)return;bewaar("ta_traykosten",traykosten);if(fbOk)fbSaveStam("traykosten",traykosten);},[traykosten]);
+  useEffect(()=>{if(!geladen)return;bewaar("ta_arbeidskosten",arbeidskosten);},[arbeidskosten]);
   useEffect(()=>{if(!geladen)return;bewaar("ta_leveranciers",leveranciers);if(fbOk)fbSaveStam("leveranciers",leveranciers);},[leveranciers]);
 
   const [geladen,setGeladen]   = useState(false);
@@ -7026,10 +7468,13 @@ function App() {
           </button>
         ))}
         {/* Marge overzicht */}
-        <button onClick={()=>{setPagina("margeoverzicht");setBonnenDropdown(false);setStamdataDropdown(false);}}
+        <button onClick={()=>{
+            if(margeUnlocked){setPagina("margeoverzicht");setBonnenDropdown(false);setStamdataDropdown(false);}
+            else{setMargePinPopup(true);setMargePinInvoer("");setMargePinFout(false);}
+          }}
           style={{background:pagina==="margeoverzicht"?"rgba(255,255,255,0.2)":"transparent",color:wit,border:"none",
             borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:14,fontWeight:pagina==="margeoverzicht"?700:400}}>
-          💹 Marge
+          💹 Marge {margeUnlocked?"🔓":"🔒"}
         </button>
 
         {/* Bonnen dropdown */}
@@ -7131,9 +7576,55 @@ function App() {
               🔒 Uitloggen
             </button>
           )}
+          {margeUnlocked&&(
+            <button onClick={()=>setMargeUnlocked(false)}
+              style={{background:"rgba(255,255,255,0.15)",color:"#fde68a",border:"1px solid rgba(255,220,100,0.4)",
+                borderRadius:5,padding:"3px 9px",cursor:"pointer",fontSize:11}}>
+              💹 Marge vergrendelen
+            </button>
+          )}
           
         </div>
       </div>
+      {/* ── MARGE PINCODE POPUP ── */}
+      {margePinPopup&&(
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",
+          display:"flex",alignItems:"center",justifyContent:"center",zIndex:999}}>
+          <div style={{background:"#fff",borderRadius:12,padding:36,minWidth:300,textAlign:"center",
+            boxShadow:"0 8px 32px rgba(0,0,0,0.2)"}}>
+            <div style={{fontSize:32,marginBottom:8}}>💹</div>
+            <div style={{fontSize:15,fontWeight:700,color:groen,marginBottom:4}}>Margeoverzicht</div>
+            <div style={{fontSize:12,color:subtekst,marginBottom:16}}>Voer de marge-pincode in</div>
+            <input
+              autoFocus
+              type="password" maxLength={8}
+              style={{width:"100%",padding:"10px 14px",borderRadius:8,
+                border:`2px solid ${margePinFout?"#dc2626":"#c8e6c9"}`,
+                fontSize:20,textAlign:"center",letterSpacing:6,outline:"none",boxSizing:"border-box",marginBottom:8}}
+              value={margePinInvoer}
+              onChange={e=>{setMargePinInvoer(e.target.value);setMargePinFout(false);}}
+              onKeyDown={e=>{
+                if(e.key==="Enter") {
+                  const mpin = localStorage.getItem("ta_margepin")||"1234";
+                  if(margePinInvoer===mpin){setMargeUnlocked(true);setMargePinPopup(false);setPagina("margeoverzicht");}
+                  else{setMargePinFout(true);setMargePinInvoer("");}
+                }
+              }}
+              placeholder="••••"
+            />
+            {margePinFout&&<div style={{color:"#dc2626",fontSize:12,marginBottom:8}}>Pincode onjuist</div>}
+            <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:8}}>
+              <button style={{...gs.knopPrimair,flex:1}} onClick={()=>{
+                const mpin = localStorage.getItem("ta_margepin")||"1234";
+                if(margePinInvoer===mpin){setMargeUnlocked(true);setMargePinPopup(false);setPagina("margeoverzicht");}
+                else{setMargePinFout(true);setMargePinInvoer("");}
+              }}>Inloggen</button>
+              <button style={{...gs.knopSecundair,flex:1}} onClick={()=>setMargePinPopup(false)}>Annuleren</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {pagina==="orders"       && <Orders      klanten={klanten} gewassen={gewassen} prijzen={prijzen} orders={orders} setOrders={setOrders} verpDef={verpDef} bedrijf={bedrijf} />}
       {pagina==="klanten"         && <Klantenbeheer klanten={klanten} setKlanten={setKlanten} gewassen={gewassen} verpDef={verpDef} />}
       {pagina==="voorkeurenmatrix" && <VoorkeurenMatrix klanten={klanten} setKlanten={setKlanten} gewassen={gewassen} verpDef={verpDef} />}
@@ -7148,7 +7639,7 @@ function App() {
       {pagina==="overzichten"  && <div style={{padding:16,overflowY:"auto",height:"calc(100vh - 50px)"}}><MatrixFilterPaneel klanten={klanten} gewassen={gewassen} orders={orders} verpDef={verpDef} weken={weekOpties()} /></div>}
       {pagina==="mailing" && <MailingPagina klanten={klanten} orders={orders} />}
       {pagina==="offertes" && <Offertes klanten={klanten} gewassen={gewassen} prijzen={prijzen} verpDef={verpDef} bedrijf={bedrijf} />}
-      {pagina==="margeoverzicht" && <MargeOverzicht klanten={klanten} gewassen={gewassen} prijzen={prijzen} verpDef={verpDef} kiemkracht={kiemkracht} traykosten={traykosten} setTraykosten={setTraykosten} />}
+      {pagina==="margeoverzicht" && <MargeOverzicht klanten={klanten} gewassen={gewassen} prijzen={prijzen} verpDef={verpDef} kiemkracht={kiemkracht} traykosten={traykosten} setTraykosten={setTraykosten} arbeidskosten={arbeidskosten} setArbeidskosten={setArbeidskosten} />}
       {pagina==="omzetoverzicht" && <OmzetOverzicht klanten={klanten} gewassen={gewassen} orders={orders} verpDef={verpDef} />}
       {pagina==="factuuroverzicht" && <FactuurOverzicht klanten={klanten} orders={orders} verpDef={verpDef} bedrijf={bedrijf} setOrders={setOrders} />}
       {pagina==="afleveroverzicht" && <AfleverOverzicht klanten={klanten} orders={orders} />}
@@ -7162,7 +7653,7 @@ function App() {
       {pagina==="inkoop"       && <Inkoopprijzen gewassen={gewassen} setGewassen={setGewassen} />}
       {pagina==="leveranciers" && <LeveranciersBeheer leveranciers={leveranciers} setLeveranciers={setLeveranciers} gewassen={gewassen} setGewassen={setGewassen} />}
       {pagina==="verpakkingen" && <Verpakkingen verpDef={verpDef} setVerpDef={setVerpDef} />}
-      {pagina==="instellingen"  && <Instellingen bedrijf={bedrijf} setBedrijf={setBedrijf} gewassen={gewassen} setGewassen={setGewassen} orders={orders} setOrders={setOrders} prijzen={prijzen} setPrijzen={setPrijzen} kiemkracht={kiemkracht} setKiemkracht={setKiemkracht} teeltduur={teeltduur} setTeeltduur={setTeeltduur} verpDef={verpDef} setVerpDef={setVerpDef} traykosten={traykosten} setTraykosten={setTraykosten} />}
+      {pagina==="instellingen"  && <Instellingen bedrijf={bedrijf} setBedrijf={setBedrijf} gewassen={gewassen} setGewassen={setGewassen} orders={orders} setOrders={setOrders} prijzen={prijzen} setPrijzen={setPrijzen} kiemkracht={kiemkracht} setKiemkracht={setKiemkracht} teeltduur={teeltduur} setTeeltduur={setTeeltduur} verpDef={verpDef} setVerpDef={setVerpDef} traykosten={traykosten} setTraykosten={setTraykosten} arbeidskosten={arbeidskosten} setArbeidskosten={setArbeidskosten} />}
     </div>
   );
 }
@@ -8672,7 +9163,7 @@ function OmzetOverzicht({ klanten, gewassen, orders, verpDef }) {
 // ════════════════════════════════════════════════════════
 // MARGE OVERZICHT — inkoop vs verkoop per soort per klant
 // ════════════════════════════════════════════════════════
-function MargeOverzicht({ klanten, gewassen, prijzen, verpDef, kiemkracht, traykosten, setTraykosten }) {
+function MargeOverzicht({ klanten, gewassen, prijzen, verpDef, kiemkracht, traykosten, setTraykosten, arbeidskosten, setArbeidskosten }) {
   // Traykosten ophalen
   const tk = traykosten||{};
 
@@ -8720,10 +9211,17 @@ function MargeOverzicht({ klanten, gewassen, prijzen, verpDef, kiemkracht, trayk
       const traykostenPer1000 = getTraykosten1000(selFust);
       const traykostenPerPlant = traykostenPer1000 / 1000;
       // Totale kostprijs per plant
+      const getArbeid1000 = (fust) => {
+        const ak2 = arbeidskosten||{};
+        return Number(ak2[fust+"_h1"]||0) + Number(ak2[fust+"_h2"]||0) + Number(ak2[fust+"_h3"]||0);
+      };
+      const arbeid1000 = getArbeid1000(selFust);
+      const arbeidPerPlant = arbeid1000 / 1000;
       const heeftZaad = inkoopZaadPerPlant !== null;
       const heeftTray = traykostenPer1000 > 0;
-      const inkoopPrijs = (heeftZaad || heeftTray)
-        ? (inkoopZaadPerPlant||0) + traykostenPerPlant
+      const heeftArbeid = arbeid1000 > 0;
+      const inkoopPrijs = (heeftZaad || heeftTray || heeftArbeid)
+        ? (inkoopZaadPerPlant||0) + traykostenPerPlant + arbeidPerPlant
         : null;
       // Verzamel verkoop per klant
       const verkopen = {};
@@ -8743,7 +9241,7 @@ function MargeOverzicht({ klanten, gewassen, prijzen, verpDef, kiemkracht, trayk
         ? Math.max(...Object.values(verkopen).map(vp=>(vp-inkoopPrijs)*1000))
         : null;
 
-      rijen.push({gewas:gw.naam, soort:s, inkoop:inkoopPrijs||null, inkoopZaad:inkoopZaadPerPlant||null, inkoopPer1000:inkoopPer1000||null, traykostenPer1000, kiemPct, verkopen, maxMarge, minMarge, maxVerschil});
+      rijen.push({gewas:gw.naam, soort:s, inkoop:inkoopPrijs||null, inkoopZaad:inkoopZaadPerPlant||null, inkoopPer1000:inkoopPer1000||null, traykostenPer1000, arbeid1000, kiemPct, verkopen, maxMarge, minMarge, maxVerschil});
     });
   });
 
@@ -8883,6 +9381,9 @@ function MargeOverzicht({ klanten, gewassen, prijzen, verpDef, kiemkracht, trayk
                     </td>
                     <td style={{...TD3,color:"#b45309",background:"#fffbeb"}}>
                       {r.traykostenPer1000>0?"€"+(r.traykostenPer1000/1000).toFixed(4):"—"}
+                    </td>
+                    <td style={{...TD3,color:"#b45309",background:"#fffbeb"}}>
+                      {r.arbeid1000>0?"€"+(r.arbeid1000/1000).toFixed(4):"—"}
                     </td>
                     <td style={{...TD3,color:"#92400e",fontWeight:700,background:"#fef9c3"}}>
                       {r.inkoop?"€"+Number(r.inkoop).toFixed(4):"—"}

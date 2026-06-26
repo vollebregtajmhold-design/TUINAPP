@@ -5909,7 +5909,7 @@ function ZaadVoorraad({ zaadinkoop, orders, gewassen, kiemkracht, teeltduur, bed
   const bestellingen = alleSleutels.map(key=>({key,adv:bestelAdvies(key)})).filter(x=>x.adv);
 
   return (
-    <div style={{flex:1,overflowY:"auto",padding:16}}>
+    <div style={{flex:1,overflowY:"auto",padding:16,position:"relative"}}>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,flexWrap:"wrap"}}>
         {bestellingen.length===0
           ? <span style={{...gs.badge,background:"#e5e7eb",color:subtekst}}>Niets te bestellen</span>
@@ -5920,10 +5920,10 @@ function ZaadVoorraad({ zaadinkoop, orders, gewassen, kiemkracht, teeltduur, bed
         <span style={{fontSize:11,color:subtekst}}>Seizoen t/m week {eindeSeizoensWk} · 3-weken horizon</span>
       </div>
 
-      <table style={{width:"100%"}}>
+      <table style={{width:"100%",borderCollapse:"collapse"}}>
         <thead>
           <tr>{["Gewas","Soort","Jaarprognose","Geleverd","Rest seizoen","Verbruikt","Huidige voorraad","Verbruik 3w","Saldo 3w","Besteladvies"].map((h,i)=>(
-            <th key={h} style={{...TH,textAlign:i>=2?"right":"left"}}>{h}</th>
+            <th key={h} style={{...TH,textAlign:i>=2?"right":"left",position:"sticky",top:0,zIndex:2}}>{h}</th>
           ))}</tr>
         </thead>
         <tbody>
@@ -6085,6 +6085,96 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
   const [delId, setDelId] = useState(null);
   const [filtGewas, setFiltGewas] = useState("");
   const [sorteer, setSorteer] = useState("datum");
+  const [sortDir, setSortDir] = useState(-1);
+  const [importZaad, setImportZaad] = useState(false);
+  const [importZaadVoorbeeld, setImportZaadVoorbeeld] = useState(null);
+  const [importZaadBezig, setImportZaadBezig] = useState(false);
+
+  // Haal nummer uit soortnaam (laatste getal in de string)
+  function vindNummerUitNaam(naam) {
+    const m = naam.match(/(\d{3,6})\s*$/);
+    return m ? m[1] : null;
+  }
+
+  // Zoek soort in gewassen op basis van intern nummer
+  function vindSoortOpNummer(nummer) {
+    for(const gw of gewassen) {
+      for(const soort of gw.soorten) {
+        const internNr = (gw.internNrs||{})[soort]||"";
+        if(internNr && String(internNr) === String(nummer)) {
+          return { gewas: gw.naam, soort };
+        }
+      }
+    }
+    return null;
+  }
+
+  // Weeknr+dag naar datum (zaterdag van die week)
+  function weekDagNaarDatum(wkDag) {
+    const m = wkDag.trim().match(/^(\d{2})(\d{2})\s*(MA|DI|WO|DO|VR|ZA|ZO)/i);
+    if(!m) return new Date().toISOString().split("T")[0];
+    const jaar = 2000 + parseInt(m[1]);
+    const wk = parseInt(m[2]);
+    const dagMap = {MA:1,DI:2,WO:3,DO:4,VR:5,ZA:6,ZO:0};
+    const dag = dagMap[m[3].toUpperCase()]??0;
+    // Maandag van die ISO week
+    const jan4 = new Date(jaar, 0, 4);
+    const ma = new Date(jan4);
+    ma.setDate(jan4.getDate() - (jan4.getDay()||7) + 1 + (wk-1)*7);
+    const d = new Date(ma);
+    d.setDate(ma.getDate() + dag - 1);
+    return d.toISOString().split("T")[0];
+  }
+
+  function verwerkZaadTekst(tekst) {
+    setImportZaadBezig(true);
+    const regels = tekst.trim().split("\n").map(r=>r.split("\t"));
+    const resultaat = [];
+    const onbekend = [];
+
+    regels.forEach((cols, i) => {
+      if(cols.length < 4) return;
+      const [datumRaw, teelt, kleur, aantalRaw] = cols;
+      const datum = weekDagNaarDatum(datumRaw);
+      const aantal = parseInt(aantalRaw)||0;
+      if(!teelt||!kleur||!aantal) return;
+
+      const nummer = vindNummerUitNaam(kleur);
+      const match = nummer ? vindSoortOpNummer(nummer) : null;
+
+      if(match) {
+        resultaat.push({
+          datum, gewas:match.gewas, soort:match.soort,
+          aantal, aantalK:Math.round(aantal/1000),
+          leverancier:"", code:nummer||"", kiemkracht:90, prijs:null,
+          _origineel: kleur.trim(),
+        });
+      } else {
+        onbekend.push({
+          rij: i+1, datumRaw: datumRaw.trim(),
+          teelt: teelt.trim(), kleur: kleur.trim(),
+          nummer: nummer||"?", aantal,
+        });
+      }
+    });
+
+    setImportZaadVoorbeeld({ resultaat, onbekend });
+    setImportZaadBezig(false);
+  }
+
+  function bevestigZaadImport() {
+    if(!importZaadVoorbeeld) return;
+    const nieuw = importZaadVoorbeeld.resultaat.map(r=>({
+      id: Date.now()+Math.random(),
+      datum: r.datum, gewas: r.gewas, soort: r.soort,
+      leverancier: r.leverancier, code: r.code,
+      kiemkracht: r.kiemkracht, aantal: r.aantal, prijs: r.prijs,
+    }));
+    setZaadinkoop(prev=>[...prev, ...nieuw]);
+    setImportZaad(false);
+    setImportZaadVoorbeeld(null);
+    alert(`✅ ${nieuw.length} zaadinkoop regels geïmporteerd.`);
+  }
 
   const soorten = gewassen.find(g=>g.naam===data.gewas)?.soorten||[];
 
@@ -6108,7 +6198,11 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
     const aantalWerkelijk = Number(aantalDisplay) * 1000;
     if(!data.datum||!data.gewas||!aantalWerkelijk) return;
     const gw = gewassen.find(g=>g.naam===data.gewas);
-    const r = {...data, aantal:aantalWerkelijk, prijs:data.prijs?Number(data.prijs):null, leverancier:gw?.leverancier||""};
+    const levId = gw?.leverancierId;
+    const levNaam = levId ? ((leveranciers||[]).find(l=>l.id===levId)?.naam||"") : "";
+    const lev = data.leverancier || levNaam;
+    const inkoopPrijs = data.prijs || gw?.inkoopPrijzen?.[data.soort] || null;
+    const r = {...data, aantal:aantalWerkelijk, prijs:inkoopPrijs?Number(inkoopPrijs):null, leverancier:lev};
     if(r.id) setZaadinkoop(zaadinkoop.map(x=>x.id===r.id?r:x));
     else setZaadinkoop(prev=>[...prev, {...r, id:Date.now()}]);
     setLaatsteGewas(data.gewas);
@@ -6118,21 +6212,40 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
 
   function bewerken(z) { setData({...z}); setAantalDisplay(String(z.aantal/1000)); }
   function verwijder(id) { setZaadinkoop(zaadinkoop.filter(x=>x.id!==id)); setDelId(null); }
+  function klikSort(kol) {
+    if(sorteer===kol) setSortDir(prev=>prev*-1);
+    else { setSorteer(kol); setSortDir(kol==="datum"?-1:1); }
+  }
 
-  const gefilterd = zaadinkoop
+  const gefilterd = [...zaadinkoop]
     .filter(z=>!filtGewas||z.gewas===filtGewas)
-    .sort((a,b)=>sorteer==="datum"?b.datum.localeCompare(a.datum):a.gewas.localeCompare(b.gewas)||a.soort.localeCompare(b.soort));
+    .sort((a,b)=>{
+      // Primaire sortering op gekozen kolom
+      let v = 0;
+      if(sorteer==="datum")       v = a.datum.localeCompare(b.datum) * sortDir;
+      else if(sorteer==="gewas")  v = (a.gewas||"").localeCompare(b.gewas||"","nl") * sortDir;
+      else if(sorteer==="soort")  v = (a.soort||"").localeCompare(b.soort||"","nl") * sortDir;
+      if(v!==0) return v;
+      // Secundair altijd: datum desc, gewas asc, soort asc
+      if(a.datum!==b.datum) return b.datum.localeCompare(a.datum);
+      if(a.gewas!==b.gewas) return (a.gewas||"").localeCompare(b.gewas||"","nl");
+      return (a.soort||"").localeCompare(b.soort||"","nl");
+    });
 
   const totaalAantal = gefilterd.reduce((s,z)=>s+z.aantal,0);
-  const totaalBedrag = gefilterd.reduce((s,z)=>s+(z.prijs&&z.aantal?(Number(z.prijs)*z.aantal/1000):0),0);
+  const totaalBedrag = gefilterd.reduce((s,z)=>{
+    const gw2 = gewassen.find(g=>g.naam===z.gewas);
+    const prijs = z.prijs || gw2?.inkoopPrijzen?.[z.soort] || 0;
+    return s+(prijs&&z.aantal?(Number(prijs)*z.aantal/1000):0);
+  },0);
 
-  const sTH = {...TH, padding:"4px 6px", fontSize:11};
+  const sTH = {...TH, padding:"4px 6px", fontSize:11, position:"sticky", top:0, zIndex:2};
   const sTD = {padding:"4px 6px", fontSize:12, borderBottom:`1px solid ${rand}`, verticalAlign:"middle"};
 
   return (
     <div style={{display:"flex", flexDirection:"column", height:"calc(100vh - 50px)"}}>
       {/* Tabs */}
-      <div style={{display:"flex",gap:3,padding:"8px 12px",background:"rgba(0,0,0,0.06)",margin:"0"}}>
+      <div style={{display:"flex",gap:3,padding:"8px 12px",background:"rgba(0,0,0,0.06)",margin:"0",alignItems:"center"}}>
         {[["inkoop","📋 Inkoop"],["voorraad","📦 Zaadvoorraad"]].map(([v,l])=>(
           <button key={v} onClick={()=>setTab(v)}
             style={{padding:"5px 16px",border:"none",borderRadius:6,cursor:"pointer",fontSize:14,
@@ -6140,6 +6253,10 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
             {l}
           </button>
         ))}
+        <button onClick={()=>{setImportZaad(true);setImportZaadVoorbeeld(null);}}
+          style={{marginLeft:"auto",padding:"5px 14px",background:"#e8f5ee",border:`1px solid ${groen}`,borderRadius:6,cursor:"pointer",fontSize:13,fontWeight:600,color:groen}}>
+          📥 Importeer zaaddata
+        </button>
       </div>
 
       {tab==="voorraad" && (
@@ -6162,11 +6279,11 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
               {gewassen.map(g=><option key={g.naam}>{g.naam}</option>)}
             </select>
             <div style={{display:"flex",gap:4,marginBottom:8}}>
-              {[["datum","Datum"],["gewas","Gewas"]].map(([v,l])=>(
-                <button key={v} onClick={()=>setSorteer(v)}
+              {[["datum","Datum"],["gewas","Gewas"],["soort","Soort"]].map(([v,l])=>(
+                <button key={v} onClick={()=>klikSort(v)}
                   style={{flex:1,padding:"3px 6px",border:"none",borderRadius:4,cursor:"pointer",fontSize:11,
                     background:sorteer===v?groen:"#f0f0f0",color:sorteer===v?wit:subtekst}}>
-                  {l}
+                  {l}{sorteer===v?(sortDir===1?" ↑":" ↓"):""}
                 </button>
               ))}
             </div>
@@ -6228,11 +6345,20 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
               <div>Nog geen zaadinkoop ingevoerd</div>
             </div>
           ) : (
-            <table style={{width:"auto",minWidth:"100%"}}>
+            <table style={{width:"auto",minWidth:"100%",borderCollapse:"collapse"}}>
               <thead>
-                <tr>{["Datum","Gewas","Soort","Aantal","Kiem%","Code","Leverancier","Bedrag",""].map((h,i)=>(
-                  <th key={h||i} style={{...sTH,textAlign:i>=3&&i<=4||i===7?"right":"left"}}>{h}</th>
-                ))}</tr>
+                <tr>
+                  {[["Datum","datum"],["Gewas","gewas"],["Soort","soort"],["Aantal",null],["Kiem%",null],["Code",null],["Leverancier",null],["Bedrag",null],["",null]].map(([h,kol],i)=>{
+                    const actief = kol&&sorteer===kol;
+                    return <th key={h||i}
+                      onClick={kol?()=>klikSort(kol):undefined}
+                      style={{...sTH,textAlign:i>=3&&i<=4||i===7?"right":"left",
+                        cursor:kol?"pointer":"default",userSelect:"none",
+                        background:actief?"#b8ddc8":sTH.background}}>
+                      {h}{kol&&<span style={{marginLeft:3,color:actief?"#0f3320":"#6aaa88"}}>{actief?(sortDir===1?"↑":"↓"):"⇅"}</span>}
+                    </th>;
+                  })}
+                </tr>
               </thead>
               <tbody>
                 {gefilterd.map((z,i)=>(
@@ -6243,8 +6369,18 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
                     <td style={{...sTD,textAlign:"right",fontWeight:700,color:groen}}>{(z.aantal).toLocaleString("nl-NL")}</td>
                     <td style={{...sTD,textAlign:"right"}}>{z.kiemkracht!=null?`${z.kiemkracht}%`:"—"}</td>
                     <td style={sTD}>{z.code||"—"}</td>
-                    <td style={sTD}>{z.leverancier||"—"}</td>
-                    <td style={{...sTD,textAlign:"right",color:groen,fontWeight:600}}>{z.prijs&&z.aantal?"€ "+(z.prijs*z.aantal/1000).toFixed(2):"—"}</td>
+                    <td style={sTD}>{(()=>{
+                      if(z.leverancier) return z.leverancier;
+                      const gw2 = gewassen.find(g=>g.naam===z.gewas);
+                      const levId = gw2?.leverancierId;
+                      if(levId) return (leveranciers||[]).find(l=>l.id===levId)?.naam||"—";
+                      return "—";
+                    })()}</td>
+                    <td style={{...sTD,textAlign:"right",color:groen,fontWeight:600}}>{(()=>{
+                      const gw2 = gewassen.find(g=>g.naam===z.gewas);
+                      const prijs = z.prijs || gw2?.inkoopPrijzen?.[z.soort] || null;
+                      return prijs&&z.aantal?"€ "+(Number(prijs)*z.aantal/1000).toFixed(2):"—";
+                    })()}</td>
                     <td style={{...sTD,textAlign:"right",whiteSpace:"nowrap"}}>
                       <button style={gs.knopKlein} onClick={()=>bewerken(z)}>✏️</button>
                       <button style={{...gs.knopVerwijder,marginLeft:4}} onClick={()=>setDelId(z.id)}>🗑️</button>
@@ -6266,6 +6402,91 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
       </div>
       )}
       {delId&&<BevestigModal tekst="Inkoop verwijderen?" onJa={()=>verwijder(delId)} onNee={()=>setDelId(null)} />}
+
+      {/* ── ZAAD IMPORT MODAL ── */}
+      {importZaad&&(
+        <div style={gs.overlay}>
+          <div style={{...gs.modal,width:740,maxHeight:"90vh",overflowY:"auto"}}>
+            <div style={{fontWeight:700,fontSize:15,marginBottom:10,color:groen}}>📥 Zaaddata importeren</div>
+            {!importZaadVoorbeeld&&(
+              <div>
+                <div style={{fontSize:12,color:subtekst,marginBottom:8}}>
+                  Plak hieronder de gekopieerde data (tab-gescheiden: Datum, Teelt, Kleur, Aantal). Matching op nummer achteraan de soortnaam.
+                </div>
+                <textarea
+                  style={{width:"100%",height:200,fontFamily:"monospace",fontSize:11,padding:8,border:`1px solid ${rand}`,borderRadius:6,resize:"vertical",boxSizing:"border-box"}}
+                  placeholder={"2626 DI\tMacro\tKester MAC633\t60000\n2626 DI\tCarino\tBergwint CAR131\t60000"}
+                  onChange={e=>{if(e.target.value.includes("\t")) verwerkZaadTekst(e.target.value);}}
+                />
+                {importZaadBezig&&<div style={{textAlign:"center",padding:20,color:subtekst}}>⏳ Verwerken...</div>}
+                <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:10}}>
+                  <button style={gs.knopSecundair} onClick={()=>setImportZaad(false)}>Annuleren</button>
+                </div>
+              </div>
+            )}
+            {importZaadVoorbeeld&&(()=>{
+              const {resultaat,onbekend}=importZaadVoorbeeld;
+              return (
+                <div>
+                  <div style={{display:"flex",gap:8,marginBottom:12}}>
+                    <div style={{background:"#dcfce7",border:"1px solid #c8e6c9",borderRadius:8,padding:"8px 14px"}}>
+                      <div style={{fontSize:11,color:groen}}>Herkend</div>
+                      <div style={{fontSize:22,fontWeight:700,color:groen}}>{resultaat.length}</div>
+                    </div>
+                    {onbekend.length>0&&(
+                      <div style={{background:"#fee2e2",border:"1px solid #fca5a5",borderRadius:8,padding:"8px 14px"}}>
+                        <div style={{fontSize:11,color:"#dc2626"}}>Niet herkend</div>
+                        <div style={{fontSize:22,fontWeight:700,color:"#dc2626"}}>{onbekend.length}</div>
+                      </div>
+                    )}
+                  </div>
+                  {onbekend.length>0&&(
+                    <div style={{background:"#fff8f8",border:"1px solid #fca5a5",borderRadius:6,padding:10,marginBottom:12}}>
+                      <div style={{fontWeight:700,fontSize:12,color:"#dc2626",marginBottom:6}}>⚠️ Niet herkend — nummer niet gevonden in stamdata</div>
+                      <div style={{maxHeight:120,overflowY:"auto"}}>
+                        {onbekend.map((r,i)=>(
+                          <div key={i} style={{fontSize:11,color:"#dc2626",marginBottom:2}}>
+                            • rij {r.rij}: {r.teelt} — {r.kleur} (nr: {r.nummer}, {Math.round(r.aantal/1000)}k)
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div style={{maxHeight:320,overflowY:"auto",border:`1px solid ${rand}`,borderRadius:6,marginBottom:12}}>
+                    <table style={{borderCollapse:"collapse",width:"100%",fontSize:11}}>
+                      <thead>
+                        <tr style={{background:"#e8f5ee",position:"sticky",top:0}}>
+                          {["Datum","Gewas","Soort","Origineel (Excel)","Aantal"].map(h=>(
+                            <th key={h} style={{padding:"4px 8px",textAlign:"left",color:groen,fontWeight:700,borderBottom:`1px solid ${rand}`}}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {resultaat.map((r,i)=>(
+                          <tr key={i} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                            <td style={{padding:"3px 8px"}}>{r.datum}</td>
+                            <td style={{padding:"3px 8px",fontWeight:600,color:groen}}>{r.gewas}</td>
+                            <td style={{padding:"3px 8px"}}>{r.soort}</td>
+                            <td style={{padding:"3px 8px",color:subtekst,fontSize:10}}>{r._origineel}</td>
+                            <td style={{padding:"3px 8px",textAlign:"right",fontWeight:600}}>{Math.round(r.aantal/1000).toLocaleString("nl-NL")}k</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                    <button style={gs.knopSecundair} onClick={()=>setImportZaadVoorbeeld(null)}>← Terug</button>
+                    <button style={gs.knopSecundair} onClick={()=>{setImportZaad(false);setImportZaadVoorbeeld(null);}}>Annuleren</button>
+                    {resultaat.length>0&&(
+                      <button style={gs.knopPrimair} onClick={bevestigZaadImport}>✅ Importeer {resultaat.length} regels</button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -7534,7 +7755,6 @@ function App() {
     {id:"zaadinkoop",  label:"🌰 Zaadinkoop"},
     {id:"planning",    label:"📅 Werklijsten"},
     {id:"transport",   label:"🚛 Transport"},
-    {id:"overzichten", label:"📊 Overzichten"},
     {id:"offertes",    label:"📝 Offertes"},
   ];
   const margeMenu = {id:"margeoverzicht", label:"💹 Marge"};
@@ -7561,6 +7781,7 @@ function App() {
   const bonnenOpen = bonnen.some(m=>m.id===pagina);
   const [stamdataDropdown, setStamdataDropdown] = useState(false);
   const [bonnenDropdown, setBonnenDropdown] = useState(false);
+  const [statDropdown, setStatDropdown] = useState(false);
 
   // Login scherm
   if(!ingelogd) return (
@@ -7592,18 +7813,46 @@ function App() {
       <div style={{background:groen,display:"flex",alignItems:"center",height:50,padding:"0 14px",gap:3}}>
         <div style={{color:wit,fontWeight:700,fontSize:15,marginRight:16}}>🌱 TuinApp</div>
         {menu.map(m=>(
-          <button key={m.id} onClick={()=>{setPagina(m.id);setBonnenDropdown(false);setStamdataDropdown(false);}}
+          <button key={m.id} onClick={()=>{setPagina(m.id);setBonnenDropdown(false);setStamdataDropdown(false);setStatDropdown(false);}}
             style={{background:pagina===m.id?"rgba(255,255,255,0.2)":"transparent",color:wit,border:"none",
               borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:14,fontWeight:pagina===m.id?700:400}}>
             {m.label}
           </button>
         ))}
-        {/* Marge overzicht */}
-        <button onClick={()=>{setPagina("margeoverzicht");setBonnenDropdown(false);setStamdataDropdown(false);}}
-          style={{background:pagina==="margeoverzicht"?"rgba(255,255,255,0.2)":"transparent",color:wit,border:"none",
-            borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:14,fontWeight:pagina==="margeoverzicht"?700:400}}>
-          💹 Marge
-        </button>
+        {/* Statistieken dropdown */}
+        {(()=>{
+          const statOpen = ["overzichten","margeoverzicht","dashboard"].includes(pagina);
+          return (
+            <div style={{position:"relative"}}>
+              <button onClick={()=>{setStatDropdown(!statDropdown);setBonnenDropdown(false);setStamdataDropdown(false);}}
+                style={{background:statOpen||statDropdown?"rgba(255,255,255,0.2)":"transparent",color:wit,border:"none",
+                  borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:14,
+                  fontWeight:statOpen?700:400,display:"flex",alignItems:"center",gap:4}}>
+                📊 Statistieken {statDropdown?"▲":"▼"}
+              </button>
+              {statDropdown&&(
+                <div style={{position:"absolute",top:42,left:0,background:wit,border:`1px solid ${rand}`,
+                  borderRadius:8,padding:4,zIndex:300,minWidth:200,boxShadow:"0 4px 16px rgba(0,0,0,0.15)"}}>
+                  {[
+                    {id:"dashboard",  label:"🏠 Dashboard"},
+                    {id:"overzichten",label:"📊 Overzichten"},
+                    {id:"margeoverzicht",label:"💹 Marge"},
+                  ].map(m=>(
+                    <button key={m.id} onClick={()=>{setPagina(m.id);setStatDropdown(false);}}
+                      style={{display:"block",width:"100%",textAlign:"left",padding:"7px 12px",
+                        border:"none",borderRadius:6,cursor:"pointer",fontSize:13,
+                        background:pagina===m.id?lichtGroen:"transparent",
+                        color:pagina===m.id?groen:tekst,fontWeight:pagina===m.id?700:400}}
+                      onMouseEnter={e=>{if(pagina!==m.id)e.currentTarget.style.background="#f0f7f4"}}
+                      onMouseLeave={e=>{if(pagina!==m.id)e.currentTarget.style.background="transparent"}}>
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Bonnen dropdown */}
         <div style={{position:"relative"}}>
@@ -7718,6 +7967,10 @@ function App() {
       />}
       {pagina==="teelten"      && <Teelten     gewassen={gewassen} setGewassen={setGewassen} orders={orders} setOrders={setOrders} />}
       {pagina==="prijzen"      && <Prijzen     klanten={klanten} gewassen={gewassen} prijzen={prijzen} setPrijzen={setPrijzen} verpDef={verpDef} />}
+      {pagina==="dashboard"     && <div style={{padding:24,overflowY:"auto",height:"calc(100vh - 50px)"}}>
+        <div style={{fontSize:20,fontWeight:700,color:groen,marginBottom:8}}>🏠 Dashboard</div>
+        <div style={{color:subtekst,fontSize:13}}>Dashboard wordt later ingevuld.</div>
+      </div>}
       {pagina==="overzichten"  && <div style={{padding:16,overflowY:"auto",height:"calc(100vh - 50px)"}}><MatrixFilterPaneel klanten={klanten} gewassen={gewassen} orders={orders} verpDef={verpDef} weken={weekOpties()} /></div>}
       {pagina==="mailing" && <MailingPagina klanten={klanten} orders={orders} />}
       {pagina==="offertes" && <Offertes klanten={klanten} gewassen={gewassen} prijzen={prijzen} verpDef={verpDef} bedrijf={bedrijf} />}

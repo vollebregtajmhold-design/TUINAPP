@@ -317,7 +317,7 @@ function VoorkeurenMatrix({ klanten, setKlanten, gewassen, verpDef }) {
         </thead>
         <tbody>
           {klanten.sort((a,b)=>a.naam.localeCompare(b.naam)).map((k,i)=>(
-            <tr key={k.id} style={{background:i%2===0?wit:"#f9fcfb"}}>
+            <tr key={k.id} style={{background:i%2===0?wit:"#f0f7f4"}}>
               <td style={{...td,fontWeight:700,fontSize:12,paddingLeft:8}}>{k.naam}</td>
               {kolommen.map(kol=>(
                 <td key={kol.id} style={{...td,minWidth:kol.breedte}}>
@@ -549,13 +549,41 @@ function SoortItem({ soort, onDelete, onRename }) {
 // ════════════════════════════════════════════════════════
 // MODULE 2 — TEELTEN & SOORTEN
 // ════════════════════════════════════════════════════════
-function Teelten({ gewassen, setGewassen, orders, setOrders }) {
+function Teelten({ gewassen, setGewassen, orders, setOrders, zaadinkoop, setZaadinkoop }) {
   const [ges,setGes]=useState(null); const [zoek,setZoek]=useState("");
   const [gwF,setGwF]=useState(false); const [gwN,setGwN]=useState(""); const [bew,setBew]=useState(null);
   const [si,setSi]=useState(""); const [delGw,setDelGw]=useState(null); const [delS,setDelS]=useState(null);
   const gefilterd=gewassen.filter(g=>g.naam.toLowerCase().includes(zoek.toLowerCase()));
 
   function gwSave(){if(!gwN.trim())return;if(bew){const b=gewassen.map(g=>g.id===bew.id?{...g,naam:gwN}:g);setGewassen(b);setGes(b.find(g=>g.id===bew.id));}else setGewassen([...gewassen,{id:Date.now(),naam:gwN,soorten:[]}]);setGwN("");setGwF(false);setBew(null);}
+
+  // Synchroniseer orders + zaadinkoop op basis van intern nummer
+  function syncNamen() {
+    let aantalOrders = 0, aantalZaad = 0;
+    // Bouw lookup: internNr → {gewas, soort}
+    const lookup = {};
+    gewassen.forEach(g=>{
+      g.soorten.forEach(s=>{
+        const nr = (g.internNrs||{})[s];
+        if(nr) lookup[String(nr)] = {gewas:g.naam, soort:s};
+      });
+    });
+    // Update orders
+    setOrders(prev=>prev.map(o=>({...o,regels:o.regels.map(r=>{
+      const nr = String(r.code||"").trim() || String((r.soort||"").match(/(\d{3,6})\s*$/)?.[1]||"");
+      const match = nr && lookup[nr];
+      if(match && (r.gewas!==match.gewas||r.soort!==match.soort)) { aantalOrders++; return {...r,gewas:match.gewas,soort:match.soort}; }
+      return r;
+    })})));
+    // Update zaadinkoop
+    setZaadinkoop(prev=>prev.map(z=>{
+      const nr = String(z.code||"").trim() || String((z.soort||"").match(/(\d{3,6})\s*$/)?.[1]||"");
+      const match = nr && lookup[nr];
+      if(match && (z.gewas!==match.gewas||z.soort!==match.soort)) { aantalZaad++; return {...z,gewas:match.gewas,soort:match.soort}; }
+      return z;
+    }));
+    setTimeout(()=>alert(`✅ Gesynchroniseerd\n- ${aantalOrders} orderregels bijgewerkt\n- ${aantalZaad} zaadinkoop regels bijgewerkt`),100);
+  }
   function gwDel(id){setGewassen(gewassen.filter(g=>g.id!==id));if(ges?.id===id)setGes(null);setDelGw(null);}
   function sAdd(id){if(!si.trim())return;const b=gewassen.map(g=>g.id===id?{...g,soorten:[...g.soorten,si.trim()]}:g);setGewassen(b);setGes(b.find(g=>g.id===id));setSi("");}
   function sDel(id,s){const b=gewassen.map(g=>g.id===id?{...g,soorten:g.soorten.filter(x=>x!==s)}:g);setGewassen(b);setGes(b.find(g=>g.id===id));setDelS(null);}
@@ -565,6 +593,10 @@ function Teelten({ gewassen, setGewassen, orders, setOrders }) {
       <div style={{width:260,borderRight:`1px solid ${rand}`,background:wit,overflowY:"auto",padding:10}}>
         <input style={{...gs.input,marginBottom:8}} placeholder="🔍 Zoek gewas..." value={zoek} onChange={e=>setZoek(e.target.value)} />
         <button style={{...gs.knopPrimair,width:"100%",marginBottom:8}} onClick={()=>{setBew(null);setGwN("");setGwF(true);}}>+ Nieuw gewas</button>
+        <button style={{...gs.knopSecundair,width:"100%",marginBottom:8,fontSize:11}} onClick={syncNamen}
+          title="Synchroniseer orders en zaadinkoop op basis van intern nummer">
+          🔄 Namen synchroniseren
+        </button>
         <div style={{fontSize:10,color:subtekst,marginBottom:6}}>{gefilterd.length} gewas(sen)</div>
         {gefilterd.map(g=>(
           <div key={g.id} onClick={()=>setGes(g)}
@@ -615,6 +647,10 @@ function Teelten({ gewassen, setGewassen, orders, setOrders }) {
                         setOrders(prev=>prev.map(o=>({...o,regels:o.regels.map(r=>
                           r.gewas===ges.naam&&r.soort===s ? {...r,soort:nieuw.trim()} : r
                         )})));
+                        // Bijwerken in zaadinkoop
+                        setZaadinkoop(prev=>prev.map(z=>
+                          z.gewas===ges.naam&&z.soort===s ? {...z,soort:nieuw.trim()} : z
+                        ));
                       }}
                     />
                     <input
@@ -897,7 +933,7 @@ function Prijzen({ klanten, gewassen, prijzen, setPrijzen, verpDef }) {
                             })}
                           </tr>
                           {gw.soorten.map((s,si)=>(
-                            <tr key={s} style={{background:si%2===0?wit:"#f9fcfb"}}>
+                            <tr key={s} style={{background:si%2===0?wit:"#f0f7f4"}}>
                               <td style={{...mTD,paddingLeft:8,whiteSpace:"nowrap"}}>{s}</td>
                               {verpDef.map(v=>{
                                 const prijs=getPrijs(selKlant,gw.naam,s,v.naam);
@@ -1544,7 +1580,7 @@ function MatrixFilterPaneel({ klanten, gewassen, orders, verpDef, weken }) {
             <tbody>
               {gesorteerdeKlanten.map(([kid,kdata])=>(
                 kdata.rijen.map((r,ri)=>(
-                  <tr key={kid+r.gewas+r.soort+r.verpakking} style={{background:ri%2===0?wit:"#f9fcfb"}}>
+                  <tr key={kid+r.gewas+r.soort+r.verpakking} style={{background:ri%2===0?wit:"#f0f7f4"}}>
                     {ri===0
                       ? <td style={{...mTDL,fontWeight:700,verticalAlign:"top",paddingTop:8,borderRight:`2px solid ${lichtGroen}`}} rowSpan={kdata.rijen.length}>
                           {kdata.naam}
@@ -2040,7 +2076,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
     const regels = gesorteerdeRegels.map((r,i)=>{
       const vd = verpDef.find(v=>v.naam===r.verpakking);
       const pl = r.vastPlanten??((vd?.aantal||0)*r.aantal);
-      const bg = i%2===0?"#fff":"#f9fcfb";
+      const bg = i%2===0?wit:"#f0f7f4";
       const gw = gewassen.find(g=>g.naam===r.gewas);
       const internNr = (gw?.internNrs||{})[r.soort]||"";
       const soortTekst = r.soort+(internNr?" <span style='color:#888;font-size:11px'>"+internNr+"</span>":"");
@@ -2159,7 +2195,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
     const regels = gesorteerdeRegels.map((r,i)=>{
       const vd = verpDef.find(v=>v.naam===r.verpakking);
       const pl = r.vastPlanten??((vd?.aantal||0)*r.aantal);
-      const bg = i%2===0?"#fff":"#f9fcfb";
+      const bg = i%2===0?wit:"#f0f7f4";
       return "<tr style=\'background:"+bg+";\'>"
         +"<td style=\'padding:6px 10px;border:2px solid #b0cfc0\'>"+r.gewas+"</td>"
         +"<td style=\'padding:6px 10px;border:2px solid #b0cfc0\'>"+r.soort+"</td>"
@@ -2242,7 +2278,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
       const pl = r.vastPlanten??((vd?.aantal||0)*r.aantal);
       const prijs = r.prijs?Number(r.prijs):0;
       const bedrag = pl*prijs;
-      const bg = i%2===0?"#fff":"#f9fcfb";
+      const bg = i%2===0?wit:"#f0f7f4";
       return {r, pl, prijs, bedrag, bg};
     });
 
@@ -2332,7 +2368,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
       const pl = r.vastPlanten??((vd?.aantal||0)*r.aantal);
       const prijs = r.prijs?Number(r.prijs):0;
       const bedrag = pl*prijs;
-      const bg = i%2===0?"#fff":"#f9fcfb";
+      const bg = i%2===0?wit:"#f0f7f4";
       return {r, pl, prijs, bedrag, bg};
     });
 
@@ -2425,7 +2461,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
       const pl = r.vastPlanten??((vd?.aantal||0)*r.aantal);
       const prijs = r.prijs?Number(r.prijs):0;
       const bedrag = pl*prijs;
-      const bg = i%2===0?"#fff":"#f9fcfb";
+      const bg = i%2===0?wit:"#f0f7f4";
       return "<tr style='background:"+bg+"'>"
         +"<td style='padding:6px 8px;border:2px solid #b0cfc0'>"+r.soort+"</td>"
         +"<td style='padding:6px 8px;border:2px solid #b0cfc0'>"+r.verpakking+"</td>"
@@ -2804,7 +2840,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                   </thead>
                   <tbody>
                     {rijen.map((r,i)=>(
-                      <tr key={i} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                      <tr key={i} style={{background:i%2===0?wit:"#f0f7f4"}}>
                         <td style={cDL}><strong>{r.gewas}</strong></td>
                         <td style={cDL}>{r.soort}</td>
                         <td style={cDL}><span style={gs.badge}>{r.verpakking}</span></td>
@@ -3451,7 +3487,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                           const nieuweNaamKey = "__naam__"+key;
                           const nieuweNaam = importKoppelingen[nieuweNaamKey] ?? kleurExcel;
                           return (
-                            <tr key={key} style={{background:i%2===0?wit:"#f9fcfb",verticalAlign:"top"}}>
+                            <tr key={key} style={{background:i%2===0?wit:"#f0f7f4",verticalAlign:"top"}}>
                               <td style={{padding:"6px 10px"}}>
                                 {/* Gewas aanpasbaar */}
                                 <select
@@ -3579,7 +3615,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                             const kl = klanten.find(k=>k.id===o.klantId);
                             const pl = o.regels.reduce((s,r)=>s+(r.vastPlanten||0),0);
                             return (
-                              <tr key={i} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                              <tr key={i} style={{background:i%2===0?wit:"#f0f7f4"}}>
                                 <td style={{padding:"3px 8px",fontWeight:600,color:groen}}>{kl?.naam||"?"}</td>
                                 <td style={{padding:"3px 8px"}}>{weekLabel(o.leverdatum)}</td>
                                 <td style={{padding:"3px 8px"}}>{o.regels.length}</td>
@@ -3789,7 +3825,7 @@ function Teeltduur({ gewassen, verpDef, teeltduur, setTeeltduur }) {
                   </thead>
                   <tbody>
                     {gw.soorten.map((s, si) => (
-                      <tr key={s} style={{background:si%2===0?wit:"#f9fcfb"}}>
+                      <tr key={s} style={{background:si%2===0?wit:"#f0f7f4"}}>
                         <td style={{...mTD}}>{s}</td>
                         {verpDef.map(v => (
                           <td key={v.naam} style={{...mTD, textAlign:"right", padding:"2px 4px"}}>
@@ -4087,7 +4123,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                             const werkInput=opgeslagen===''?'':String(opgeslagen);
                             const verschil=werk-gepland;
                             return (
-                              <tr key={i} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                              <tr key={i} style={{background:i%2===0?wit:"#f0f7f4"}}>
                                 <td style={{...sTD,padding:"2px 6px"}}><strong>{r.gewas}</strong></td>
                                 <td style={{...sTD,padding:"2px 6px"}}>{r.soort}</td>
                                 <td style={{...sTD,padding:"2px 6px"}}><span style={gs.badge}>{r.fust}</span></td>
@@ -4210,7 +4246,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                         {relevRijen.map((k,i)=>{
                           const r=rijSet[k];
                           return (
-                            <tr key={k} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                            <tr key={k} style={{background:i%2===0?wit:"#f0f7f4"}}>
                               <td style={mTD2}><strong>{r.gewas}</strong></td>
                               <td style={mTD2}>{r.soort}</td>
                               <td style={mTD2}><span style={gs.badge}>{r.fust}</span></td>
@@ -4372,7 +4408,7 @@ function Kiemkracht({ gewassen, kiemkracht, setKiemkracht }) {
                     {gw.soorten.map((s,si)=>{
                       const k=getKiem(gw.naam,s);
                       return (
-                        <tr key={s} style={{background:si%2===0?wit:"#f9fcfb"}}>
+                        <tr key={s} style={{background:si%2===0?wit:"#f0f7f4"}}>
                           <td style={{...mTD}}>{s}</td>
                           <td style={{...mTD,textAlign:"right"}}>
                             <KiemInput waarde={k} style={iS} onSave={v=>setKiem(gw.naam,s,v)} />
@@ -4456,7 +4492,7 @@ function Bevestiging({ klanten, gewassen, orders, setOrders, verpDef, bedrijf, m
       const totaalCellen = wkGroep.map(wk=>"<td style='"+th+"font-weight:700'>"+
         (totaalPerWeek(wk)>0?totaalPerWeek(wk).toLocaleString("nl-NL"):"")+"</td>").join("");
       const dataRijen2 = actieveRijen.map((r,i)=>{
-        const bg = i%2===0?"#fff":"#f9fcfb";
+        const bg = i%2===0?wit:"#f0f7f4";
         const cellen = wkGroep.map(wk=>"<td style='"+td+(r.weken[wk]?"font-weight:600;color:#222":"color:#ccc")+"'>"+
           (r.weken[wk]?r.weken[wk].toLocaleString("nl-NL"):"")+"</td>").join("");
         return "<tr style='background:"+bg+"'>"
@@ -4531,7 +4567,7 @@ function Bevestiging({ klanten, gewassen, orders, setOrders, verpDef, bedrijf, m
         +"</div>"
 
         // Standaard tekst
-        +"<div style=\'font-size:8.5px;color:#444;line-height:1.6;margin-bottom:12px;padding:8px 10px;background:#f9fcfb;border-left:3px solid #2d6a4f;\'>"
+        +"<div style=\'font-size:8.5px;color:#444;line-height:1.6;margin-bottom:12px;padding:8px 10px;background:#f0f7f4;border-left:3px solid #2d6a4f;\'>"
           +"Geachte "+(bd2.naam||klant.naam||"heer/mevrouw")+",<br/><br/>"
           +"Hierbij bevestigen wij uw order voor het seizoen "+new Date().getFullYear()+" zoals hieronder gespecificeerd. "
           +"Wij verzoeken u dit overzicht te controleren en eventuele afwijkingen binnen 5 werkdagen aan ons door te geven.<br/><br/>"
@@ -4833,7 +4869,7 @@ function Bevestiging({ klanten, gewassen, orders, setOrders, verpDef, bedrijf, m
                 {matrixArr.map((r,i)=>{
                   const tot=matrixWeken.reduce((s,wk)=>s+(r.weken[wk]||0),0);
                   return (
-                    <tr key={i} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                    <tr key={i} style={{background:i%2===0?wit:"#f0f7f4"}}>
                       <td style={{...td,textAlign:"left"}}>{r.soort}</td>
                       <td style={{...td,textAlign:"left"}}><span style={{background:lichtGroen,color:groen,borderRadius:8,padding:"1px 5px",fontSize:9,fontWeight:600}}>{r.fust}</span></td>
                       <td style={{...td,color:groen}}>{r.prijs?"€"+Number(r.prijs).toFixed(3):"—"}</td>
@@ -4951,7 +4987,7 @@ function BevestigingPrint({ order, klant, bedrijf, verpDef, onSluit }) {
                 const vast = plantenVast(r);
                 const bedrag = Number(r.prijs||0)*r.aantal;
                 return (
-                  <tr key={r.id} style={{background:i%2===0?"#fff":"#f9fcfb"}}>
+                  <tr key={r.id} style={{background:i%2===0?wit:"#f0f7f4"}}>
                     <td style={{padding:"5px 8px",border:"1px solid #e0e0e0"}}>{r.gewas}</td>
                     <td style={{padding:"5px 8px",border:"1px solid #e0e0e0"}}>{r.soort}</td>
                     <td style={{padding:"5px 8px",border:"1px solid #e0e0e0"}}>{r.verpakking}</td>
@@ -5118,7 +5154,7 @@ function MultiBevestigingPrint({ data, bedrijf, verpDef, onSluit }) {
                   </thead>
                   <tbody>
                     {rijen.map((r,i)=>(
-                      <tr key={i} style={{background:i%2===0?"#fff":"#f9fcfb"}}>
+                      <tr key={i} style={{background:i%2===0?wit:"#f0f7f4"}}>
                         <td style={{...cDL,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.gewas}</td>
                         <td style={{...cDL,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.soort}</td>
                         <td style={{...cDL,whiteSpace:"nowrap"}}>{r.verpakking}</td>
@@ -5322,7 +5358,7 @@ function WegzetlijstMatrixPrint({ data, bedrijf, onSluit }) {
                       const rij = matrix[key];
                       const rijTot = klantLijst.reduce((s,k)=>s+(rij.klanten[k.id]||0),0);
                       return (
-                        <tr key={key} style={{background:i%2===0?"#fff":"#f5faf7"}}>
+                        <tr key={key} style={{background:i%2===0?wit:"#f0f7f4"}}>
                           <td className="gewas-cel">{rij.gewas}</td>
                           <td className="soort-cel">{rij.soort}</td>
                           <td className="nr">{rij.internNr}</td>
@@ -5489,7 +5525,7 @@ function ControlelijstPrint({ data, bedrijf, onSluit }) {
                     {Object.values(perKlant).map((kd,ki)=>(
                       <React.Fragment key={ki}>
                         {kd.rijen.map((r,ri)=>(
-                          <tr key={ri} style={{background:ri%2===0?"#fff":"#f9fcfb"}}>
+                          <tr key={ri} style={{background:ri%2===0?wit:"#f0f7f4"}}>
                             <td style={{fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:100}}>{r.klantNaam}</td>
                             <td style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:80}}>{r.gewas}</td>
                             <td>{r.soort}</td>
@@ -5611,7 +5647,7 @@ function WerklijstPrint({ data, bedrijf, onSluit }) {
                 </thead>
                 <tbody>
                   {fustrijen.map((r,i)=>(
-                    <tr key={i} style={{background:i%2===0?"#fff":"#f9fcfb"}}>
+                    <tr key={i} style={{background:i%2===0?wit:"#f0f7f4"}}>
                       <td style={{padding:"7px 8px",border:"1px solid #ddd"}}><strong>{r.gewas}</strong></td>
                       <td style={{padding:"7px 4px 7px 8px",border:"1px solid #ddd"}}>{r.soort}</td>
                       <td style={{padding:"7px 2px 7px 0",border:"1px solid #ddd",color:"#333",fontWeight:700,width:30,whiteSpace:"nowrap"}}>{r.internNr||""}</td>
@@ -5676,7 +5712,7 @@ function maakBestellingDoc(bestellingen, alleSleutels, verbVerbruikt2, verbSzn2,
       if(z1>0) zakjes.push(`${z1}x 1k`);
     }
     const zakjesTxt = zakjes.join(" + ");
-    const bg = i%2===0?"#fff":"#f9fcfb";
+    const bg = i%2===0?wit:"#f0f7f4";
     return "<tr style='background:"+bg+"'>"
       +"<td style='"+td+"font-weight:600'>"+gewas+"</td>"
       +"<td style='"+td+"'>"+soort+"</td>"
@@ -5693,7 +5729,7 @@ function maakBestellingDoc(bestellingen, alleSleutels, verbVerbruikt2, verbSzn2,
     const huidigBestel = bestellingen.find(b=>b.key===key);
     const bestelAantal = huidigBestel ? Math.ceil(huidigBestel.adv.tekort3w/1000)*1000 : 0;
     const restant = jaarProg - verbruikt - bestelAantal;
-    const bg = i%2===0?"#fff":"#f9fcfb";
+    const bg = i%2===0?wit:"#f0f7f4";
     const restKleur = restant<0?";color:#dc2626;font-weight:700":restant===0?";color:#888":"";
     return "<tr style='background:"+bg+"'>"
       +"<td style='"+td+"font-weight:600'>"+gewas+"</td>"
@@ -5938,7 +5974,7 @@ function ZaadVoorraad({ zaadinkoop, orders, gewassen, kiemkracht, teeltduur, bed
             const k7 = k5 - k6;
             const adv = bestelAdvies(key);
             return (
-              <tr key={key} style={{background:adv?"#fff5f5":i%2===0?wit:"#f9fcfb"}}>
+              <tr key={key} style={{background:adv?"#fff5f5":i%2===0?wit:"#f0f7f4"}}>
                 <td style={TD}><strong>{gewas}</strong></td>
                 <td style={TD}>{soort}</td>
                 <td style={{...TD,textAlign:"right",color:subtekst}}>{k1>0?k1.toLocaleString("nl-NL"):"—"}</td>
@@ -6144,10 +6180,10 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
 
       if(match) {
         resultaat.push({
-          datum, gewas:match.gewas, soort:match.soort,
+          datum, gewas:match.gewas, soort:match.soort, // app-naam
           aantal, aantalK:Math.round(aantal/1000),
           leverancier:"", code:nummer||"", kiemkracht:90, prijs:null,
-          _origineel: kleur.trim(),
+          _origineel: kleur.trim(), // originele Excel-naam ter info
         });
       } else {
         onbekend.push({
@@ -6362,7 +6398,7 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
               </thead>
               <tbody>
                 {gefilterd.map((z,i)=>(
-                  <tr key={z.id} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                  <tr key={z.id} style={{background:i%2===0?wit:"#f0f7f4"}}>
                     <td style={sTD}>{z.datum}</td>
                     <td style={sTD}><strong>{z.gewas}</strong></td>
                     <td style={sTD}>{z.soort}</td>
@@ -6463,7 +6499,7 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
                       </thead>
                       <tbody>
                         {resultaat.map((r,i)=>(
-                          <tr key={i} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                          <tr key={i} style={{background:i%2===0?wit:"#f0f7f4"}}>
                             <td style={{padding:"3px 8px"}}>{r.datum}</td>
                             <td style={{padding:"3px 8px",fontWeight:600,color:groen}}>{r.gewas}</td>
                             <td style={{padding:"3px 8px"}}>{r.soort}</td>
@@ -6490,6 +6526,403 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
     </div>
   );
 }
+
+function Dashboard({ gewassen, zaadinkoop, orders, prijzen, verpDef, teeltduur, kiemkracht, leveranciers, klanten }) {
+  const [selGewas, setSelGewas] = useState("");
+  const [selSoort, setSelSoort] = useState("");
+  const [openBlok, setOpenBlok] = useState({inkoop:false,zaai:false,inboet:false,lever:false});
+  const toggle = k => setOpenBlok(prev=>({...prev,[k]:!prev[k]}));
+
+  const gewasSoorten = selGewas ? (gewassen.find(g=>g.naam===selGewas)?.soorten||[]) : [];
+  const toonData = selGewas && selSoort;
+  const gw = (gewassen||[]).find(g=>g.naam===selGewas);
+  const levId = gw?.leverancierId;
+  const leverancier = levId ? (leveranciers||[]).find(l=>l.id===levId)?.naam||"" : "";
+  const internNr = (gw?.internNrs||{})[selSoort]||"";
+  const kiemSetting = (kiemkracht||[]).find(k=>k.gewas?.toLowerCase()===selGewas?.toLowerCase()&&k.soort?.toLowerCase()===selSoort?.toLowerCase());
+  const teeltSetting = (teeltduur||[]).find(t=>t.gewas?.toLowerCase()===selGewas?.toLowerCase()&&t.soort?.toLowerCase()===selSoort?.toLowerCase());
+
+  function haalNummer(naam) { const m=(naam||"").match(/(\d{3,6})\s*$/); return m?m[1]:null; }
+  const selInternNr = internNr||haalNummer(selSoort);
+
+  // Inkoop
+  const inkoopRegels = (zaadinkoop||[])
+    .filter(z=>z.gewas===selGewas&&(z.soort===selSoort||(selInternNr&&(haalNummer(z.soort)===selInternNr||z.code===selInternNr))))
+    .sort((a,b)=>a.datum.localeCompare(b.datum));
+  const totZaad = inkoopRegels.reduce((s,z)=>s+(z.aantal||0),0);
+  const totInkoopBedrag = inkoopRegels.reduce((s,z)=>{
+    const pr=z.prijs||gw?.inkoopPrijzen?.[selSoort]||0;
+    return s+Number(pr)*(z.aantal||0)/1000;
+  },0);
+
+  // Zaai en inboet
+  const zaaiMomenten=[]; const inboetMomenten=[];
+  (orders||[]).forEach(o=>{
+    (o.regels||[]).forEach(r=>{
+      if(r.gewas!==selGewas||r.soort!==selSoort) return;
+      const vd=(verpDef||[]).find(v=>v.naam===r.verpakking);
+      const pl=r.vastPlanten??((vd?.aantal||0)*r.aantal);
+      const kl=(klanten||[]).find(k=>k.id===o.klantId)?.naam||"?";
+      const kiem=(kiemkracht||[]).find(k=>k.gewas?.toLowerCase()===selGewas?.toLowerCase()&&k.soort?.toLowerCase()===selSoort?.toLowerCase());
+      const kiemPct=kiem?kiem.waarde/100:0.9;
+      // Zoek teeltduur specifiek voor dit fust, anders algemeen
+      const td=(teeltduur||[]).find(t=>
+        t.gewas?.toLowerCase()===selGewas?.toLowerCase()&&
+        t.soort?.toLowerCase()===selSoort?.toLowerCase()&&
+        t.fust?.toLowerCase()===r.verpakking?.toLowerCase()
+      ) || teeltSetting;
+      const zaaiWk=td?.uitzaai;
+      const inboetWk=td?.inboet;
+      if(zaaiWk!=null){
+        const d=new Date(o.leverdatum); d.setDate(d.getDate()-zaaiWk*7);
+        const ds=d.toISOString().split("T")[0];
+        const wk=String(getJaar(ds)).slice(-2)+String(getWeekNr(ds)).padStart(2,"0");
+        // Bereken zaden zelfde methode als zaadvoorraad: zaaiTrays × aantalPerTray
+        const fustL=(r.verpakking||"").toLowerCase();
+        const is65=fustL.includes("65")||fustL.includes("66");
+        const zaaiTrays=is65?Math.ceil(Math.ceil(r.aantal/kiemPct)/4):(kiemPct>0?Math.ceil(r.aantal/kiemPct):r.aantal);
+        const aantalPerTray=fustL.includes("179")||fustL.includes("180")?180:264;
+        const zaadBerekend=zaaiTrays*aantalPerTray;
+        zaaiMomenten.push({week:wk,datum:ds,klant:kl,fust:r.verpakking,zaaiWk,zaden:zaadBerekend,planten:pl,leverweek:weekLabel(o.leverdatum)});
+      }
+      if(inboetWk!=null){
+        const d=new Date(o.leverdatum); d.setDate(d.getDate()-inboetWk*7);
+        const ds=d.toISOString().split("T")[0];
+        const wk=String(getJaar(ds)).slice(-2)+String(getWeekNr(ds)).padStart(2,"0");
+        inboetMomenten.push({week:wk,datum:ds,klant:kl,fust:r.verpakking,inboetWk,planten:pl,leverweek:weekLabel(o.leverdatum)});
+      }
+    });
+  });
+  const zaaiPerWeek={};
+  zaaiMomenten.sort((a,b)=>a.datum.localeCompare(b.datum)).forEach(z=>{
+    if(!zaaiPerWeek[z.week]) zaaiPerWeek[z.week]={week:z.week,zaden:0,regels:[]};
+    zaaiPerWeek[z.week].zaden+=z.zaden; zaaiPerWeek[z.week].regels.push(z);
+  });
+  const inboetPerWeek={};
+  inboetMomenten.sort((a,b)=>a.datum.localeCompare(b.datum)).forEach(z=>{
+    if(!inboetPerWeek[z.week]) inboetPerWeek[z.week]={week:z.week,planten:0,regels:[]};
+    inboetPerWeek[z.week].planten+=z.planten; inboetPerWeek[z.week].regels.push(z);
+  });
+  const totZaaiZaden=zaaiMomenten.reduce((s,z)=>s+z.zaden,0);
+  const totInboetPlanten=inboetMomenten.reduce((s,z)=>s+z.planten,0);
+
+  // Orders per klant
+  const perKlant={};
+  (orders||[]).forEach(o=>{
+    (o.regels||[]).forEach(r=>{
+      if(r.gewas!==selGewas||r.soort!==selSoort) return;
+      const kl=(klanten||[]).find(k=>k.id===o.klantId);
+      const naam=kl?.naam||"?";
+      const vd=(verpDef||[]).find(v=>v.naam===r.verpakking);
+      const pl=r.vastPlanten??((vd?.aantal||0)*r.aantal);
+      const prijs=r.prijs?Number(r.prijs):null;
+      const bedrag=prijs&&pl?prijs*pl:0;
+      if(!perKlant[naam]) perKlant[naam]={naam,planten:0,bedrag:0,geleverd:0,geleverdBedrag:0,regels:[]};
+      perKlant[naam].planten+=pl; perKlant[naam].bedrag+=bedrag;
+      if(o.status==="geleverd"){perKlant[naam].geleverd+=pl;perKlant[naam].geleverdBedrag+=bedrag;}
+      perKlant[naam].regels.push({week:weekLabel(o.leverdatum),leverdatum:o.leverdatum,verpakking:r.verpakking,trays:r.aantal,planten:pl,prijs,bedrag,status:o.status});
+    });
+  });
+  const klantLijst=Object.values(perKlant).sort((a,b)=>a.naam.localeCompare(b.naam,"nl"));
+  klantLijst.forEach(k=>k.regels.sort((a,b)=>a.leverdatum.localeCompare(b.leverdatum)));
+  const totPlanten=klantLijst.reduce((s,k)=>s+k.planten,0);
+  const totBedrag=klantLijst.reduce((s,k)=>s+k.bedrag,0);
+  const totGeleverd=klantLijst.reduce((s,k)=>s+k.geleverd,0);
+  const totGeleverdBedrag=klantLijst.reduce((s,k)=>s+k.geleverdBedrag,0);
+
+  // Nog te... berekeningen
+  const nogTeZaaien = Math.max(0, totZaad - totZaaiZaden);
+  const nogTeInboeten = Math.max(0, totZaaiZaden - totInboetPlanten);
+  const nogTeLeveren = Math.max(0, totPlanten - totGeleverd);
+  const nogTeLeverenBedrag = Math.max(0, totBedrag - totGeleverdBedrag);
+
+  const fmt=n=>n>0?n.toLocaleString("nl-NL"):"—";
+  const eur=n=>n>0?"€ "+n.toFixed(0):"—";
+  const eurp=n=>n?"€ "+Number(n).toFixed(3):"—";
+
+  // Groen palet
+  const G = {
+    donker:  "#1a4731",
+    midden:  "#2d6a4f",
+    licht:   "#52a87a",
+    bg1:     "#e8f5ee", // lichtst
+    bg2:     "#d0eadd",
+    bg3:     "#b8ddc8",
+    rand:    "#a8cfc0",
+    wit:     "#fff",
+  };
+
+  const blokStijl = (open) => ({
+    border:`1px solid ${G.rand}`,
+    borderRadius:8,
+    overflow:"hidden",
+    marginBottom:0,
+  });
+  const blokHeader = (open) => ({
+    display:"flex", justifyContent:"space-between", alignItems:"center",
+    padding:"8px 12px", background:open?G.bg2:G.bg1,
+    cursor:"pointer", userSelect:"none",
+    borderBottom: open?`1px solid ${G.rand}`:"none",
+  });
+  const TH3 = {...TH, fontSize:11, padding:"4px 10px", background:G.bg2, color:G.donker};
+  const TD3 = {padding:"4px 10px", fontSize:11, borderBottom:`1px solid ${G.bg1}`};
+  const TDr = {...TD3, textAlign:"right"};
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 50px)"}}>
+
+      {/* Selectiebalk */}
+      <div style={{padding:"8px 16px",background:G.bg1,borderBottom:`1px solid ${G.rand}`,display:"flex",gap:10,alignItems:"flex-end",flexShrink:0,flexWrap:"wrap"}}>
+        <strong style={{color:G.donker,fontSize:14,marginBottom:4}}>🌱 Dashboard</strong>
+        <div style={{display:"flex",flexDirection:"column",gap:1}}>
+          <label style={{fontSize:10,color:G.midden}}>Gewas</label>
+          <select style={{...gs.input,minWidth:160,fontSize:12}} value={selGewas}
+            onChange={e=>{setSelGewas(e.target.value);setSelSoort("");setOpenBlok({inkoop:false,zaai:false,inboet:false,lever:false});}}>
+            <option value="">— Kies gewas —</option>
+            {(gewassen||[]).sort((a,b)=>a.naam.localeCompare(b.naam,"nl")).map(g=>(
+              <option key={g.naam} value={g.naam}>{g.naam}</option>
+            ))}
+          </select>
+        </div>
+        {selGewas&&<div style={{display:"flex",flexDirection:"column",gap:1}}>
+          <label style={{fontSize:10,color:G.midden}}>Soort</label>
+          <select style={{...gs.input,minWidth:200,fontSize:12}} value={selSoort}
+            onChange={e=>{setSelSoort(e.target.value);setOpenBlok({inkoop:false,zaai:false,inboet:false,lever:false});}}>
+            <option value="">— Kies soort —</option>
+            {gewasSoorten.sort((a,b)=>a.localeCompare(b,"nl")).map(s=>(
+              <option key={s} value={s}>{s}{(gw?.internNrs||{})[s]?" #"+(gw.internNrs[s]):""}</option>
+            ))}
+          </select>
+        </div>}
+        {toonData&&(
+          <div style={{marginLeft:"auto",display:"flex",gap:10,alignItems:"center",
+            background:G.bg2,border:`1px solid ${G.rand}`,borderRadius:6,padding:"5px 12px",fontSize:11,color:G.donker,flexWrap:"wrap"}}>
+            {leverancier&&<span><span style={{color:G.midden}}>Leverancier: </span><strong>{leverancier}</strong></span>}
+            {kiemSetting&&<span><span style={{color:G.midden}}>Kiem: </span><strong>{kiemSetting.waarde}%</strong></span>}
+            {(()=>{
+              // Toon per fust de teelttijden
+              const fustTijden = (teeltduur||[]).filter(t=>
+                t.gewas?.toLowerCase()===selGewas?.toLowerCase()&&
+                t.soort?.toLowerCase()===selSoort?.toLowerCase()&&
+                t.fust
+              );
+              if(fustTijden.length>0) return fustTijden.map(t=>(
+                <span key={t.fust} style={{borderLeft:`1px solid ${G.rand}`,paddingLeft:8}}>
+                  <strong style={{color:G.donker}}>{t.fust}</strong>
+                  {t.uitzaai&&<span style={{color:G.midden}}> · uitzaai {t.uitzaai} wk</span>}
+                  {t.inboet&&<span style={{color:G.midden}}> · inboet {t.inboet} wk</span>}
+                </span>
+              ));
+              // Geen fust-specifiek — toon algemeen
+              return teeltSetting&&(
+                <span style={{borderLeft:`1px solid ${G.rand}`,paddingLeft:8}}>
+                  {teeltSetting.uitzaai&&<span style={{color:G.midden}}>Uitzaai: <strong>{teeltSetting.uitzaai} wk</strong></span>}
+                  {teeltSetting.inboet&&<span style={{color:G.midden}}> · Inboet: <strong>{teeltSetting.inboet} wk</strong></span>}
+                </span>
+              );
+            })()}
+          </div>
+        )}
+      </div>
+
+      {!toonData&&(
+        <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:6,color:G.midden}}>
+          <div style={{fontSize:32}}>🌱</div>
+          <div style={{fontSize:13}}>Kies een gewas en soort</div>
+        </div>
+      )}
+
+      {toonData&&(
+        <div style={{flex:1,overflowY:"auto",padding:"12px 16px",display:"flex",flexDirection:"column",gap:8}}>
+
+          {/* Titel */}
+          <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+            <div style={{fontSize:11,color:G.midden}}>{selGewas}</div>
+            {internNr&&<div style={{fontSize:11,color:G.licht}}>#{internNr}</div>}
+            <div style={{fontSize:18,fontWeight:700,color:G.donker,marginLeft:4}}>{selSoort}</div>
+          </div>
+
+          {/* 5 kerngetallen */}
+          {(()=>{
+            const nu = weekLabel(new Date().toISOString().split("T")[0]);
+            // Gezaaid t/m deze week
+            const gezaaidTmNu = zaaiMomenten
+              .filter(z=>z.week<=nu)
+              .reduce((s,z)=>s+z.zaden,0);
+            // Huidige voorraad = ingekocht - gezaaid tm nu
+            const huidigeVoorraad = totZaad - gezaaidTmNu;
+            // Nog te zaaien rest seizoen = totaal te zaaien - gezaaid tm nu
+            const nogTeZaaienRest = Math.max(0, totZaaiZaden - gezaaidTmNu);
+            // Nog te bestellen = nog te zaaien - huidige voorraad (als negatief)
+            const nogTeBestellen = Math.max(0, nogTeZaaienRest - Math.max(0, huidigeVoorraad));
+            const items = [
+              ["Ingekocht zaden",    fmt(totZaad),         eur(totInkoopBedrag), false],
+              ["Gezaaid t/m nu",     fmt(gezaaidTmNu),     "wk "+nu,             false],
+              ["Huidige voorraad",   huidigeVoorraad>=0?fmt(huidigeVoorraad):"⚠️ "+fmt(Math.abs(huidigeVoorraad))+" tekort",
+                                     huidigeVoorraad>=0?"zaden":"te weinig",      huidigeVoorraad<0],
+              ["Nog te zaaien",      fmt(nogTeZaaienRest), "rest seizoen",        false],
+              ["Nog te bestellen",   nogTeBestellen>0?fmt(nogTeBestellen):"—",    nogTeBestellen>0?"zaden extra nodig":"voldoende in voorraad", nogTeBestellen>0],
+              (()=>{
+                const teVeel = Math.max(0, huidigeVoorraad - nogTeZaaienRest);
+                return ["Te veel einde seizoen", teVeel>0?fmt(teVeel):"—", teVeel>0?"zaden over":"geen overschot", false];
+              })(),
+            ];
+            return (
+              <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:8}}>
+                {items.map(([lbl,v1,v2,alarm])=>(
+                  <div key={lbl} style={{
+                    background:alarm?"#fff8f0":G.bg1,
+                    border:`1px solid ${alarm?"#f59e0b":G.rand}`,
+                    borderRadius:8,padding:"10px 12px"}}>
+                    <div style={{fontSize:10,color:alarm?"#b45309":G.midden,marginBottom:3}}>{lbl}</div>
+                    <div style={{fontSize:15,fontWeight:700,color:alarm?"#b45309":G.donker}}>{v1}</div>
+                    {v2&&<div style={{fontSize:10,color:alarm?"#b45309":G.licht,marginTop:2}}>{v2}</div>}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          {/* 4 uitvouwbare blokken in 2x2 */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+
+            {/* Inkoop */}
+            <div style={blokStijl(openBlok.inkoop)}>
+              <div style={blokHeader(openBlok.inkoop)} onClick={()=>toggle("inkoop")}>
+                <div style={{fontSize:12,fontWeight:600,color:G.donker}}>
+                  Inkoop
+                  <span style={{fontWeight:400,color:G.midden,marginLeft:8,fontSize:11}}>
+                    {inkoopRegels.length}× · {fmt(totZaad)} zaden · {eur(totInkoopBedrag)}
+                  </span>
+                </div>
+                <span style={{color:G.midden,fontSize:11}}>{openBlok.inkoop?"▲":"▼"}</span>
+              </div>
+              {openBlok.inkoop&&<table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead><tr>
+                  {["Datum","Code","Zaden","€/1000","Bedrag"].map((h,i)=>(
+                    <th key={h} style={{...TH3,textAlign:i>=2?"right":"left"}}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>{inkoopRegels.map((z,i)=>{
+                  const pr=z.prijs||gw?.inkoopPrijzen?.[selSoort]||null;
+                  const bdg=pr?Number(pr)*(z.aantal||0)/1000:0;
+                  return <tr key={i} style={{background:i%2===0?G.wit:G.bg1}}>
+                    <td style={TD3}>{z.datum}</td>
+                    <td style={{...TD3,color:G.licht}}>{z.code||"—"}</td>
+                    <td style={{...TDr,fontWeight:600,color:G.donker}}>{(z.aantal||0).toLocaleString("nl-NL")}</td>
+                    <td style={{...TDr,color:G.midden}}>{pr?eurp(pr):"—"}</td>
+                    <td style={{...TDr,fontWeight:600,color:G.donker}}>{bdg>0?eur(bdg):"—"}</td>
+                  </tr>;
+                })}</tbody>
+              </table>}
+            </div>
+
+            {/* Uitzaai */}
+            <div style={blokStijl(openBlok.zaai)}>
+              <div style={blokHeader(openBlok.zaai)} onClick={()=>toggle("zaai")}>
+                <div style={{fontSize:12,fontWeight:600,color:G.donker}}>
+                  Uitzaai
+                  <span style={{fontWeight:400,color:G.midden,marginLeft:8,fontSize:11}}>
+                    {Object.keys(zaaiPerWeek).length} weken · {fmt(totZaaiZaden)} zaden
+                  </span>
+                </div>
+                <span style={{color:G.midden,fontSize:11}}>{openBlok.zaai?"▲":"▼"}</span>
+              </div>
+              {openBlok.zaai&&<table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead><tr>
+                  {["Zaaiweek","Klant","Fust","Zaden","Leverweek"].map((h,i)=>(
+                    <th key={h} style={{...TH3,textAlign:i===3?"right":"left"}}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>{zaaiMomenten.map((r,i)=>(
+                  <tr key={i} style={{background:i%2===0?G.wit:G.bg1}}>
+                    <td style={{...TD3,color:G.midden,whiteSpace:"nowrap"}}>{r.week}</td>
+                    <td style={TD3}>{r.klant}</td>
+                    <td style={{...TD3,fontSize:10,color:G.licht}}>{r.fust}</td>
+                    <td style={{...TDr,fontWeight:600,color:G.donker}}>{r.zaden.toLocaleString("nl-NL")}</td>
+                    <td style={{...TD3,color:G.midden}}>{r.leverweek}</td>
+                  </tr>
+                ))}</tbody>
+              </table>}
+            </div>
+
+            {/* Inboet */}
+            <div style={blokStijl(openBlok.inboet)}>
+              <div style={blokHeader(openBlok.inboet)} onClick={()=>toggle("inboet")}>
+                <div style={{fontSize:12,fontWeight:600,color:G.donker}}>
+                  Inboet
+                  <span style={{fontWeight:400,color:G.midden,marginLeft:8,fontSize:11}}>
+                    {Object.keys(inboetPerWeek).length} weken · {fmt(totInboetPlanten)} planten
+                  </span>
+                </div>
+                <span style={{color:G.midden,fontSize:11}}>{openBlok.inboet?"▲":"▼"}</span>
+              </div>
+              {openBlok.inboet&&<table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead><tr>
+                  {["Inboetweek","Klant","Fust","Planten","Leverweek"].map((h,i)=>(
+                    <th key={h} style={{...TH3,textAlign:i===3?"right":"left"}}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>{inboetMomenten.map((r,i)=>(
+                  <tr key={i} style={{background:i%2===0?G.wit:G.bg1}}>
+                    <td style={{...TD3,color:G.midden,whiteSpace:"nowrap"}}>{r.week}</td>
+                    <td style={TD3}>{r.klant}</td>
+                    <td style={{...TD3,fontSize:10,color:G.licht}}>{r.fust}</td>
+                    <td style={{...TDr,fontWeight:600,color:G.donker}}>{r.planten.toLocaleString("nl-NL")}</td>
+                    <td style={{...TD3,color:G.midden}}>{r.leverweek}</td>
+                  </tr>
+                ))}</tbody>
+              </table>}
+            </div>
+
+            {/* Leveringen per klant */}
+            <div style={blokStijl(openBlok.lever)}>
+              <div style={blokHeader(openBlok.lever)} onClick={()=>toggle("lever")}>
+                <div style={{fontSize:12,fontWeight:600,color:G.donker}}>
+                  Leveringen
+                  <span style={{fontWeight:400,color:G.midden,marginLeft:8,fontSize:11}}>
+                    {klantLijst.length} klanten · {fmt(totPlanten)} pl. · {eur(totBedrag)}
+                  </span>
+                </div>
+                <span style={{color:G.midden,fontSize:11}}>{openBlok.lever?"▲":"▼"}</span>
+              </div>
+              {openBlok.lever&&<div>
+                {klantLijst.map((k,ki)=>(
+                  <div key={k.naam} style={{borderTop:ki>0?`1px solid ${G.bg2}`:"none"}}>
+                    <div style={{padding:"6px 12px",background:ki%2===0?G.wit:G.bg1,display:"flex",gap:16,alignItems:"center"}}>
+                      <span style={{fontWeight:600,fontSize:12,color:G.donker,minWidth:120}}>{k.naam}</span>
+                      <span style={{fontSize:11,color:G.midden}}>{fmt(k.planten)} pl.</span>
+                      <span style={{fontSize:11,color:G.donker,fontWeight:600}}>{eur(k.bedrag)}</span>
+                      {k.geleverd>0&&<span style={{fontSize:10,background:G.bg3,color:G.donker,padding:"1px 6px",borderRadius:4}}>✓ {fmt(k.geleverd)} geleverd</span>}
+                    </div>
+                    <table style={{width:"100%",borderCollapse:"collapse"}}>
+                      <tbody>{k.regels.map((r,i)=>(
+                        <tr key={i} style={{background:r.status==="geleverd"?G.bg2:G.wit}}>
+                          <td style={{...TD3,color:G.midden,fontSize:10,paddingLeft:20}}>{r.week}</td>
+                          <td style={{...TD3,fontSize:10}}>{r.verpakking}</td>
+                          <td style={{...TDr,fontSize:10}}>{r.trays} tr</td>
+                          <td style={{...TDr,fontWeight:600,color:G.donker,fontSize:11}}>{r.planten.toLocaleString("nl-NL")}</td>
+                          <td style={{...TDr,color:G.midden,fontSize:10}}>{eurp(r.prijs)}</td>
+                          <td style={{...TDr,fontWeight:600,color:G.donker,fontSize:11}}>{r.bedrag>0?eur(r.bedrag):"—"}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                ))}
+                <div style={{padding:"6px 12px",background:G.bg3,display:"flex",gap:16,fontSize:11,fontWeight:600,color:G.donker}}>
+                  <span>Totaal: {fmt(totPlanten)} pl. · {eur(totBedrag)}</span>
+                  <span style={{marginLeft:"auto"}}>Geleverd: {fmt(totGeleverd)} pl. · {eur(totGeleverdBedrag)}</span>
+                </div>
+              </div>}
+            </div>
+
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 // ════════════════════════════════════════════════════════
 // HOOFD APP
@@ -6654,7 +7087,7 @@ function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef, traykosten, se
               </tr></thead>
               <tbody>
                 {ALLE_TRAYS.map((t,i)=>(
-                  <tr key={t.naam} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                  <tr key={t.naam} style={{background:i%2===0?wit:"#f0f7f4"}}>
                     <td style={{...TD,fontWeight:600}}>{t.naam}</td>
                     <td style={{...TD,fontSize:11,color:subtekst}}>{t.zaai?"zaai":"aflevering"}</td>
                     <td style={{...TD,textAlign:"right"}}>
@@ -7379,7 +7812,7 @@ function Offertes({ klanten, gewassen, prijzen, verpDef, bedrijf }) {
         </tr></thead>
         <tbody>
           {rijData.map((r,i)=>(
-            <tr key={i} style={{background:i%2===0?wit:"#f9fcfb"}}>
+            <tr key={i} style={{background:i%2===0?wit:"#f0f7f4"}}>
               <td style={{padding:"5px 8px",borderBottom:`1px solid ${rand}`,fontWeight:r.type==="groep"?600:400,color:r.type==="groep"?"#1d4ed8":tekst,fontStyle:r.type==="groep"?"italic":"normal"}}>{r.naam}</td>
               {toon264&&<td style={{...celStijl,color:r.type==="groep"?"#1d4ed8":groen}}>{r.p264?"€"+r.p264.toFixed(3):""}</td>}
               {toon180&&<td style={{...celStijl,color:r.type==="groep"?"#1d4ed8":groen}}>{r.p180?"€"+r.p180.toFixed(3):""}</td>}
@@ -7551,7 +7984,7 @@ function Offertes({ klanten, gewassen, prijzen, verpDef, bedrijf }) {
                       </tr></thead>
                       <tbody>
                         {historie.map((h,i)=>(
-                          <tr key={i} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                          <tr key={i} style={{background:i%2===0?wit:"#f0f7f4"}}>
                             <td style={{padding:"3px 6px",border:`1px solid ${rand}`,fontWeight:700,color:"#1d4ed8",whiteSpace:"nowrap"}}>#{h.nr}</td>
                             <td style={{padding:"3px 6px",border:`1px solid ${rand}`,color:subtekst,whiteSpace:"nowrap"}}>{new Date(h.datum).toLocaleDateString("nl-NL")}</td>
                             <td style={{padding:"3px 6px",border:`1px solid ${rand}`,fontWeight:600}}>{h.klantNaam}</td>
@@ -7965,12 +8398,9 @@ function App() {
         teeltduur={teeltduur} setTeeltduur={setTeeltduur}
         verpDef={verpDef}
       />}
-      {pagina==="teelten"      && <Teelten     gewassen={gewassen} setGewassen={setGewassen} orders={orders} setOrders={setOrders} />}
+      {pagina==="teelten"      && <Teelten     gewassen={gewassen} setGewassen={setGewassen} orders={orders} setOrders={setOrders} zaadinkoop={zaadinkoop} setZaadinkoop={setZaadinkoop} />}
       {pagina==="prijzen"      && <Prijzen     klanten={klanten} gewassen={gewassen} prijzen={prijzen} setPrijzen={setPrijzen} verpDef={verpDef} />}
-      {pagina==="dashboard"     && <div style={{padding:24,overflowY:"auto",height:"calc(100vh - 50px)"}}>
-        <div style={{fontSize:20,fontWeight:700,color:groen,marginBottom:8}}>🏠 Dashboard</div>
-        <div style={{color:subtekst,fontSize:13}}>Dashboard wordt later ingevuld.</div>
-      </div>}
+      {pagina==="dashboard" && <Dashboard gewassen={gewassen} zaadinkoop={zaadinkoop} orders={orders} prijzen={prijzen} verpDef={verpDef} teeltduur={teeltduur} kiemkracht={kiemkracht} leveranciers={leveranciers} klanten={klanten} />}
       {pagina==="overzichten"  && <div style={{padding:16,overflowY:"auto",height:"calc(100vh - 50px)"}}><MatrixFilterPaneel klanten={klanten} gewassen={gewassen} orders={orders} verpDef={verpDef} weken={weekOpties()} /></div>}
       {pagina==="mailing" && <MailingPagina klanten={klanten} orders={orders} />}
       {pagina==="offertes" && <Offertes klanten={klanten} gewassen={gewassen} prijzen={prijzen} verpDef={verpDef} bedrijf={bedrijf} />}
@@ -8030,7 +8460,7 @@ function maakPakbonDoc(o, klanten, bedrijf, verpDef) {
   const leverWkDag = weekLabel(o.leverdatum)+" "+dagenKort[leverD.getDay()];
   const regels = o.regels.map((r,i)=>{
     const vd = verpDef.find(v=>v.naam===r.verpakking);
-    const bg = i%2===0?"#fff":"#f9fcfb";
+    const bg = i%2===0?wit:"#f0f7f4";
     return "<tr style='background:"+bg+"'>"
       +"<td style='padding:5px 8px;border:2px solid #b0cfc0'>"+r.gewas+"</td>"
       +"<td style='padding:5px 8px;border:2px solid #b0cfc0'>"+r.soort+"</td>"
@@ -8343,7 +8773,7 @@ function maakTransportDoc(twk, tOrders, klanten, verpDef, bedrijf){
     const pl=o.regels.reduce((s,r)=>{const vd=verpDef.find(v=>v.naam===r.verpakking);return s+(vd?.aantal||0)*r.aantal;},0);
     const fusten=[...new Set(o.regels.map(r=>r.verpakking))].join(", ");
     const verd=_berekenKarren(trays);
-    const bg=i%2===0?"#fff":"#f9fcfb";
+    const bg=i%2===0?wit:"#f0f7f4";
     return "<tr style='background:"+bg+"'>"
       +"<td style='padding:5px 8px;border:1px solid #eee;font-weight:700'>"+kl.naam+"</td>"
       +"<td style='padding:5px 8px;border:2px solid #b0cfc0'>"+(cp.naam||"—")+"<br/><small style='color:#666'>"+[cp.telefoon,cp.email].filter(Boolean).join(" · ")+"</small></td>"
@@ -8460,7 +8890,7 @@ function TransportPagina({ klanten, orders, bedrijf, verpDef }) {
       const pl=o.regels.reduce((s,r)=>{const vd=verpDef.find(v=>v.naam===r.verpakking);return s+(vd?.aantal||0)*r.aantal;},0);
       const fusten=[...new Set(o.regels.map(r=>r.verpakking))].join(", ");
       const verd=berekenKarren(trays);
-      const bg=i%2===0?"#fff":"#f9fcfb";
+      const bg=i%2===0?wit:"#f0f7f4";
       const TD="padding:5px 8px;border:2px solid #b0cfc0";
       const dagen=["ZO","MA","DI","WO","DO","VR","ZA"];
       const td=o.transportDatum?new Date(o.transportDatum):null;
@@ -8537,7 +8967,7 @@ function TransportPagina({ klanten, orders, bedrijf, verpDef }) {
                 const fusten=[...new Set(o.regels.map(r=>r.verpakking))].join(", ");
                 const verd=berekenKarren(trays);
                 return (
-                  <tr key={o.id} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                  <tr key={o.id} style={{background:i%2===0?wit:"#f0f7f4"}}>
                     <td style={{...TD,fontWeight:700,color:groen}}>{kl.naam}</td>
                     <td style={{...TD,fontSize:11,lineHeight:1.4}}>{cp.naam||"—"}<br/><span style={{color:subtekst,fontSize:10}}>{[cp.telefoon,cp.email].filter(Boolean).join(" · ")||""}</span></td>
                     <td style={{...TD,fontSize:11}}>{fusten}</td>
@@ -8653,7 +9083,7 @@ function MailingPagina({ klanten, orders }) {
             </thead>
             <tbody>
               {gefilterd.map((m,i)=>(
-                <tr key={i} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                <tr key={i} style={{background:i%2===0?wit:"#f0f7f4"}}>
                   <td style={{...TD,fontSize:12,whiteSpace:"nowrap"}}>{m.datum}</td>
                   <td style={{...TD,fontSize:12,fontWeight:600,color:groen}}>{m.klant}</td>
                   <td style={{...TD,fontSize:12}}>{m.email}</td>
@@ -8770,7 +9200,7 @@ function KlantMatrixPrint({ data, bedrijf, verpDef, onSluit }) {
               </thead>
               <tbody>
                 {rijen.map((r,i)=>(
-                  <tr key={i} style={{background:i%2===0?"#fff":"#f9fcfb"}}>
+                  <tr key={i} style={{background:i%2===0?wit:"#f0f7f4"}}>
                     <td style={cDL}>{r.soort}</td>
                     <td style={cDL}><span style={{background:lichtGroen,color:groen,borderRadius:20,padding:"1px 6px",fontSize:9,fontWeight:600}}>{r.verpakking}</span></td>
                     <td style={{...cD,color:groen}}>{r.prijs?"€"+Number(r.prijs).toFixed(3):"—"}</td>
@@ -9018,7 +9448,7 @@ function Inkoopprijzen({ gewassen, setGewassen }) {
                       {gw.soorten.map((s,si)=>{
                         const prijs = (gw.inkoopPrijzen||{})[s];
                         return (
-                          <tr key={s} style={{background:si%2===0?wit:"#f9fcfb"}}>
+                          <tr key={s} style={{background:si%2===0?wit:"#f0f7f4"}}>
                             <td style={mTD}>{s}</td>
                             <td style={{...mTD,textAlign:"right"}}>
                               <div style={{display:"flex",alignItems:"center",gap:3,justifyContent:"flex-end"}}>
@@ -9244,7 +9674,7 @@ function FactuurOverzicht({ klanten, orders, verpDef, bedrijf, setOrders }) {
                 const bedrag = berekenBedrag(o);
                 const dOpen = dagenOpen(o);
                 return (
-                  <tr key={o.id} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                  <tr key={o.id} style={{background:i%2===0?wit:"#f0f7f4"}}>
                     <td style={{...TD2,fontWeight:700,color:groen,textAlign:"left"}}>#{o.factuurNr}</td>
                     <td style={{...TD2,fontWeight:600}}>{kl.naam}</td>
                     <td style={TD2}>{weekLabel(o.leverdatum)}</td>
@@ -9307,7 +9737,7 @@ function AfleverOverzicht({ klanten, orders }) {
               {metAflever.map((o,i)=>{
                 const kl = klanten.find(k=>k.id===o.klantId)||{};
                 return (
-                  <tr key={o.id} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                  <tr key={o.id} style={{background:i%2===0?wit:"#f0f7f4"}}>
                     <td style={{...TD2,fontWeight:700,color:"#1d4ed8"}}>#{o.afleverNr}</td>
                     <td style={{...TD2,fontWeight:600}}>{kl.naam}</td>
                     <td style={TD2}>{weekLabel(o.leverdatum)}</td>
@@ -9432,7 +9862,7 @@ function OmzetOverzicht({ klanten, gewassen, orders, verpDef }) {
               {rijen.map((r,i)=>{
                 const tot = rijTotaal(r);
                 return (
-                  <tr key={r.naam} style={{background:i%2===0?wit:"#f9fcfb"}}>
+                  <tr key={r.naam} style={{background:i%2===0?wit:"#f0f7f4"}}>
                     <td style={{...TDL,fontWeight:600}}>{r.naam}</td>
                     {alleJaren.map(j=>{
                       const v = r.jaren[j]?.[weergave==="euro"?"euro":"planten"]||0;
@@ -9710,9 +10140,9 @@ function MargeOverzicht({ klanten, gewassen, prijzen, verpDef, kiemkracht, trayk
               </thead>
               <tbody>
                 {gesorteerd.map((r,i)=>(
-                  <tr key={r.gewas+"_"+r.soort} style={{background:i%2===0?wit:"#f9fcfb"}}>
-                    <td style={{...TD3,textAlign:"left",fontWeight:700,color:groen,position:"sticky",left:0,background:i%2===0?wit:"#f9fcfb",zIndex:1,overflow:"hidden",textOverflow:"ellipsis"}}>{r.gewas}</td>
-                    <td style={{...TD3,textAlign:"left",position:"sticky",left:0,background:i%2===0?wit:"#f9fcfb",zIndex:1,overflow:"hidden",textOverflow:"ellipsis"}}>{r.soort}</td>
+                  <tr key={r.gewas+"_"+r.soort} style={{background:i%2===0?wit:"#f0f7f4"}}>
+                    <td style={{...TD3,textAlign:"left",fontWeight:700,color:groen,position:"sticky",left:0,background:i%2===0?wit:"#f0f7f4",zIndex:1,overflow:"hidden",textOverflow:"ellipsis"}}>{r.gewas}</td>
+                    <td style={{...TD3,textAlign:"left",position:"sticky",left:0,background:i%2===0?wit:"#f0f7f4",zIndex:1,overflow:"hidden",textOverflow:"ellipsis"}}>{r.soort}</td>
                     <td style={{...TD3,color:subtekst,background:"#fafffe",textAlign:"center"}}>
                       {r.kiemPct?r.kiemPct+"%":"—"}
                     </td>
@@ -9868,7 +10298,7 @@ function Soortenbeheer({ gewassen, setGewassen, kiemkracht, setKiemkracht, teelt
                       {(gw.soorten||[]).map(function(s,si){
                         var oud=getOud(gw,s);
                         return (
-                          <tr key={s} style={{background:oud?"#f9fafb":si%2===0?wit:"#f9fcfb",opacity:oud?0.55:1}}>
+                          <tr key={s} style={{background:oud?"#f9fafb":si%2===0?wit:"#f0f7f4",opacity:oud?0.55:1}}>
                             <td style={{...TD3,fontWeight:oud?400:600,color:oud?subtekst:tekst,whiteSpace:"nowrap"}}>{s}</td>
                             <td style={{...TD3,textAlign:"center"}}>
                               <input style={{padding:"1px 3px",border:"1px solid #c8e6c9",borderRadius:2,fontSize:11,width:42,textAlign:"center",background:"#fafffe"}} type="text" placeholder="—"

@@ -637,7 +637,28 @@ function Teelten({ gewassen, setGewassen }) {
 // ════════════════════════════════════════════════════════
 function PrijsInput({ prijs, onSave, style }) {
   const [val, setVal] = useState(prijs);
-  useEffect(()=>setVal(prijs), [prijs]);
+  const origRef = React.useRef(prijs);
+  useEffect(()=>{ setVal(prijs); origRef.current=prijs; }, [prijs]);
+  function bewaar(nieuweWaarde) {
+    const oud = origRef.current;
+    const nieuw = nieuweWaarde;
+    // Geen wijziging
+    if(String(oud??"")=== String(nieuw??"")) return;
+    // Nieuwe prijs invullen (was leeg)
+    if(oud===""||oud===null||oud===undefined) { onSave(nieuw); return; }
+    // Prijs wissen
+    if(nieuw===""||nieuw===null) {
+      if(window.confirm(`Prijs €${Number(oud).toFixed(3)} verwijderen?`)) onSave(nieuw);
+      else setVal(oud);
+      return;
+    }
+    // Prijs wijzigen
+    if(window.confirm(`Prijs wijzigen van €${Number(oud).toFixed(3)} naar €${Number(nieuw).toFixed(3)}?`)) {
+      onSave(nieuw);
+    } else {
+      setVal(oud);
+    }
+  }
   return (
     <input
       style={{...style, background:val!==""&&val!==undefined?"#f0fff8":"#fff"}}
@@ -645,7 +666,7 @@ function PrijsInput({ prijs, onSave, style }) {
       value={val??""} 
       onFocus={e=>e.target.select()}
       onChange={e=>setVal(e.target.value)}
-      onBlur={e=>onSave(e.target.value)}
+      onBlur={e=>bewaar(e.target.value)}
       onKeyDown={e=>{if(e.key==="Enter"||e.key==="Tab")e.target.blur();}}
     />
   );
@@ -809,8 +830,12 @@ function Prijzen({ klanten, gewassen, prijzen, setPrijzen, verpDef }) {
                                   value={vulGewas[gw.naam+"_"+v.naam]||""}
                                   onChange={e=>setVulGewas({...vulGewas,[gw.naam+"_"+v.naam]:e.target.value})}
                                   onBlur={e=>{if(e.target.value){
+                                    const kl=klanten.find(k=>k.id===selKlant);
+                                    if(!window.confirm(`Alle soorten van ${gw.naam} (${v.naam}) voor ${kl?.naam} instellen op €${Number(e.target.value).toFixed(3)}?`)) {
+                                      setVulGewas({...vulGewas,[gw.naam+"_"+v.naam]:""});
+                                      return;
+                                    }
                                     const nieuw=[...prijzen];
-                                    // Vul alle soorten + groepsprijs
                                     [...gw.soorten,"__groep__"].forEach(s=>{
                                       const idx=nieuw.findIndex(x=>x.klantId===selKlant&&x.gewas===gw.naam&&x.soort===s&&x.verpakking===v.naam);
                                       if(idx>=0)nieuw[idx]={...nieuw[idx],prijs:parseFloat(e.target.value)};
@@ -1635,11 +1660,18 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
     if(f.includes("zaail") || f.includes("extra")) {
       return verpDef.find(v => v.aantal===260 || v.naam.includes("260"))?.naam || verpDef[0]?.naam || "";
     }
-    if(f.includes("180") || (f.includes("tray") && !f.includes("zaai"))) {
-      return verpDef.find(v => v.aantal===180 || v.naam.includes("180"))?.naam || verpDef[0]?.naam || "";
+    // Eerst: zoek op specifiek getal (bijv. "179", "65", "260")
+    const getalMatch = f.match(/\d+/);
+    if(getalMatch) {
+      const getal = parseInt(getalMatch[0]);
+      const exactMatch = verpDef.find(v => v.aantal===getal);
+      if(exactMatch) return exactMatch.naam;
     }
-    const match = verpDef.find(v => f.includes(String(v.aantal)) || v.naam.toLowerCase().includes(f));
-    return match?.naam || verpDef[0]?.naam || "";
+    // Dan: naam-match
+    const naamMatch = verpDef.find(v => v.naam.toLowerCase().includes(f) || f.includes(v.naam.toLowerCase()));
+    if(naamMatch) return naamMatch.naam;
+    // Fallback: 180
+    return verpDef.find(v => v.aantal===180)?.naam || verpDef[0]?.naam || "";
   }
 
   function verwerkExcel(file) {
@@ -2062,7 +2094,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
         +"<th style='"+TH_PB+";text-align:right'>Trays</th>"
         +"<th style='"+TH_PB+";text-align:left'>Aantekening</th>"
       +"</tr></thead><tbody>"+regels+"</tbody>"
-      +"<tfoot><tr style='background:#e8f5ee;font-weight:700'>"
+      +"<tfoot><tr style='background:#a8d5b5;font-weight:700'>"
         +"<td colspan='3' style='"+TD_PB+";color:#2d6a4f;border-top:3px solid #2d6a4f;font-weight:700'>Totaal</td>"
         +"<td style='"+TD_PB+";text-align:right;color:#2d6a4f;border-top:3px solid #2d6a4f;font-weight:700'>"+totTrays+"</td>"
         +"<td style='"+TD_PB+";border-top:3px solid #2d6a4f'></td>"
@@ -2095,9 +2127,9 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
       const pl = r.vastPlanten??((vd?.aantal||0)*r.aantal);
       const bg = i%2===0?"#fff":"#f9fcfb";
       return "<tr style=\'background:"+bg+";\'>"
-        +"<td style=\'padding:6px 10px;border:1px solid #eee\'>"+r.gewas+"</td>"
-        +"<td style=\'padding:6px 10px;border:1px solid #eee\'>"+r.soort+"</td>"
-        +"<td style=\'padding:6px 10px;border:1px solid #eee\'>"+r.verpakking+"</td>"
+        +"<td style=\'padding:6px 10px;border:2px solid #b0cfc0\'>"+r.gewas+"</td>"
+        +"<td style=\'padding:6px 10px;border:2px solid #b0cfc0\'>"+r.soort+"</td>"
+        +"<td style=\'padding:6px 10px;border:2px solid #b0cfc0\'>"+r.verpakking+"</td>"
         +"<td style=\'padding:6px 10px;border:1px solid #eee;text-align:right\'>"+r.aantal+"</td>"
         +"<td style=\'padding:6px 10px;border:1px solid #eee;text-align:right;font-weight:700;color:#2d6a4f\'>"+pl.toLocaleString("nl-NL")+"</td>"
         +"</tr>";
@@ -2132,16 +2164,16 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
       +"</div>"
       +"<p style=\'font-size:11px;color:#555;margin-bottom:10px\'>Geachte "+kl.naam+", hierbij ontvangt u de levering conform onderstaande specificatie.</p>"
       +"<table><thead><tr>"
-        +"<th style=\'padding:7px 10px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left\'>Gewas</th>"
-        +"<th style=\'padding:7px 10px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left\'>Soort</th>"
-        +"<th style=\'padding:7px 10px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left\'>Fust</th>"
-        +"<th style=\'padding:7px 10px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right\'>Trays</th>"
-        +"<th style=\'padding:7px 10px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right\'>Planten</th>"
+        +"<th style=\'padding:7px 10px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left\'>Gewas</th>"
+        +"<th style=\'padding:7px 10px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left\'>Soort</th>"
+        +"<th style=\'padding:7px 10px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left\'>Fust</th>"
+        +"<th style=\'padding:7px 10px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right\'>Trays</th>"
+        +"<th style=\'padding:7px 10px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right\'>Planten</th>"
       +"</tr></thead><tbody>"+regels+"</tbody>"
-      +"<tfoot><tr style=\'background:#e8f5ee;font-weight:700;\'>"
-        +"<td colspan=\'3\' style=\'padding:7px 10px;border:1px solid #c8e6c9;color:#2d6a4f;border-top:2px solid #2d6a4f\'>Totaal</td>"
-        +"<td style=\'padding:7px 10px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f;border-top:2px solid #2d6a4f\'>"+totTrays+"</td>"
-        +"<td style=\'padding:7px 10px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f;border-top:2px solid #2d6a4f\'>"+totPl.toLocaleString("nl-NL")+"</td>"
+      +"<tfoot><tr style=\'background:#a8d5b5;font-weight:700;\'>"
+        +"<td colspan=\'3\' style=\'padding:7px 10px;border:1px solid #c8e6c9;color:#2d6a4f;border-top:3px solid #0f3320\'>Totaal</td>"
+        +"<td style=\'padding:7px 10px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f;border-top:3px solid #0f3320\'>"+totTrays+"</td>"
+        +"<td style=\'padding:7px 10px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f;border-top:3px solid #0f3320\'>"+totPl.toLocaleString("nl-NL")+"</td>"
       +"</tr></tfoot></table>"
       +"<div style=\'margin-top:30px;padding:14px 18px;background:#f9fafb;border-radius:4px;border:1px solid #e2e8e4;\'>"
         +"<div style=\'font-size:11px;color:#555;margin-bottom:16px\'>Gelieve onderstaande te ondertekenen voor ontvangst:</div>"
@@ -2189,8 +2221,8 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
 
     const rijHtml = regels.map(function(x){
       return "<tr style='background:"+x.bg+"'>"
-        +"<td style='padding:6px 8px;border:1px solid #eee'>"+x.r.soort+"</td>"
-        +"<td style='padding:6px 8px;border:1px solid #eee'>"+x.r.verpakking+"</td>"
+        +"<td style='padding:6px 8px;border:2px solid #b0cfc0'>"+x.r.soort+"</td>"
+        +"<td style='padding:6px 8px;border:2px solid #b0cfc0'>"+x.r.verpakking+"</td>"
         +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right'>"+x.r.aantal+"</td>"
         +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right'>"+x.pl.toLocaleString("nl-NL")+"</td>"
         +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right'>"+(x.prijs?"€"+x.prijs.toFixed(3):"—")+"</td>"
@@ -2227,20 +2259,20 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
         +(kl.btwnummer?"<div style='font-size:10px;color:#888;margin-top:2px'>BTW: "+kl.btwnummer+"</div>":"")
       +"</div>"
       +"<table style='margin-bottom:14px'><thead><tr>"
-        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Soort</th>"
-        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Fust</th>"
-        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Trays</th>"
-        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Planten</th>"
-        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Prijs/st</th>"
-        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Bedrag</th>"
+        +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left'>Soort</th>"
+        +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left'>Fust</th>"
+        +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>Trays</th>"
+        +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>Planten</th>"
+        +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>Prijs/st</th>"
+        +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>Bedrag</th>"
       +"</tr></thead><tbody>"+rijHtml+"</tbody></table>"
       +"<div style='display:flex;justify-content:flex-end'><table style='width:260px'>"
         +"<tr><td style='padding:4px 8px;color:#555'>Subtotaal</td><td style='padding:4px 8px;text-align:right'>€"+subTotaal.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</td></tr>"
         +(behandelkosten>0?"<tr><td style='padding:4px 8px;color:#555'>Behandelkosten ("+aantalRegels+" regel"+(aantalRegels!==1?"s":"")+" × €"+kostenPerRegel.toFixed(2)+")</td><td style='padding:4px 8px;text-align:right'>€"+behandelkosten.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</td></tr>":"")
         +"<tr><td style='padding:4px 8px;color:#555'>BTW "+btwPct+"%</td><td style='padding:4px 8px;text-align:right'>€"+btwBedrag.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</td></tr>"
         +"<tr style='background:#e8f5ee;font-weight:700;font-size:12px'>"
-          +"<td style='padding:6px 8px;color:#2d6a4f;border-top:2px solid #2d6a4f'>Totaal te betalen</td>"
-          +"<td style='padding:6px 8px;text-align:right;color:#2d6a4f;border-top:2px solid #2d6a4f'>€"+totaal.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</td>"
+          +"<td style='padding:6px 8px;color:#2d6a4f;border-top:3px solid #0f3320'>Totaal te betalen</td>"
+          +"<td style='padding:6px 8px;text-align:right;color:#2d6a4f;border-top:3px solid #0f3320'>€"+totaal.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</td>"
         +"</tr></table></div>"
       +"<div style='margin-top:20px;padding:10px 14px;background:#f0f7f4;border-radius:4px;font-size:9px;color:#444'>"
         +"Gelieve <strong>€"+totaal.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</strong> binnen <strong>"+termijn+" dagen</strong> over te maken op: "
@@ -2279,8 +2311,8 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
 
     const rijHtml = regels.map(function(x){
       return "<tr style='background:"+x.bg+"'>"
-        +"<td style='padding:6px 8px;border:1px solid #eee'>"+x.r.soort+"</td>"
-        +"<td style='padding:6px 8px;border:1px solid #eee'>"+x.r.verpakking+"</td>"
+        +"<td style='padding:6px 8px;border:2px solid #b0cfc0'>"+x.r.soort+"</td>"
+        +"<td style='padding:6px 8px;border:2px solid #b0cfc0'>"+x.r.verpakking+"</td>"
         +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right'>"+x.r.aantal+"</td>"
         +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right'>"+x.pl.toLocaleString("nl-NL")+"</td>"
         +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right'>"+(x.prijs?"€"+x.prijs.toFixed(3):"—")+"</td>"
@@ -2360,8 +2392,8 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
       const bedrag = pl*prijs;
       const bg = i%2===0?"#fff":"#f9fcfb";
       return "<tr style='background:"+bg+"'>"
-        +"<td style='padding:6px 8px;border:1px solid #eee'>"+r.soort+"</td>"
-        +"<td style='padding:6px 8px;border:1px solid #eee'>"+r.verpakking+"</td>"
+        +"<td style='padding:6px 8px;border:2px solid #b0cfc0'>"+r.soort+"</td>"
+        +"<td style='padding:6px 8px;border:2px solid #b0cfc0'>"+r.verpakking+"</td>"
         +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right'>"+r.aantal+"</td>"
         +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right'>"+pl.toLocaleString("nl-NL")+"</td>"
         +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right'>"+(prijs?"€"+prijs.toFixed(3):"—")+"</td>"
@@ -2388,18 +2420,18 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
         +"<div style='font-size:10px;color:#dc2626;font-weight:700'>Vervaldatum: "+vervalStr+"</div></div>"
       +"</div>"
       +"<table style='margin-bottom:12px'><thead><tr>"
-        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Soort</th>"
-        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Fust</th>"
-        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Trays</th>"
-        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Planten</th>"
-        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>€/st</th>"
-        +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Bedrag</th>"
+        +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left'>Soort</th>"
+        +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left'>Fust</th>"
+        +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>Trays</th>"
+        +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>Planten</th>"
+        +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>€/st</th>"
+        +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>Bedrag</th>"
       +"</tr></thead><tbody>"+regels+"</tbody></table>"
       +"<div style='display:flex;justify-content:flex-end;margin-bottom:16px'><table style='width:240px'>"
         +"<tr><td style='padding:4px 8px;color:#555'>Subtotaal</td><td style='padding:4px 8px;text-align:right'>€"+subTotaal.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</td></tr>"
         +"<tr><td style='padding:4px 8px;color:#555'>BTW "+btwPct+"%</td><td style='padding:4px 8px;text-align:right'>€"+btwBedrag.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</td></tr>"
-        +"<tr style='background:#e8f5ee;font-weight:700'><td style='padding:6px 8px;color:#2d6a4f;border-top:2px solid #2d6a4f'>Totaal</td>"
-        +"<td style='padding:6px 8px;text-align:right;color:#2d6a4f;border-top:2px solid #2d6a4f'>€"+totaal.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</td></tr>"
+        +"<tr style='background:#a8d5b5;font-weight:700'><td style='padding:6px 8px;color:#2d6a4f;border-top:3px solid #0f3320'>Totaal</td>"
+        +"<td style='padding:6px 8px;text-align:right;color:#2d6a4f;border-top:3px solid #0f3320'>€"+totaal.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</td></tr>"
       +"</table></div>"
       +"<div style='padding:10px 14px;background:#f0f7f4;border-radius:4px;font-size:10px;color:#444'>"
         +"Gelieve <strong>€"+totaal.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</strong> binnen <strong>"+termijn+" dagen</strong> over te maken op "
@@ -2442,9 +2474,9 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
     const regelsHtml = order.regels.map(r=>{
       const vd = verpDef.find(v=>v.naam===r.verpakking);
       const pl = r.vastPlanten??((vd?.aantal||0)*r.aantal);
-      return "<tr><td style='padding:5px 8px;border:1px solid #eee'>"+r.gewas+"</td>"
-        +"<td style='padding:5px 8px;border:1px solid #eee'>"+r.soort+"</td>"
-        +"<td style='padding:5px 8px;border:1px solid #eee'>"+r.verpakking+"</td>"
+      return "<tr><td style='padding:5px 8px;border:2px solid #b0cfc0'>"+r.gewas+"</td>"
+        +"<td style='padding:5px 8px;border:2px solid #b0cfc0'>"+r.soort+"</td>"
+        +"<td style='padding:5px 8px;border:2px solid #b0cfc0'>"+r.verpakking+"</td>"
         +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right'>"+(r.prijs?"€"+Number(r.prijs).toFixed(3):"—")+"</td>"
         +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right'>"+r.aantal+"</td>"
         +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right;color:#2d6a4f;font-weight:700'>"+pl.toLocaleString("nl-NL")+"</td>"
@@ -2468,7 +2500,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
       +"<table><thead><tr>"
         +"<th>Gewas</th><th>Soort</th><th>Fust</th><th style='text-align:right'>€/st</th><th style='text-align:right'>Trays</th><th style='text-align:right'>Planten</th>"
       +"</tr></thead><tbody>"+regelsHtml+"</tbody>"
-      +"<tfoot><tr style='background:#e8f5ee;font-weight:700'>"
+      +"<tfoot><tr style='background:#a8d5b5;font-weight:700'>"
         +"<td colspan='4' style='padding:6px 8px;border:1px solid #c8e6c9;color:#2d6a4f'>Totaal</td>"
         +"<td style='padding:6px 8px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f'>"+totTrays+"</td>"
         +"<td style='padding:6px 8px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f'>"+totPl.toLocaleString("nl-NL")+"</td>"
@@ -4375,8 +4407,8 @@ function Bevestiging({ klanten, gewassen, orders, setOrders, verpDef, bedrijf, m
     for(let i=0; i<alleWkn.length; i+=COLS) weekGroepen.push(alleWkn.slice(i,i+COLS));
 
     // Stijlen voor staand A4, kleine letters
-    const th = "padding:3px 4px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right;font-size:8px;font-weight:700;white-space:nowrap;";
-    const thL = "padding:3px 4px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left;font-size:8px;font-weight:700;";
+    const th = "padding:3px 4px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right;font-size:8px;font-weight:700;white-space:nowrap;";
+    const thL = "padding:3px 4px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left;font-size:8px;font-weight:700;";
     const td = "padding:2px 4px;border:1px solid #eee;text-align:right;font-size:8px;";
     const tdL = "padding:2px 4px;border:1px solid #eee;text-align:left;font-size:8px;";
 
@@ -4408,7 +4440,7 @@ function Bevestiging({ klanten, gewassen, orders, setOrders, verpDef, bedrijf, m
         +"</tr></thead>"
         +"<tbody>"+dataRijen2+"</tbody>"
         +"<tfoot><tr style='background:#e8f5ee;'>"
-          +"<td colspan='3' style='"+thL+"border-top:2px solid #2d6a4f'>Totaal</td>"
+          +"<td colspan='3' style='"+thL+"border-top:3px solid #0f3320'>Totaal</td>"
           +totaalCellen
           +"<td style='"+th+"border-top:2px solid #2d6a4f;background:#c8e6c9'>"+grootTotaal.toLocaleString("nl-NL")+"</td>"
         +"</tr></tfoot>"
@@ -5567,8 +5599,8 @@ function maakBestellingDoc(bestellingen, alleSleutels, verbVerbruikt2, verbSzn2,
   const vandaag = new Date().toLocaleDateString("nl-NL",{day:"2-digit",month:"long",year:"numeric"});
   const logo = bd.logo?"<img src='"+bd.logo+"' style='height:45px;max-width:120px;object-fit:contain'/>":"";
 
-  const th  = "padding:3px 6px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left;font-size:11px;font-weight:700;white-space:nowrap;";
-  const thR = "padding:3px 6px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right;font-size:11px;font-weight:700;white-space:nowrap;";
+  const th  = "padding:3px 6px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left;font-size:11px;font-weight:700;white-space:nowrap;";
+  const thR = "padding:3px 6px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right;font-size:11px;font-weight:700;white-space:nowrap;";
   const td  = "padding:2px 6px;border:1px solid #eee;font-size:11px;";
   const tdR = "padding:2px 6px;border:1px solid #eee;font-size:11px;text-align:right;";
   const tdG = "padding:2px 6px;border:1px solid #eee;font-size:11px;text-align:right;font-weight:700;color:#2d6a4f;";
@@ -7691,11 +7723,11 @@ function maakPakbonDoc(o, klanten, bedrijf, verpDef) {
     const vd = verpDef.find(v=>v.naam===r.verpakking);
     const bg = i%2===0?"#fff":"#f9fcfb";
     return "<tr style='background:"+bg+"'>"
-      +"<td style='padding:5px 8px;border:1px solid #eee'>"+r.gewas+"</td>"
-      +"<td style='padding:5px 8px;border:1px solid #eee'>"+r.soort+"</td>"
-      +"<td style='padding:5px 8px;border:1px solid #eee'>"+r.verpakking+"</td>"
+      +"<td style='padding:5px 8px;border:2px solid #b0cfc0'>"+r.gewas+"</td>"
+      +"<td style='padding:5px 8px;border:2px solid #b0cfc0'>"+r.soort+"</td>"
+      +"<td style='padding:5px 8px;border:2px solid #b0cfc0'>"+r.verpakking+"</td>"
       +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right'>"+r.aantal+"</td>"
-      +"<td style='padding:5px 8px;border:1px solid #eee'></td>"
+      +"<td style='padding:5px 8px;border:2px solid #b0cfc0'></td>"
       +"</tr>";
   }).join("");
   const totTrays = o.regels.reduce((s,r)=>s+r.aantal,0);
@@ -7735,16 +7767,16 @@ function maakPakbonDoc(o, klanten, bedrijf, verpDef) {
       +(o.notitie?"<div style='text-align:right'><span style='color:#555;font-size:11px'>Notitie</span><br/><strong style='font-size:14px'>"+o.notitie+"</strong></div>":"")
     +"</div>"
     +"<table><thead><tr>"
-      +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Gewas</th>"
-      +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Soort</th>"
-      +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Fust</th>"
-      +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Trays</th>"
-      +"<th style='padding:6px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9'>Aantekening</th>"
+      +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left'>Gewas</th>"
+      +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left'>Soort</th>"
+      +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left'>Fust</th>"
+      +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>Trays</th>"
+      +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac'>Aantekening</th>"
     +"</tr></thead><tbody>"+regels+"</tbody>"
-    +"<tfoot><tr style='background:#e8f5ee;font-weight:700'>"
-      +"<td colspan='3' style='padding:6px 8px;border:1px solid #c8e6c9;color:#2d6a4f;border-top:2px solid #2d6a4f'>Totaal</td>"
-      +"<td style='padding:6px 8px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f;border-top:2px solid #2d6a4f'>"+totTrays+"</td>"
-      +"<td style='padding:6px 8px;border:1px solid #c8e6c9;border-top:2px solid #2d6a4f'></td>"
+    +"<tfoot><tr style='background:#a8d5b5;font-weight:700'>"
+      +"<td colspan='3' style='padding:6px 8px;border:1px solid #c8e6c9;color:#2d6a4f;border-top:3px solid #0f3320'>Totaal</td>"
+      +"<td style='padding:6px 8px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f;border-top:3px solid #0f3320'>"+totTrays+"</td>"
+      +"<td style='padding:6px 8px;border:1px solid #c8e6c9;border-top:3px solid #0f3320'></td>"
     +"</tr></tfoot></table>"
     +"</body></html>";
 }
@@ -8005,7 +8037,7 @@ function maakTransportDoc(twk, tOrders, klanten, verpDef, bedrijf){
     const bg=i%2===0?"#fff":"#f9fcfb";
     return "<tr style='background:"+bg+"'>"
       +"<td style='padding:5px 8px;border:1px solid #eee;font-weight:700'>"+kl.naam+"</td>"
-      +"<td style='padding:5px 8px;border:1px solid #eee'>"+(cp.naam||"—")+"<br/><small style='color:#666'>"+[cp.telefoon,cp.email].filter(Boolean).join(" · ")+"</small></td>"
+      +"<td style='padding:5px 8px;border:2px solid #b0cfc0'>"+(cp.naam||"—")+"<br/><small style='color:#666'>"+[cp.telefoon,cp.email].filter(Boolean).join(" · ")+"</small></td>"
       +"<td style='padding:5px 8px;border:1px solid #eee;font-size:11px'>"+fusten+"</td>"
       +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right;font-weight:700'>"+trays+"</td>"
       +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right;font-weight:700;color:#2d6a4f'>"+(verd?verd.k:"—")+"</td>"
@@ -8022,21 +8054,21 @@ function maakTransportDoc(twk, tOrders, klanten, verpDef, bedrijf){
       +"<div style='text-align:right;font-size:11px'><strong>"+tOrders.length+"</strong> orders &nbsp;·&nbsp; <strong>"+totaalTrays+"</strong> trays</div>"
     +"</div>"
     +"<table><thead><tr>"
-      +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Klant</th>"
-      +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Contact</th>"
-      +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Fust</th>"
-      +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Trays</th>"
-      +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Karren</th>"
-      +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9'>Verdeling</th>"
-      +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Planten</th>"
-      +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9'>Aftekenen</th>"
+      +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left'>Klant</th>"
+      +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left'>Contact</th>"
+      +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left'>Fust</th>"
+      +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>Trays</th>"
+      +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>Karren</th>"
+      +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac'>Verdeling</th>"
+      +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>Planten</th>"
+      +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac'>Aftekenen</th>"
     +"</tr></thead><tbody>"+rijen+"</tbody>"
-    +"<tfoot><tr style='background:#e8f5ee;font-weight:700'>"
-      +"<td colspan='2' style='padding:5px 8px;border:1px solid #c8e6c9;color:#2d6a4f;border-top:2px solid #2d6a4f'>"+pSamenvatting+"</td>"
-      +"<td style='padding:5px 8px;border:1px solid #c8e6c9'></td>"
-      +"<td style='padding:5px 8px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f;border-top:2px solid #2d6a4f'>"+totaalTrays+"</td>"
-      +"<td style='padding:5px 8px;border:1px solid #c8e6c9;text-align:right;font-weight:700;color:#2d6a4f;border-top:2px solid #2d6a4f'>"+ptotKarren+"</td>"
-      +"<td colspan='3' style='padding:5px 8px;border:1px solid #c8e6c9;border-top:2px solid #2d6a4f'></td>"
+    +"<tfoot><tr style='background:#a8d5b5;font-weight:700'>"
+      +"<td colspan='2' style='padding:5px 8px;border:1px solid #c8e6c9;color:#2d6a4f;border-top:3px solid #0f3320'>"+pSamenvatting+"</td>"
+      +"<td style='padding:5px 8px;border:2px solid #8cbfac'></td>"
+      +"<td style='padding:5px 8px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f;border-top:3px solid #0f3320'>"+totaalTrays+"</td>"
+      +"<td style='padding:5px 8px;border:1px solid #c8e6c9;text-align:right;font-weight:700;color:#2d6a4f;border-top:3px solid #0f3320'>"+ptotKarren+"</td>"
+      +"<td colspan='3' style='padding:5px 8px;border:1px solid #c8e6c9;border-top:3px solid #0f3320'></td>"
     +"</tr></tfoot></table></body></html>";
 }
 
@@ -8109,7 +8141,9 @@ function TransportPagina({ klanten, orders, bedrijf, verpDef }) {
     const ptotRest=prestKarren.length;
     const ptotRestPl=prestKarren.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return s+(v&&v.rest>0?v.rest-1:0);},0);
     const ptotKarren=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return s+(v?v.k:0);},0);
-    const pSamenvatting=[ptot11>0?ptot11+"× 11pl":null,ptot13>0?ptot13+"× 13pl":null,ptot14>0?ptot14+"× 14pl":null,ptotRest>0?ptotRest+"× rest ("+ptotRestPl+" pl.)":null].filter(Boolean).join(" · ");
+    const prestDetails=prestKarren.map(o=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return "("+( v.rest-1)+")";}).join(" ");
+    const ptotKarrenZonderRest=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return s+(v?v.k-(v.rest>0?1:0):0);},0);
+    const pSamenvatting=[ptot11>0?ptot11+"× 11pl":null,ptot13>0?ptot13+"× 13pl":null,ptot14>0?ptot14+"× 14pl":null,prestKarren.length>0?"rest: "+prestKarren.length+"× "+prestDetails:null].filter(Boolean).join(" · ");
     const rijen=tOrders.map((o,i)=>{
       const kl=klanten.find(k=>k.id===o.klantId)||{};
       const cp=(kl.contactpersonen||[])[0]||{};
@@ -8118,16 +8152,16 @@ function TransportPagina({ klanten, orders, bedrijf, verpDef }) {
       const fusten=[...new Set(o.regels.map(r=>r.verpakking))].join(", ");
       const verd=berekenKarren(trays);
       const bg=i%2===0?"#fff":"#f9fcfb";
+      const TD="padding:5px 8px;border:2px solid #b0cfc0";
       return "<tr style='background:"+bg+"'>"
-        +"<td style='padding:5px 8px;border:1px solid #eee;font-weight:700'>"+kl.naam+"</td>"
-        
-        +"<td style='padding:5px 8px;border:1px solid #eee'>"+(cp.naam||"—")+"<br/><small style='color:#666'>"+[cp.telefoon,cp.email].filter(Boolean).join(" · ")+"</small></td>"
-        +"<td style='padding:5px 8px;border:1px solid #eee;font-size:11px'>"+fusten+"</td>"
-        +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right;font-weight:700'>"+trays+"</td>"
-        +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right;font-weight:700;color:#2d6a4f'>"+(verd?verd.k:"—")+"</td>"
-        +"<td style='padding:5px 8px;border:1px solid #eee;font-size:10px'>"+karOmschrijving(verd)+"</td>"
-        +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right'>"+pl.toLocaleString("nl-NL")+"</td>"
-        +"<td style='padding:5px 8px;border:1px solid #eee;width:40px'></td>"
+        +"<td style='"+TD+";font-weight:700'>"+kl.naam+"</td>"
+        +"<td style='"+TD+"'>"+(cp.naam||"—")+"<br/><small style='color:#666'>"+[cp.telefoon,cp.email].filter(Boolean).join(" · ")+"</small></td>"
+        +"<td style='"+TD+";font-size:11px'>"+fusten+"</td>"
+        +"<td style='"+TD+";text-align:right;font-weight:700'>"+trays+"</td>"
+        +"<td style='"+TD+";text-align:right;font-weight:700;color:#2d6a4f'>"+(verd?verd.k:"—")+"</td>"
+        +"<td style='"+TD+";font-size:10px'>"+karOmschrijving(verd)+"</td>"
+        +"<td style='"+TD+";text-align:right'>"+pl.toLocaleString("nl-NL")+"</td>"
+        +"<td style='"+TD+";width:40px'></td>"
         +"</tr>";
     }).join("");
     const doc="<!DOCTYPE html><html><head><meta charset='UTF-8'>"
@@ -8138,21 +8172,31 @@ function TransportPagina({ klanten, orders, bedrijf, verpDef }) {
         +"<div style='text-align:right;font-size:11px'><strong>"+tOrders.length+"</strong> orders &nbsp;·&nbsp; <strong>"+totaalTrays+"</strong> trays</div>"
       +"</div>"
       +"<table><thead><tr>"
-        +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Klant</th>"
+        +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left'>Klant</th>"
         
-        +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Contact</th>"
-        +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:left'>Fust</th>"
-        +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Trays</th>"
-        +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Karren</th>"
-        +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9'>Verdeling</th>"
-        +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9;text-align:right'>Planten</th>"
-        +"<th style='padding:5px 8px;background:#e8f5ee;color:#2d6a4f;border:1px solid #c8e6c9'>Aftekenen</th>"
+        +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left'>Contact</th>"
+        +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left'>Fust</th>"
+        +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>Trays</th>"
+        +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>Karren</th>"
+        +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac'>Verdeling</th>"
+        +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>Planten</th>"
+        +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac'>Aftekenen</th>"
       +"</tr></thead><tbody>"+rijen+"</tbody>"
-      +"<tfoot><tr style='background:#e8f5ee;font-weight:700'>"
-        +"<td colspan='2' style='padding:5px 8px;border:1px solid #c8e6c9;color:#2d6a4f;border-top:2px solid #2d6a4f'>"+pSamenvatting+"</td>"
-        +"<td style='padding:5px 8px;border:1px solid #c8e6c9;text-align:right;color:#2d6a4f;border-top:2px solid #2d6a4f'>"+totaalTrays+"</td>"
-        +"<td style='padding:5px 8px;border:1px solid #c8e6c9;text-align:right;font-weight:700;color:#2d6a4f;border-top:2px solid #2d6a4f'>"+ptotKarren+"</td><td colspan='3' style='padding:5px 8px;border:1px solid #c8e6c9;border-top:2px solid #2d6a4f'></td>"
-      +"</tr></tfoot></table></body></html>";
+      +"<tfoot>"
+      +"<tr style='background:#a8d5b5;font-weight:700;border-top:3px solid #0f3320'>"
+        +"<td style='padding:5px 8px;border:2px solid #8cbfac;color:#0f3320'>Totaal</td>"
+        +"<td style='padding:5px 8px;border:2px solid #8cbfac'></td>"
+        +"<td style='padding:5px 8px;border:2px solid #8cbfac'></td>"
+        +"<td style='padding:5px 8px;border:2px solid #8cbfac;text-align:right;color:#0f3320;font-weight:700'>"+totaalTrays+"</td>"
+        +"<td style='padding:5px 8px;border:2px solid #8cbfac;text-align:right;color:#0f3320;font-weight:700'>"+ptotKarrenZonderRest+"</td>"
+        +"<td style='padding:5px 8px;border:2px solid #8cbfac;color:#0f3320;font-size:10px'>"
+          +[ptot11>0?ptot11+"× 11pl":null,ptot13>0?ptot13+"× 13pl":null,ptot14>0?ptot14+"× 14pl":null].filter(Boolean).join(" · ")
+          +(prestKarren.length>0?"<br/>rest: "+prestKarren.length+"× "+prestDetails:"")
+        +"</td>"
+        +"<td style='padding:5px 8px;border:2px solid #8cbfac'></td>"
+        +"<td style='padding:5px 8px;border:2px solid #8cbfac'></td>"
+      +"</tr>"
+      +"</tfoot></table></body></html>";
     const w=window.open("","_blank");
     if(w){w.document.open();w.document.write(doc);w.document.close();setTimeout(()=>w.print(),400);}
   }
@@ -8199,18 +8243,18 @@ function TransportPagina({ klanten, orders, bedrijf, verpDef }) {
             <tfoot>{(()=>{
               const totTrays=tOrders.reduce((s,o)=>s+o.regels.reduce((r,x)=>r+x.aantal,0),0);
               const totPl=tOrders.reduce((s,o)=>s+o.regels.reduce((r,x)=>{const vd=verpDef.find(v=>v.naam===x.verpakking);return r+(vd?.aantal||0)*x.aantal;},0),0);
-              const totKarren=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return s+(v?v.k:0);},0);
+              const restKarren=tOrders.filter(o=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return v&&v.rest>0;});
+              // Restkarren NIET meetellen in totaal
+              const totKarren=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return s+(v?v.k-(v.rest>0?1:0):0);},0);
               const tot11=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return s+(v?v.a:0);},0);
               const tot13=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return s+(v?v.b:0);},0);
               const tot14=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return s+(v?v.c:0);},0);
-              const restKarren=tOrders.filter(o=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return v&&v.rest>0;});
-              const totRest=restKarren.length;
-              const totRestPl=restKarren.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return s+(v&&v.rest>0?v.rest-1:0);},0);
+              const restDetails=restKarren.map(o=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=berekenKarren(t);return "("+( v.rest-1)+")";}).join(" ");
               const samenvatting=[
                 tot11>0?tot11+"× 11pl":null,
                 tot13>0?tot13+"× 13pl":null,
                 tot14>0?tot14+"× 14pl":null,
-                totRest>0?totRest+"× rest ("+totRestPl+" pl.)":null,
+                restKarren.length>0?"rest: "+restKarren.length+"× "+restDetails:null,
               ].filter(Boolean).join(" · ");
               const bS={padding:"5px 6px",fontWeight:700,borderTop:"2px solid "+groen,background:"#e8f5ee"};
               return (

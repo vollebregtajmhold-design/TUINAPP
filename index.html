@@ -2176,7 +2176,16 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
       +"</body></html>";
 
     const w = window.open("","_blank");
-    if(w){w.document.open();w.document.write(doc);w.document.close();setTimeout(()=>w.print(),400);}
+    if(w){
+      w.document.open();w.document.write(doc);w.document.close();
+      setTimeout(()=>w.print(),400);
+      // Sla afdruktijdstip op in de order
+      const nu = new Date();
+      const tijdstip = nu.toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"});
+      const datumStr = nu.toLocaleDateString("nl-NL");
+      const bijgewerkt = {...order, pakbonGedrukt: datumStr+" "+tijdstip};
+      setOrders(prev=>prev.map(o=>o.id===order.id?bijgewerkt:o));
+    }
   }
 
 
@@ -4136,6 +4145,13 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                                     placeholder={String(gepland)}
                                     onFocus={e=>e.target.select()}
                                     onChange={e=>setReal(wk,actieType,rijKey,e.target.value)}
+                                    onKeyDown={e=>{
+                                      if((e.key==="ArrowUp"||e.key==="ArrowDown")&&werkInput==="") {
+                                        e.preventDefault();
+                                        const basis = Number(gepland)||0;
+                                        setReal(wk,actieType,rijKey,String(e.key==="ArrowUp"?basis+1:Math.max(0,basis-1)));
+                                      }
+                                    }}
                                   />
                                 </td>
                                 <td style={{...sTDR,padding:"2px 6px",fontWeight:700,
@@ -7006,7 +7022,7 @@ function HerstelBackup() {
   );
 }
 
-function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef, traykosten, setTraykosten }) {
+function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef, traykosten, setTraykosten, fontSize, setFontSize }) {
   const [b, setB] = useState({...bedrijf});
   const [mailUrl, setMailUrl] = useState(()=>{ try{ return localStorage.getItem('ta_mailUrl')||'https://script.google.com/macros/s/AKfycby5SF6Sx9DPmFNBO_hb1ztwmdHApE19DIinmm7rs_CEJQdpQO8HLPuEI9Y4dvIUAMOi/exec'; }catch(e){ return ''; } });
   const [fustNaam, setFustNaam] = useState("");
@@ -7025,6 +7041,21 @@ function Instellingen({ bedrijf, setBedrijf, verpDef, setVerpDef, traykosten, se
   return (
     <div style={{padding:20,maxWidth:520,overflowY:"auto"}}>
       <h2 style={{fontSize:15,fontWeight:700,marginBottom:14,color:groen}}>Instellingen</h2>
+
+      {/* Lettergrootte */}
+      <div style={{...gs.sectie,marginBottom:16}}>
+        <div style={gs.sectieLabel}>Weergave</div>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <label style={{...gs.label,marginBottom:0,minWidth:100}}>Lettergrootte</label>
+          <span style={{fontSize:12,color:subtekst}}>A</span>
+          <input type="range" min={11} max={18} step={1} value={fontSize}
+            style={{flex:1}}
+            onChange={e=>setFontSize(Number(e.target.value))} />
+          <span style={{fontSize:16,color:subtekst}}>A</span>
+          <span style={{fontSize:12,color:groen,fontWeight:600,minWidth:30}}>{fontSize}px</span>
+          <button style={gs.knopKlein} onClick={()=>setFontSize(14)}>Reset</button>
+        </div>
+      </div>
 
       {/* Fust */}
       <div style={{...gs.sectie,marginBottom:16}}>
@@ -8083,6 +8114,7 @@ function App() {
   const [orders,setOrders]     = useState(()=>laad("ta_orders",   SO));
   const [verpDef,setVerpDef]   = useState(()=>zorgVerpDef(laad("ta_verp", VERPAKKINGEN_DEF)));
   const [syncStatus,setSyncStatus] = useState("💾 Lokaal");
+  const [fontSize, setFontSize] = useState(()=>{ try{ return Number(localStorage.getItem("ta_fontSize"))||14; }catch(e){ return 14; } });
 
 
   // ── LOKAAL LADEN ─────────────────────────────────────────
@@ -8242,7 +8274,7 @@ function App() {
   );
 
   return (
-    <div style={{minHeight:"100vh",background:achtergrond}}>
+    <div style={{minHeight:"100vh",background:achtergrond,fontSize:fontSize+"px"}}>
       <div style={{background:groen,display:"flex",alignItems:"center",height:50,padding:"0 14px",gap:3}}>
         <div style={{color:wit,fontWeight:700,fontSize:15,marginRight:16}}>🌱 TuinApp</div>
         {menu.map(m=>(
@@ -8418,7 +8450,7 @@ function App() {
       {pagina==="inkoop"       && <Inkoopprijzen gewassen={gewassen} setGewassen={setGewassen} />}
       {pagina==="leveranciers" && <LeveranciersBeheer leveranciers={leveranciers} setLeveranciers={setLeveranciers} gewassen={gewassen} setGewassen={setGewassen} />}
       {pagina==="verpakkingen" && <Verpakkingen verpDef={verpDef} setVerpDef={setVerpDef} />}
-      {pagina==="instellingen"  && <Instellingen bedrijf={bedrijf} setBedrijf={setBedrijf} gewassen={gewassen} setGewassen={setGewassen} orders={orders} setOrders={setOrders} prijzen={prijzen} setPrijzen={setPrijzen} kiemkracht={kiemkracht} setKiemkracht={setKiemkracht} teeltduur={teeltduur} setTeeltduur={setTeeltduur} verpDef={verpDef} setVerpDef={setVerpDef} traykosten={traykosten} setTraykosten={setTraykosten} />}
+      {pagina==="instellingen"  && <Instellingen fontSize={fontSize} setFontSize={v=>{setFontSize(v);try{localStorage.setItem("ta_fontSize",v);}catch(e){}}} bedrijf={bedrijf} setBedrijf={setBedrijf} gewassen={gewassen} setGewassen={setGewassen} orders={orders} setOrders={setOrders} prijzen={prijzen} setPrijzen={setPrijzen} kiemkracht={kiemkracht} setKiemkracht={setKiemkracht} teeltduur={teeltduur} setTeeltduur={setTeeltduur} verpDef={verpDef} setVerpDef={setVerpDef} traykosten={traykosten} setTraykosten={setTraykosten} />}
     </div>
   );
 }
@@ -8801,6 +8833,7 @@ function maakTransportDoc(twk, tOrders, klanten, verpDef, bedrijf){
       +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac'>Verdeling</th>"
       +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>Planten</th>"
       +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:center'>Dag</th>"
+        +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:center'>Pakbon</th>"
     +"</tr></thead><tbody>"+rijen+"</tbody>"
     +"<tfoot><tr style='background:#a8d5b5;font-weight:700'>"
       +"<td colspan='2' style='padding:5px 8px;border:1px solid #c8e6c9;color:#2d6a4f;border-top:3px solid #0f3320'>"+pSamenvatting+"</td>"
@@ -8895,6 +8928,8 @@ function TransportPagina({ klanten, orders, bedrijf, verpDef }) {
       const dagen=["ZO","MA","DI","WO","DO","VR","ZA"];
       const td=o.transportDatum?new Date(o.transportDatum):null;
       const dagWk=td?"wk"+String(getWeekNr(o.transportDatum)).padStart(2,"0")+" "+dagen[td.getDay()]:"";
+      const gedruktOp = o.pakbonGedrukt||"";
+      const klaartijdTonen = gedruktOp ? (o.klaartijd||kl.klaartijd||"") : "";
       return "<tr style='background:"+bg+"'>"
         +"<td style='"+TD+";font-weight:700'>"+kl.naam+"</td>"
         +"<td style='"+TD+";vertical-align:middle;text-align:left'>"+(cp.mobiel||cp.telefoon||"")+"</td>"
@@ -8902,7 +8937,8 @@ function TransportPagina({ klanten, orders, bedrijf, verpDef }) {
         +"<td style='"+TD+";text-align:right;font-weight:700'>"+trays+"</td>"
         +"<td style='"+TD+";text-align:right;font-weight:700;color:#2d6a4f'>"+(verd?verd.k:"—")+"</td>"
         +"<td style='"+TD+";font-size:10px'>"+karOmschrijving(verd)+"</td>"
-        +"<td style='"+TD+";text-align:center;font-weight:700;color:#0891b2;font-size:12px;min-width:120px;white-space:nowrap'>"+dagWk+(dagWk&&(o.klaartijd||kl.klaartijd)?" ":"")+(o.klaartijd||kl.klaartijd?"<span style='font-weight:400;color:#333'>"+(o.klaartijd||kl.klaartijd)+"</span>":"")+"</td>"
+        +"<td style='"+TD+";text-align:center;font-weight:700;color:#0891b2;font-size:12px;min-width:120px;white-space:nowrap'>"+dagWk+(dagWk&&klaartijdTonen?" ":"")+(klaartijdTonen?"<span style='font-weight:400;color:#333'>"+klaartijdTonen+"</span>":"")+"</td>"
+        +"<td style='"+TD+";text-align:center;font-size:10px;color:"+(gedruktOp?"#166534":"#aaa")+"'>"+(gedruktOp?"🖨️ "+gedruktOp:"—")+"</td>"
         +"</tr>";
     }).join("");
     const doc="<!DOCTYPE html><html><head><meta charset='UTF-8'>"
@@ -8933,6 +8969,7 @@ function TransportPagina({ klanten, orders, bedrijf, verpDef }) {
           +[ptot11>0?ptot11+"× 11pl":null,ptot13>0?ptot13+"× 13pl":null,ptot14>0?ptot14+"× 14pl":null].filter(Boolean).join(" · ")
           +(prestKarren.length>0?"<br/>rest: "+prestKarren.length+"× "+prestDetails:"")
         +"</td>"
+        +"<td style='padding:5px 8px;border:2px solid #8cbfac'></td>"
         +"<td style='padding:5px 8px;border:2px solid #8cbfac'></td>"
       +"</tr>"
       +"</tfoot></table></body></html>";

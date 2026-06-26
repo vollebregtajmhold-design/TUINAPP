@@ -128,6 +128,14 @@ function weekOpties() {
   return opties.filter(o => { if(seen.has(o.label)) return false; seen.add(o.label); return true; });
 }
 
+function sorteerRegels(regels) {
+  return [...regels].sort((a,b)=>{
+    const g = a.gewas.localeCompare(b.gewas, "nl");
+    if(g!==0) return g;
+    return a.soort.localeCompare(b.soort, "nl");
+  });
+}
+
 function laad(k, def) { try { const v=localStorage.getItem(k); return v?JSON.parse(v):def; } catch { return def; } }
 function bewaar(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 
@@ -1089,7 +1097,7 @@ function OrderDetail({ ges, kl, klanten, verpDef, gewassen, setSt, setTab, setDa
     <div style={{fontSize:12}}>
       {/* TOPBALK */}
       <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:6,flexWrap:"wrap",background:"#fff",border:`1px solid ${rand}`,borderRadius:6,padding:"5px 8px"}}>
-        <button title="Bewerken" style={{background:lichtGroen,color:groen,border:"none",borderRadius:4,padding:"2px 7px",cursor:"pointer",fontSize:11,fontWeight:600}} onClick={()=>checkGewijzigd(()=>{setData({...ges});setRegel(legeRegel);setForm(true);setTab("lijst");})}>✏️</button>
+        <button title="Bewerken" style={{background:lichtGroen,color:groen,border:"none",borderRadius:4,padding:"2px 7px",cursor:"pointer",fontSize:11,fontWeight:600}} onClick={()=>checkGewijzigd(()=>{setData({...ges,regels:sorteerRegels(ges.regels||[])});setRegel(legeRegel);setForm(true);setTab("lijst");})}>✏️</button>
         <button title="Kopiëren" style={{background:lichtGroen,color:groen,border:"none",borderRadius:4,padding:"2px 7px",cursor:"pointer",fontSize:11,fontWeight:600}} onClick={()=>{setKopO(ges);}}>📋</button>
         {ges.bevestigingNr&&(()=>{
           const kl2 = klanten.find(k=>k.id===ges.klantId)||{};
@@ -1335,6 +1343,12 @@ function MatrixFilterPaneel({ klanten, gewassen, orders, verpDef, weken }) {
   rijen.forEach(r=>{
     if(!perKlant[r.klantId]) perKlant[r.klantId]={naam:r.klantNaam,rijen:[]};
     perKlant[r.klantId].rijen.push(r);
+  });
+  // Standaard: gewas alfabetisch, soort alfabetisch binnen gewas
+  Object.values(perKlant).forEach(kdata=>{
+    if(!matrixSort) kdata.rijen.sort((a,b)=>{
+      const g=a.gewas.localeCompare(b.gewas,"nl"); return g!==0?g:a.soort.localeCompare(b.soort,"nl");
+    });
   });
   // Sorteer rijen binnen elke klant
   Object.values(perKlant).forEach(kdata=>{
@@ -1881,7 +1895,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
     const p=prijzen.find(x=>x.klantId===Number(data.klantId)&&x.gewas===(k==="gewas"?v:r.gewas)&&x.soort===(k==="soort"?v:r.soort)&&x.verpakking===(k==="verpakking"?v:r.verpakking));
     if(p)r.prijs=p.prijs; setRegel(r);
   }
-  function regelAdd(){if(!regel.gewas||!regel.aantal)return;const vandaag=new Date().toISOString().split('T')[0];setData({...data,regels:[...data.regels,{...regel,id:Date.now(),datumInvoer:regel.datumInvoer||vandaag}]});setRegel(maakLegeRegel(data.klantId));setGewijzigd(true);
+  function regelAdd(){if(!regel.gewas||!regel.aantal)return;const vandaag=new Date().toISOString().split('T')[0];const nieuweRegels=sorteerRegels([...data.regels,{...regel,id:Date.now(),datumInvoer:regel.datumInvoer||vandaag}]);setData({...data,regels:nieuweRegels});setRegel(maakLegeRegel(data.klantId));setGewijzigd(true);
     if(data.bevestigingNr) setTimeout(()=>alert("⚠️ Let op: deze order is al bevestigd. Vergeet niet de klant opnieuw te informeren na het opslaan."),100);
   }
   function maakOrderNr(klantId, leverdatum, bestaandeOrders, huidigId) {
@@ -2004,7 +2018,8 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
     const transporteurNaam = order.transporteur || kl.transporteur || "";
     const klaartijdStr     = order.klaartijd    || kl.klaartijd    || "";
 
-    const regels = order.regels.map((r,i)=>{
+    const gesorteerdeRegels = sorteerRegels(order.regels||[]);
+    const regels = gesorteerdeRegels.map((r,i)=>{
       const vd = verpDef.find(v=>v.naam===r.verpakking);
       const pl = r.vastPlanten??((vd?.aantal||0)*r.aantal);
       const bg = i%2===0?"#fff":"#f9fcfb";
@@ -2122,7 +2137,8 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
     const leverD = new Date(order.leverdatum);
     const leverWkDag = weekLabel(order.leverdatum)+" "+dagenKort[leverD.getDay()];
 
-    const regels = order.regels.map((r,i)=>{
+    const gesorteerdeRegels = sorteerRegels(order.regels||[]);
+    const regels = gesorteerdeRegels.map((r,i)=>{
       const vd = verpDef.find(v=>v.naam===r.verpakking);
       const pl = r.vastPlanten??((vd?.aantal||0)*r.aantal);
       const bg = i%2===0?"#fff":"#f9fcfb";
@@ -2202,7 +2218,8 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
     vervalDatum.setDate(vervalDatum.getDate()+termijn);
     const vervalStr = vervalDatum.toLocaleDateString("nl-NL",{day:"2-digit",month:"long",year:"numeric"});
 
-    const regels = order.regels.map((r,i)=>{
+    const gesorteerdeRegels = sorteerRegels(order.regels||[]);
+    const regels = gesorteerdeRegels.map((r,i)=>{
       const vd = verpDef.find(v=>v.naam===r.verpakking);
       const pl = r.vastPlanten??((vd?.aantal||0)*r.aantal);
       const prijs = r.prijs?Number(r.prijs):0;
@@ -2604,10 +2621,10 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
         const nieuw = e.key==="ArrowDown"
           ? (gefilterd[idx+1]||gefilterd[0])
           : (gefilterd[idx-1]||gefilterd[gefilterd.length-1]);
-        if(nieuw) { setData({...nieuw});setRegel(maakLegeRegel(nieuw.klantId));setForm(true);setGes(nieuw);setTab("lijst");setFiltK(nieuw.klantId); }
+        if(nieuw) { setData({...nieuw,regels:sorteerRegels(nieuw.regels||[])});setRegel(maakLegeRegel(nieuw.klantId));setForm(true);setGes(nieuw);setTab("lijst");setFiltK(nieuw.klantId); }
         return;
       }
-      if(e.key==="Enter"&&ges&&!form) { setData({...ges});setRegel(maakLegeRegel(ges.klantId));setForm(true);setTab("lijst"); }
+      if(e.key==="Enter"&&ges&&!form) { setData({...ges,regels:sorteerRegels(ges.regels||[])});setRegel(maakLegeRegel(ges.klantId));setForm(true);setTab("lijst"); }
     }
     window.addEventListener("keydown", onKey);
     return ()=>window.removeEventListener("keydown", onKey);
@@ -2687,7 +2704,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
             return Object.entries(perWeek).map(([wk, weekOrders])=>(
               <WeekGroep key={wk} wk={wk} weekOrders={weekOrders} klanten={klanten}
                 ges={ges} verpDef={verpDef} forceOpen={alleWkenOpen}
-                onOpen={(o)=>checkGewijzigd(()=>{setData({...o});setRegel(maakLegeRegel(o.klantId));setForm(true);setGes(o);setTab("lijst");setFiltK(o.klantId);})}
+                onOpen={(o)=>checkGewijzigd(()=>{setData({...o,regels:sorteerRegels(o.regels||[])});setRegel(maakLegeRegel(o.klantId));setForm(true);setGes(o);setTab("lijst");setFiltK(o.klantId);})}
                 onKopie={(o)=>{setKopO(o);setKopODat(defWeek.datum);}}
                 plantenTotaal={plantenTotaal}
               />
@@ -3860,6 +3877,8 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
     const leverJaar = getJaar(o.leverdatum);
 
     o.regels.forEach(r => {
+      const gw_ = gewassen.find(g=>g.naam===r.gewas);
+      r = {...r, internNr:(gw_?.internNrs||{})[r.soort]||""};
       const trays = r.aantal;
       const uitzaaiWeken = getDuur(r.gewas, r.soort, r.verpakking, "uitzaai");
       const inboetWeken  = getDuur(r.gewas, r.soort, r.verpakking, "inboet");
@@ -3893,7 +3912,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
           : (kiem>0 ? Math.ceil(trays/kiem) : trays);
         const zaaiKey = r.gewas+"||"+r.soort+"||"+zaaiFust;
         if(!planning[zaaiLabel]) planning[zaaiLabel]={zaai:{},inboet:{}};
-        if(!planning[zaaiLabel].zaai[zaaiKey]) planning[zaaiLabel].zaai[zaaiKey]={gewas:r.gewas,soort:r.soort,fust:zaaiFust,trays:0,zaaiTrays:0,kiem:Math.round(kiem*100),leverWeek:leverLabel};
+        if(!planning[zaaiLabel].zaai[zaaiKey]) planning[zaaiLabel].zaai[zaaiKey]={gewas:r.gewas,soort:r.soort,fust:zaaiFust,trays:0,zaaiTrays:0,kiem:Math.round(kiem*100),leverWeek:leverLabel,internNr:r.internNr||""};
         planning[zaaiLabel].zaai[zaaiKey].trays += trays;
         planning[zaaiLabel].zaai[zaaiKey].zaaiTrays += zaaiTrays;
       }
@@ -3905,7 +3924,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
         if(inboetWk <= 0) { inboetJaar--; inboetWk += 52; }
         const inboetLabel = `${String(inboetJaar).slice(-2)}${String(inboetWk).padStart(2,"0")}`;
         if(!planning[inboetLabel]) planning[inboetLabel]={zaai:{},inboet:{}};
-        if(!planning[inboetLabel].inboet[rijKey]) planning[inboetLabel].inboet[rijKey]={gewas:r.gewas,soort:r.soort,fust:r.verpakking,trays:0,inboetTrays:0,kiem:Math.round(kiem*100),leverWeek:leverLabel};
+        if(!planning[inboetLabel].inboet[rijKey]) planning[inboetLabel].inboet[rijKey]={gewas:r.gewas,soort:r.soort,fust:r.verpakking,trays:0,inboetTrays:0,kiem:Math.round(kiem*100),leverWeek:leverLabel,internNr:r.internNr||""};
         planning[inboetLabel].inboet[rijKey].trays += trays;
         planning[inboetLabel].inboet[rijKey].inboetTrays += trays; // = bestelde trays
       }
@@ -5238,8 +5257,11 @@ function WegzetlijstMatrixPrint({ data, bedrijf, onSluit }) {
               code: trayRijen.find(r=>r.klantId===id)?.klantcode||"?",
             })).sort((a,b)=>a.naam.localeCompare(b.naam));
 
-            // Unieke soorten (gewas + soort), gesorteerd
-            const soortKeys = [...new Set(trayRijen.map(r=>r.gewas+"||"+r.soort))].sort();
+            // Unieke soorten (gewas + soort), gesorteerd gewas+soort alfabetisch
+            const soortKeys = [...new Set(trayRijen.map(r=>r.gewas+"||"+r.soort))].sort((a,b)=>{
+              const [ag,as_]=a.split("||"); const [bg,bs_]=b.split("||");
+              const g=ag.localeCompare(bg,"nl"); return g!==0?g:as_.localeCompare(bs_,"nl");
+            });
 
             // Matrix: soortKey → klantId → aantal
             const matrix = {};
@@ -5495,11 +5517,17 @@ function WerklijstPrint({ data, bedrijf, onSluit }) {
   const rijen = Object.values(isZaai ? blok.zaai : blok.inboet);
   const vandaag = new Date().toLocaleDateString("nl-NL");
 
-  // Groepeer per fust
+  // Groepeer per fust, gesorteerd gewas+soort alfabetisch
   const perFust = {};
   rijen.forEach(r => {
     if(!perFust[r.fust]) perFust[r.fust] = [];
     perFust[r.fust].push(r);
+  });
+  Object.values(perFust).forEach(fr => {
+    fr.sort((a,b)=>{
+      const g = a.gewas.localeCompare(b.gewas,"nl");
+      return g!==0 ? g : a.soort.localeCompare(b.soort,"nl");
+    });
   });
 
   const kleur = isZaai ? "#1d4ed8" : "#0891b2";
@@ -5550,6 +5578,7 @@ function WerklijstPrint({ data, bedrijf, onSluit }) {
                   <tr>
                     <th style={{padding:"6px 8px",background:"#e8f5ee",color:"#2d6a4f",border:"1px solid #c8e6c9",textAlign:"left",minWidth:120}}>Gewas</th>
                     <th style={{padding:"6px 8px",background:"#e8f5ee",color:"#2d6a4f",border:"1px solid #c8e6c9",textAlign:"left",minWidth:160}}>Soort</th>
+                    <th style={{padding:"6px 2px",background:"#e8f5ee",color:"#2d6a4f",border:"1px solid #c8e6c9",textAlign:"left",width:30,minWidth:30}}>Nr.</th>
                     <th style={{padding:"6px 8px",background:"#e8f5ee",color:"#2d6a4f",border:"1px solid #c8e6c9",textAlign:"right",minWidth:60}}>Nodig</th>
                     <th style={{padding:"6px 8px",background:"#fffbe6",color:"#854d0e",border:"1px solid #c8e6c9",textAlign:"right",minWidth:80}}>Gedaan</th>
                     <th style={{padding:"6px 8px",background:"#f9fafb",color:"#555",border:"1px solid #c8e6c9",textAlign:"left",minWidth:150}}>Opmerking</th>
@@ -5559,7 +5588,8 @@ function WerklijstPrint({ data, bedrijf, onSluit }) {
                   {fustrijen.map((r,i)=>(
                     <tr key={i} style={{background:i%2===0?"#fff":"#f9fcfb"}}>
                       <td style={{padding:"7px 8px",border:"1px solid #ddd"}}><strong>{r.gewas}</strong></td>
-                      <td style={{padding:"7px 8px",border:"1px solid #ddd"}}>{r.soort}</td>
+                      <td style={{padding:"7px 4px 7px 8px",border:"1px solid #ddd"}}>{r.soort}</td>
+                      <td style={{padding:"7px 2px 7px 0",border:"1px solid #ddd",color:"#333",fontWeight:700,width:30,whiteSpace:"nowrap"}}>{r.internNr||""}</td>
                       <td style={{padding:"7px 8px",border:"1px solid #ddd",textAlign:"right",fontWeight:700,color:kleur,fontSize:14}}>{(isZaai?r.zaaiTrays:r.inboetTrays)||0}</td>
                       <td style={{padding:"7px 8px",border:"1px solid #ddd"}}></td>
                       <td style={{padding:"7px 8px",border:"1px solid #ddd"}}></td>
@@ -5568,7 +5598,7 @@ function WerklijstPrint({ data, bedrijf, onSluit }) {
                 </tbody>
                 <tfoot>
                   <tr style={{background:"#e8f5ee",fontWeight:700}}>
-                    <td colSpan={2} style={{padding:"6px 8px",border:"1px solid #c8e6c9",color:"#2d6a4f",borderTop:"2px solid #2d6a4f"}}>Totaal</td>
+                    <td colSpan={3} style={{padding:"6px 8px",border:"1px solid #c8e6c9",color:"#2d6a4f",borderTop:"2px solid #2d6a4f"}}>Totaal</td>
                     <td style={{padding:"6px 8px",border:"1px solid #c8e6c9",textAlign:"right",color:kleur,borderTop:"2px solid #2d6a4f",fontSize:14}}>{fustrijen.reduce((s,r)=>s+(isZaai?r.zaaiTrays:r.inboetTrays)||0,0)}</td>
                     <td colSpan={2} style={{padding:"6px 8px",border:"1px solid #c8e6c9",borderTop:"2px solid #2d6a4f"}}></td>
                   </tr>
@@ -7963,7 +7993,7 @@ function maakPlanning(orders, teeltduur, kiemkracht) {
         const zaaiTrays=is65?Math.ceil(Math.ceil(trays/kiem)/4):(kiem>0?Math.ceil(trays/kiem):trays);
         const zaaiKey=r.gewas+"||"+r.soort+"||"+zaaiFust;
         if(!planning[zaaiLabel]) planning[zaaiLabel]={zaai:{},inboet:{}};
-        if(!planning[zaaiLabel].zaai[zaaiKey]) planning[zaaiLabel].zaai[zaaiKey]={gewas:r.gewas,soort:r.soort,fust:zaaiFust,trays:0,zaaiTrays:0,kiem:Math.round(kiem*100),leverWeek:leverLabel};
+        if(!planning[zaaiLabel].zaai[zaaiKey]) planning[zaaiLabel].zaai[zaaiKey]={gewas:r.gewas,soort:r.soort,fust:zaaiFust,trays:0,zaaiTrays:0,kiem:Math.round(kiem*100),leverWeek:leverLabel,internNr:r.internNr||""};
         planning[zaaiLabel].zaai[zaaiKey].trays+=trays;
         planning[zaaiLabel].zaai[zaaiKey].zaaiTrays+=zaaiTrays;
       }
@@ -7972,7 +8002,7 @@ function maakPlanning(orders, teeltduur, kiemkracht) {
         if(inboetWk<=0){inboetJaar--;inboetWk+=52;}
         const inboetLabel=String(inboetJaar).slice(-2)+String(inboetWk).padStart(2,"0");
         if(!planning[inboetLabel]) planning[inboetLabel]={zaai:{},inboet:{}};
-        if(!planning[inboetLabel].inboet[rijKey]) planning[inboetLabel].inboet[rijKey]={gewas:r.gewas,soort:r.soort,fust:r.verpakking,trays:0,inboetTrays:0,kiem:Math.round(kiem*100),leverWeek:leverLabel};
+        if(!planning[inboetLabel].inboet[rijKey]) planning[inboetLabel].inboet[rijKey]={gewas:r.gewas,soort:r.soort,fust:r.verpakking,trays:0,inboetTrays:0,kiem:Math.round(kiem*100),leverWeek:leverLabel,internNr:r.internNr||""};
         planning[inboetLabel].inboet[rijKey].trays+=trays;
         planning[inboetLabel].inboet[rijKey].inboetTrays+=trays;
       }

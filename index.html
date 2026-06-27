@@ -1984,7 +1984,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
     const p=prijzen.find(x=>x.klantId===Number(data.klantId)&&x.gewas===(k==="gewas"?v:r.gewas)&&x.soort===(k==="soort"?v:r.soort)&&x.verpakking===(k==="verpakking"?v:r.verpakking));
     if(p)r.prijs=p.prijs; setRegel(r);
   }
-  function regelAdd(){if(!regel.gewas||!regel.aantal)return;const vandaag=new Date().toISOString().split('T')[0];const nieuweRegels=sorteerRegels([...data.regels,{...regel,id:Date.now(),datumInvoer:regel.datumInvoer||vandaag}]);setData({...data,regels:nieuweRegels});setRegel(maakLegeRegel(data.klantId));setGewijzigd(true);
+  function regelAdd(){if(!regel.gewas||!regel.aantal)return;const vandaag=new Date().toISOString().split('T')[0];const nieuweRegels=sorteerRegels([...data.regels,{...regel,id:Date.now(),datumInvoer:regel.datumInvoer||vandaag}]);setData({...data,regels:nieuweRegels});const vorigeGewas=regel.gewas;const nieuw=maakLegeRegel(data.klantId);const g=gewassen?.find(x=>x.naam===vorigeGewas);nieuw.gewas=vorigeGewas;nieuw.soort=g?.soorten?.[0]||"";setRegel(nieuw);setGewijzigd(true);
     if(data.bevestigingNr) setTimeout(()=>alert("⚠️ Let op: deze order is al bevestigd. Vergeet niet de klant opnieuw te informeren na het opslaan."),100);
   }
   function maakOrderNr(klantId, leverdatum, bestaandeOrders, huidigId) {
@@ -2184,7 +2184,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
         +"</div>"
       +"</div>"
       +"<div style='background:#f0f7f4;border-radius:4px;padding:10px 18px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;font-size:13px;flex-wrap:wrap;gap:8px'>"
-        +"<div><span style='color:#555;font-size:12px'>Klant</span><br/><strong style='font-size:16px'>"+kl.naam+"</strong></div>"
+        +"<div><span style='color:#555;font-size:12px'>Klant</span><br/><strong style='font-size:16px'>"+kl.naam+"</strong><br/><span style='color:#555;font-size:11px'>Order: "+order.orderNr+"</span></div>"
         +"<div style='text-align:center'><span style='color:#555;font-size:12px'>Pakbon</span><br/><strong style='font-size:16px'>#"+(order.pakbonNr||"—")+"</strong></div>"
         +"<div style='text-align:center'><span style='color:#555;font-size:12px'>Transport</span><br/><strong style='font-size:15px'>"+transportStr+"</strong></div>"
         +(transporteurNaam?"<div style='text-align:center'><span style='color:#555;font-size:12px'>Transporteur</span><br/><strong style='font-size:15px'>"+transporteurNaam+"</strong></div>":"")
@@ -6959,11 +6959,12 @@ function Uitval({ gewassen, uitval, setUitval, verpDef }) {
 function Dashboard({ gewassen, zaadinkoop, uitval, orders, prijzen, verpDef, teeltduur, kiemkracht, leveranciers, klanten }) {
   const [selGewas, setSelGewas] = useState("");
   const [selSoort, setSelSoort] = useState("");
+  const [dashModus, setDashModus] = useState("soort"); // "soort" of "gewas"
   const [openBlok, setOpenBlok] = useState({inkoop:false,zaai:false,inboet:false,lever:false,uitval:false});
   const toggle = k => setOpenBlok(prev=>({...prev,[k]:!prev[k]}));
 
   const gewasSoorten = selGewas ? (gewassen.find(g=>g.naam===selGewas)?.soorten||[]) : [];
-  const toonData = selGewas && selSoort;
+  const toonData = selGewas && (dashModus==="gewas" || selSoort);
   const gw = (gewassen||[]).find(g=>g.naam===selGewas);
   const levId = gw?.leverancierId;
   const leverancier = levId ? (leveranciers||[]).find(l=>l.id===levId)?.naam||"" : "";
@@ -6973,10 +6974,13 @@ function Dashboard({ gewassen, zaadinkoop, uitval, orders, prijzen, verpDef, tee
 
   function haalNummer(naam) { const m=(naam||"").match(/(\d{3,6})\s*$/); return m?m[1]:null; }
   const selInternNr = internNr||haalNummer(selSoort);
+  // Filter helper: soort-modus filtert op soort, gewas-modus op alleen gewas
+  function matchRegel(r) { return r.gewas===selGewas&&(dashModus==="gewas"||r.soort===selSoort); }
+  function matchZaad(z) { return z.gewas===selGewas&&(dashModus==="gewas"||(z.soort===selSoort||(selInternNr&&(haalNummer(z.soort)===selInternNr||z.code===selInternNr)))); }
 
   // Inkoop
   const inkoopRegels = (zaadinkoop||[])
-    .filter(z=>z.gewas===selGewas&&(z.soort===selSoort||(selInternNr&&(haalNummer(z.soort)===selInternNr||z.code===selInternNr))))
+    .filter(z=>matchZaad(z))
     .sort((a,b)=>a.datum.localeCompare(b.datum));
   const totZaad = inkoopRegels.reduce((s,z)=>s+(z.aantal||0),0);
   const totInkoopBedrag = inkoopRegels.reduce((s,z)=>{
@@ -6988,11 +6992,11 @@ function Dashboard({ gewassen, zaadinkoop, uitval, orders, prijzen, verpDef, tee
   const zaaiMomenten=[]; const inboetMomenten=[];
   (orders||[]).forEach(o=>{
     (o.regels||[]).forEach(r=>{
-      if(r.gewas!==selGewas||r.soort!==selSoort) return;
+      if(!matchRegel(r)) return;
       const vd=(verpDef||[]).find(v=>v.naam===r.verpakking);
       const pl=r.vastPlanten??((vd?.aantal||0)*r.aantal);
       const kl=(klanten||[]).find(k=>k.id===o.klantId)?.naam||"?";
-      const kiem=(kiemkracht||[]).find(k=>k.gewas?.toLowerCase()===selGewas?.toLowerCase()&&k.soort?.toLowerCase()===selSoort?.toLowerCase());
+      const kiem=(kiemkracht||[]).find(k=>k.gewas?.toLowerCase()===selGewas?.toLowerCase()&&k.soort?.toLowerCase()===(r.soort||selSoort).toLowerCase());
       const kiemPct=kiem?kiem.waarde/100:0.9;
       // Zoek teeltduur specifiek voor dit fust, anders algemeen
       const td=(teeltduur||[]).find(t=>
@@ -7039,7 +7043,7 @@ function Dashboard({ gewassen, zaadinkoop, uitval, orders, prijzen, verpDef, tee
   const perKlant={};
   (orders||[]).forEach(o=>{
     (o.regels||[]).forEach(r=>{
-      if(r.gewas!==selGewas||r.soort!==selSoort) return;
+      if(!matchRegel(r)) return;
       const kl=(klanten||[]).find(k=>k.id===o.klantId);
       const naam=kl?.naam||"?";
       const vd=(verpDef||[]).find(v=>v.naam===r.verpakking);
@@ -7066,7 +7070,7 @@ function Dashboard({ gewassen, zaadinkoop, uitval, orders, prijzen, verpDef, tee
   const nogTeLeverenBedrag = Math.max(0, totBedrag - totGeleverdBedrag);
 
   // Uitval voor geselecteerde soort (buiten IIFE zodat blok er bij kan)
-  const uitvalDezesoort = toonData ? (uitval||[]).filter(u=>u.gewas===selGewas&&u.soort===selSoort) : [];
+  const uitvalDezesoort = toonData ? (uitval||[]).filter(u=>u.gewas===selGewas&&(dashModus==="gewas"||u.soort===selSoort)) : [];
   const uitvalTrays = uitvalDezesoort.reduce((s,u)=>s+Number(u.trays||0),0);
   const uitvalPlanten = uitvalDezesoort.reduce((s,u)=>{
     const vd=(verpDef||[]).find(v=>v.naam===u.verpakking);
@@ -7111,6 +7115,16 @@ function Dashboard({ gewassen, zaadinkoop, uitval, orders, prijzen, verpDef, tee
       {/* Selectiebalk */}
       <div style={{padding:"8px 16px",background:G.bg1,borderBottom:`1px solid ${G.rand}`,display:"flex",gap:10,alignItems:"flex-end",flexShrink:0,flexWrap:"wrap"}}>
         <strong style={{color:G.donker,fontSize:14,marginBottom:4}}>🌱 Dashboard</strong>
+        <div style={{display:"flex",gap:0,borderRadius:6,overflow:"hidden",border:`1px solid ${G.rand}`,flexShrink:0}}>
+          {["soort","gewas"].map(m=>(
+            <button key={m} tabIndex={-1}
+              style={{padding:"3px 10px",fontSize:11,fontWeight:600,cursor:"pointer",border:"none",
+                background:dashModus===m?G.midden:"#fff",color:dashModus===m?"#fff":G.midden}}
+              onClick={()=>{setDashModus(m);setSelSoort("");setOpenBlok({inkoop:false,zaai:false,inboet:false,lever:false,uitval:false});}}>
+              {m==="soort"?"Per soort":"Per gewas"}
+            </button>
+          ))}
+        </div>
         <div style={{display:"flex",flexDirection:"column",gap:1}}>
           <label style={{fontSize:10,color:G.midden}}>Gewas</label>
           <select style={{...gs.input,minWidth:160,fontSize:12}} value={selGewas}
@@ -7121,7 +7135,7 @@ function Dashboard({ gewassen, zaadinkoop, uitval, orders, prijzen, verpDef, tee
             ))}
           </select>
         </div>
-        {selGewas&&<div style={{display:"flex",flexDirection:"column",gap:1}}>
+        {selGewas&&dashModus==="soort"&&<div style={{display:"flex",flexDirection:"column",gap:1}}>
           <label style={{fontSize:10,color:G.midden}}>Soort</label>
           <select style={{...gs.input,minWidth:200,fontSize:12}} value={selSoort}
             onChange={e=>{setSelSoort(e.target.value);setOpenBlok({inkoop:false,zaai:false,inboet:false,lever:false});}}>
@@ -8597,6 +8611,25 @@ function App() {
   const [orders,setOrders]     = useState(()=>laad("ta_orders",   SO));
   const [verpDef,setVerpDef]   = useState(()=>zorgVerpDef(laad("ta_verp", VERPAKKINGEN_DEF)));
   const [syncStatus,setSyncStatus] = useState("💾 Lokaal");
+  const wijzTellerRef = React.useRef(0);
+
+  function telWijziging() {
+    wijzTellerRef.current += 1;
+    if(wijzTellerRef.current >= 10) {
+      wijzTellerRef.current = 0;
+      setTimeout(()=>{
+        if(window.confirm("💾 Tijd voor een backup!\n\nJe hebt 10 wijzigingen gemaakt.\nWil je nu een backup downloaden?")) {
+          const data={ta_orders:laad("ta_orders",[]),ta_klanten:laad("ta_klanten",[]),ta_gewassen:laad("ta_gewassen",[]),ta_prijzen:laad("ta_prijzen",{}),ta_zaadinkoop:laad("ta_zaadinkoop",[]),ta_uitval:laad("ta_uitval",[]),ta_verp:laad("ta_verp",[]),ta_teeltduur:laad("ta_teeltduur",[]),ta_kiemkracht:laad("ta_kiemkracht",[]),ta_bedrijf:laad("ta_bedrijf",{})};
+          const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+          const url=URL.createObjectURL(blob);
+          const a=document.createElement("a");
+          a.href=url;a.download="TuinApp_backup_"+new Date().toISOString().slice(0,10)+".json";
+          a.click();URL.revokeObjectURL(url);
+          localStorage.setItem("ta_backup_laats",new Date().toISOString());
+        }
+      },200);
+    }
+  }
   const [fontSize, setFontSize] = useState(()=>{ try{ return Number(localStorage.getItem("ta_fontSize"))||14; }catch(e){ return 14; } });
 
 
@@ -8618,15 +8651,15 @@ function App() {
   }, []);
 
   // ── OPSLAAN IN LOCALSTORAGE ──────────────────────────────
-  useEffect(()=>{if(!geladen)return;bewaar("ta_klanten",klanten);},[klanten]);
-  useEffect(()=>{if(!geladen)return;bewaar("ta_gewassen",gewassen);},[gewassen]);
+  useEffect(()=>{if(!geladen)return;bewaar("ta_klanten",klanten);telWijziging();},[klanten]);
+  useEffect(()=>{if(!geladen)return;bewaar("ta_gewassen",gewassen);telWijziging();},[gewassen]);
   useEffect(()=>{if(!geladen)return;bewaar("ta_prijzen",prijzen);},[prijzen]);
-  useEffect(()=>{if(!geladen)return;bewaar("ta_orders",orders);},[orders]);
+  useEffect(()=>{if(!geladen)return;bewaar("ta_orders",orders);telWijziging();},[orders]);
   useEffect(()=>{if(!geladen)return;bewaar("ta_verp",verpDef);},[verpDef]);
   useEffect(()=>{if(!geladen)return;bewaar("ta_kiemkracht",kiemkracht);},[kiemkracht]);
   useEffect(()=>{if(!geladen)return;bewaar("ta_teeltduur",teeltduur);},[teeltduur]);
-  useEffect(()=>{if(!geladen)return;bewaar("ta_zaadinkoop",zaadinkoop);},[zaadinkoop]);
-  useEffect(()=>{if(!geladen)return;bewaar("ta_uitval",uitval);},[uitval]);
+  useEffect(()=>{if(!geladen)return;bewaar("ta_zaadinkoop",zaadinkoop);telWijziging();},[zaadinkoop]);
+  useEffect(()=>{if(!geladen)return;bewaar("ta_uitval",uitval);telWijziging();},[uitval]);
   useEffect(()=>{if(!geladen)return;bewaar("ta_bedrijf",bedrijf);},[bedrijf]);
   useEffect(()=>{if(!geladen)return;bewaar("ta_traykosten",traykosten);},[traykosten]);
   useEffect(()=>{if(!geladen)return;bewaar("ta_leveranciers",leveranciers);},[leveranciers]);
@@ -9294,13 +9327,13 @@ function maakTransportDoc(twk, tOrders, klanten, verpDef, bedrijf){
     const bg=i%2===0?wit:"#f0f7f4";
     return "<tr style='background:"+bg+"'>"
       +"<td style='padding:5px 8px;border:1px solid #eee;font-weight:700'>"+kl.naam+"</td>"
-      +"<td style='padding:5px 8px;border:2px solid #b0cfc0'>"+(cp.naam||"—")+"<br/><small style='color:#666'>"+[cp.telefoon,cp.email].filter(Boolean).join(" · ")+"</small></td>"
+      +"<td style='padding:5px 8px;border:2px solid #b0cfc0;white-space:nowrap;font-size:10px'>"+[cp.naam||"—",[cp.telefoon,cp.email].filter(Boolean).join(" · ")].filter(Boolean).join(" · ")+"</td>"
       +"<td style='padding:5px 8px;border:1px solid #eee;font-size:11px'>"+fusten+"</td>"
       +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right;font-weight:700'>"+trays+"</td>"
       +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right;font-weight:700;color:#2d6a4f'>"+(verd?verd.k:"—")+"</td>"
-      +"<td style='padding:5px 8px;border:1px solid #eee;font-size:10px'>"+_karOmschrijving(verd)+"</td>"
+      +"<td style='padding:5px 8px;border:1px solid #eee;font-size:10px;white-space:nowrap'>"+_karOmschrijving(verd)+"</td>"
       +"<td style='padding:5px 8px;border:1px solid #eee;text-align:right'>"+pl.toLocaleString("nl-NL")+"</td>"
-      +(()=>{const td2=o.transportDatum?new Date(o.transportDatum):null;const dg=["ZO","MA","DI","WO","DO","VR","ZA"];const dw=td2?"wk"+String(getWeekNr(o.transportDatum)).padStart(2,"0")+" "+dg[td2.getDay()]:"";return "<td style='padding:5px 8px;border:1px solid #eee;width:60px;text-align:center;font-weight:700;color:#0891b2;font-size:11px'>"+dw+"</td>";})()
+      +(()=>{const td2=o.transportDatum?new Date(o.transportDatum):null;const dg=["ZO","MA","DI","WO","DO","VR","ZA"];const dw=td2?"wk"+String(getWeekNr(o.transportDatum)).padStart(2,"0")+" "+dg[td2.getDay()]:"";const klrt=o.klaartijd?" "+o.klaartijd:"";const pb=o.pakbonNr?" #"+o.pakbonNr:"";return "<td style='padding:5px 8px;border:1px solid #eee;white-space:nowrap;text-align:center;font-weight:700;color:#0891b2;font-size:11px'>"+dw+klrt+pb+"</td>";})()
       +"</tr>";
   }).join("");
   return "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
@@ -9318,8 +9351,7 @@ function maakTransportDoc(twk, tOrders, klanten, verpDef, bedrijf){
       +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>Karren</th>"
       +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac'>Verdeling</th>"
       +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>Planten</th>"
-      +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:center'>Dag</th>"
-        +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:center'>Pakbon</th>"
+      +"<th style='padding:5px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:center'>Dag & Tijd</th>"
     +"</tr></thead><tbody>"+rijen+"</tbody>"
     +"<tfoot><tr style='background:#a8d5b5;font-weight:700'>"
       +"<td colspan='2' style='padding:5px 8px;border:1px solid #c8e6c9;color:#2d6a4f;border-top:3px solid #0f3320'>"+pSamenvatting+"</td>"
@@ -9422,9 +9454,8 @@ function TransportPagina({ klanten, orders, bedrijf, verpDef }) {
         +"<td style='"+TD+";font-size:11px'>"+fusten+"</td>"
         +"<td style='"+TD+";text-align:right;font-weight:700'>"+trays+"</td>"
         +"<td style='"+TD+";text-align:right;font-weight:700;color:#2d6a4f'>"+(verd?verd.k:"—")+"</td>"
-        +"<td style='"+TD+";font-size:10px'>"+karOmschrijving(verd)+"</td>"
+        +"<td style='"+TD+";font-size:10px;white-space:nowrap'>"+karOmschrijving(verd)+"</td>"
         +"<td style='"+TD+";text-align:center;font-weight:700;color:#0891b2;font-size:12px;min-width:120px;white-space:nowrap'>"+dagWk+(dagWk&&klaartijdTonen?" ":"")+(klaartijdTonen?"<span style='font-weight:400;color:#333'>"+klaartijdTonen+"</span>":"")+"</td>"
-        +"<td style='"+TD+";text-align:center;font-size:10px;color:"+(gedruktOp?"#166534":"#aaa")+"'>"+(gedruktOp?"🖨️ "+gedruktOp:"—")+"</td>"
         +"</tr>";
     }).join("");
     const doc="<!DOCTYPE html><html><head><meta charset='UTF-8'>"
@@ -9455,7 +9486,6 @@ function TransportPagina({ klanten, orders, bedrijf, verpDef }) {
           +[ptot11>0?ptot11+"× 11pl":null,ptot13>0?ptot13+"× 13pl":null,ptot14>0?ptot14+"× 14pl":null].filter(Boolean).join(" · ")
           +(prestKarren.length>0?"<br/>rest: "+prestKarren.length+"× "+prestDetails:"")
         +"</td>"
-        +"<td style='padding:5px 8px;border:2px solid #8cbfac'></td>"
         +"<td style='padding:5px 8px;border:2px solid #8cbfac'></td>"
       +"</tr>"
       +"</tfoot></table></body></html>";

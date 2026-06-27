@@ -261,6 +261,32 @@ const gs = {
 const TH = {textAlign:"left",padding:"5px 10px",fontSize:10,fontWeight:700,color:"#3a5a4a",textTransform:"uppercase",letterSpacing:0.5,borderBottom:"2px solid #b0cfc0",background:"#eaf4ef",whiteSpace:"nowrap"};
 const TD = {padding:"5px 10px",fontSize:14,borderBottom:`1px solid ${rand}`};
 
+function BeveiligingsOverlay({ onOntgrendel, label }) {
+  return (
+    <div style={{position:"absolute",top:0,left:0,right:0,bottom:0,
+      background:"rgba(255,255,255,0.85)",zIndex:50,
+      display:"flex",alignItems:"center",justifyContent:"center",
+      backdropFilter:"blur(2px)"}}>
+      <div style={{background:"#fff",border:`2px solid ${rand}`,borderRadius:12,
+        padding:"32px 40px",textAlign:"center",boxShadow:"0 8px 32px rgba(0,0,0,0.12)",maxWidth:320}}>
+        <div style={{fontSize:40,marginBottom:12}}>🔒</div>
+        <div style={{fontWeight:700,fontSize:16,color:groen,marginBottom:6}}>{label}</div>
+        <div style={{fontSize:12,color:subtekst,marginBottom:20,lineHeight:1.6}}>
+          Dit tabblad is beveiligd tegen onbedoelde wijzigingen.<br/>
+          Klik op Ontgrendelen om gegevens te bewerken.
+        </div>
+        <button style={{...gs.knopPrimair,padding:"9px 24px",fontSize:14}}
+          onClick={()=>{
+            if(window.confirm("Weet u zeker dat u "+label+" wilt bewerken? Wijzigingen worden direct opgeslagen."))
+              onOntgrendel();
+          }}>
+          🔓 Ontgrendelen
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function BevestigModal({ tekst, onJa, onNee }) {
   return (
     <div style={gs.overlay}>
@@ -735,6 +761,7 @@ function PrijsInput({ prijs, onSave, style }) {
 }
 
 function Prijzen({ klanten, gewassen, prijzen, setPrijzen, verpDef }) {
+  const [ontgrendeld, setOntgrendeld] = React.useState(false);
   const [selKlant, setSelKlant] = useState(klanten[0]?.id||0);
   const [kopModal, setKopModal] = useState(false);
   const [kopNaarKlant, setKopNaarKlant] = useState("");
@@ -808,7 +835,8 @@ function Prijzen({ klanten, gewassen, prijzen, setPrijzen, verpDef }) {
   const mTD = {padding:"3px 5px",fontSize:12,borderBottom:`1px solid ${rand}`};
 
   return (
-    <div style={{display:"flex",height:"calc(100vh - 50px)"}}>
+    <div style={{display:"flex",height:"calc(100vh - 50px)",position:"relative"}}>
+      {!ontgrendeld&&<BeveiligingsOverlay onOntgrendel={()=>setOntgrendeld(true)} label="Verkoopprijzen" />}
       {/* Linker sidebar: klantenkeuze */}
       <div style={{width:200,borderRight:`1px solid ${rand}`,background:wit,overflowY:"auto",padding:10,flexShrink:0}}>
         <div style={{fontSize:10,fontWeight:700,color:groen,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Klant</div>
@@ -3761,6 +3789,7 @@ function TeeltduurInput({ waarde, onSave, stijl }) {
 }
 
 function Teeltduur({ gewassen, verpDef, teeltduur, setTeeltduur }) {
+  const [ontgrendeld, setOntgrendeld] = React.useState(false);
   const [openGewas, setOpenGewas] = useState(()=>
     Object.fromEntries((gewassen||[]).map(g=>["open_"+g.naam, false]))
   );
@@ -3808,7 +3837,8 @@ function Teeltduur({ gewassen, verpDef, teeltduur, setTeeltduur }) {
   const mTD = {padding:"3px 6px", fontSize:12, borderBottom:`1px solid ${rand}`};
 
   return (
-    <div style={{display:"flex", height:"calc(100vh - 50px)"}}>
+    <div style={{display:"flex", height:"calc(100vh - 50px)", position:"relative"}}>
+      {!ontgrendeld&&<BeveiligingsOverlay onOntgrendel={()=>setOntgrendeld(true)} label="Teeltduur" />}
       {/* Info */}
       <div style={{width:180, borderRight:`1px solid ${rand}`, background:wit, padding:14, flexShrink:0}}>
         <div style={{fontSize:11, fontWeight:700, color:groen, marginBottom:8, textTransform:"uppercase", letterSpacing:1}}>Teeltduur</div>
@@ -4402,6 +4432,7 @@ function KiemInput({ waarde, onSave, style }) {
 }
 
 function Kiemkracht({ gewassen, kiemkracht, setKiemkracht }) {
+  const [ontgrendeld, setOntgrendeld] = React.useState(false);
   const [openGewas, setOpenGewas] = useState(()=>Object.fromEntries((gewassen||[]).map(g=>["open_"+g.naam,false])));
   const [vulAlles, setVulAlles] = useState({});
 
@@ -4438,7 +4469,8 @@ function Kiemkracht({ gewassen, kiemkracht, setKiemkracht }) {
   const mTD={padding:"3px 8px",fontSize:12,borderBottom:`1px solid ${rand}`};
 
   return (
-    <div style={{display:"flex",height:"calc(100vh - 50px)"}}>
+    <div style={{display:"flex",height:"calc(100vh - 50px)",position:"relative"}}>
+      {!ontgrendeld&&<BeveiligingsOverlay onOntgrendel={()=>setOntgrendeld(true)} label="Kiemkracht" />}
       {/* Info paneel links */}
       <div style={{width:200,borderRight:`1px solid ${rand}`,background:wit,padding:14,flexShrink:0}}>
         <div style={{fontSize:11,fontWeight:700,color:groen,marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>Kiemkracht</div>
@@ -6128,7 +6160,7 @@ function ZaadVoorraad({ zaadinkoop, orders, gewassen, kiemkracht, teeltduur, bed
                     </button>
                   );
                 })}
-              </div>}
+              </div>
             </div>
           )}
 
@@ -6630,51 +6662,77 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
 
 function Uitval({ gewassen, uitval, setUitval, verpDef }) {
   const huidigWk = String(getJaar(new Date().toISOString().split("T")[0])).slice(-2)+String(getWeekNr(new Date().toISOString().split("T")[0])).padStart(2,"0");
-  const leeg = ()=>({id:null,week:huidigWk,gewas:"",soort:"",verpakking:"",trays:0,aantalPerTray:0});
-  const [data,  setData]  = useState(leeg());
+  const eersteGewas = (gewassen||[]).sort((a,b)=>a.naam.localeCompare(b.naam,"nl"))[0]?.naam||"";
+  const eersteVerpDef = (verpDef||[])[0];
+
+  function leegData() {
+    const gw = gewassen.find(g=>g.naam===eersteGewas);
+    const soort = gw?.soorten?.[0]||"";
+    const vd = eersteVerpDef;
+    return {id:null,week:huidigWk,gewas:eersteGewas,soort,verpakking:vd?.naam||"",trays:0,aantalPerTray:vd?.aantal||0,opmerking:""};
+  }
+
+  const [data, setData] = useState(leegData);
   const [delId, setDelId] = useState(null);
   const [filtGewas, setFiltGewas] = useState("");
   const [filtSoort, setFiltSoort] = useState("");
-  const [filtWeek,  setFiltWeek]  = useState("");
+  const [filtWeek, setFiltWeek] = useState("");
 
-  const soorten = data.gewas ? (gewassen.find(g=>g.naam===data.gewas)?.soorten||[]) : [];
-  const verpakkingen = verpDef||[];
+  // Letter-cycling state
+  const gewasLetterRef = React.useRef({letter:"",idx:0});
+  const soortLetterRef = React.useRef({letter:"",idx:0});
+  const fustLetterRef  = React.useRef({letter:"",idx:0});
 
-  // Refs voor keyboard navigatie
-  const refWeek    = React.useRef();
   const refGewas   = React.useRef();
+  React.useEffect(()=>{ setTimeout(()=>refGewas.current?.focus(),100); },[]);
   const refSoort   = React.useRef();
   const refFust    = React.useRef();
   const refTrays   = React.useRef();
-  const refOpmerk  = React.useRef();
   const refOpslaan = React.useRef();
+  const refOpmerk  = React.useRef();
 
-  function volgende(ref) { setTimeout(()=>ref.current?.focus(),50); }
+  function focus(ref) { setTimeout(()=>ref.current?.focus(),50); }
 
-  // Enter op input → volgende veld; op select → open dropdown (browser doet dit al)
-  function keyEnterWeek(e)   { if(e.key==="Enter"||e.key==="ArrowDown") { e.preventDefault(); volgende(refGewas); } }
-  function keyEnterGewas(e)  { if(e.key==="Enter") { e.preventDefault(); volgende(refSoort); } }
-  function keyEnterSoort(e)  { if(e.key==="Enter") { e.preventDefault(); volgende(refFust); } }
-  function keyEnterFust(e)   { if(e.key==="Enter") { e.preventDefault(); volgende(refTrays); } }
-  function keyEnterTrays(e)  {
-    if(e.key==="Enter"||e.key==="ArrowDown") { e.preventDefault(); volgende(refOpmerk); }
-    if(e.key==="ArrowUp")   { e.preventDefault(); setData(prev=>({...prev,trays:Math.round((Number(prev.trays||0)+0.25)*100)/100})); }
-    if(e.key==="ArrowDown") { e.preventDefault(); setData(prev=>({...prev,trays:Math.max(0,Math.round((Number(prev.trays||0)-0.25)*100)/100)})); }
+  const soorten = (gewassen.find(g=>g.naam===data.gewas)?.soorten||[]).sort((a,b)=>a.localeCompare(b,"nl"));
+  const verpakkingen = verpDef||[];
+  const gesorteerdeGewassen = (gewassen||[]).sort((a,b)=>a.naam.localeCompare(b.naam,"nl"));
+
+  // Zet gewas + reset soort/fust
+  function setGewas(naam) {
+    const gw = gewassen.find(g=>g.naam===naam);
+    const soort = gw?.soorten?.[0]||"";
+    const vd = verpDef[0];
+    setData(prev=>({...prev,gewas:naam,soort,verpakking:vd?.naam||"",aantalPerTray:vd?.aantal||0}));
   }
-  function keyEnterOpmerk(e) { if(e.key==="Enter") { e.preventDefault(); volgende(refOpslaan); } }
+  function setSoort(naam) { setData(prev=>({...prev,soort:naam})); }
+  function setFust(naam) {
+    const vd = verpDef.find(v=>v.naam===naam);
+    setData(prev=>({...prev,verpakking:naam,aantalPerTray:vd?.aantal||0}));
+  }
+
+  // Letter-cycling helper
+  function cycleLetter(letter, items, getVal, setVal, cycleRef) {
+    const l = letter.toLowerCase();
+    const matches = items.filter(x=>getVal(x).toLowerCase().startsWith(l));
+    if(!matches.length) return false;
+    const ref = cycleRef.current;
+    if(ref.letter !== l) { ref.letter=l; ref.idx=0; }
+    else { ref.idx=(ref.idx+1)%matches.length; }
+    setVal(matches[ref.idx]);
+    return true;
+  }
 
   function opslaan() {
-    if(!data.week||!data.gewas||!data.soort||!data.verpakking||!data.trays) return;
-    if(data.id) {
-      setUitval(prev=>prev.map(u=>u.id===data.id?{...data}:u));
-    } else {
-      setUitval(prev=>[...prev,{...data,id:Date.now()}]);
-    }
-    setData(leeg());
+    if(!data.week||!data.gewas||!data.soort||!data.verpakking||!data.trays) return false;
+    if(data.id) setUitval(prev=>prev.map(u=>u.id===data.id?{...data}:u));
+    else setUitval(prev=>[...prev,{...data,id:Date.now()}]);
+    setData(leegData());
+    setTimeout(()=>refGewas.current?.focus(),50);
+    return true;
   }
 
   function verwijder(id) { setUitval(prev=>prev.filter(u=>u.id!==id)); setDelId(null); }
-  function bewerken(u) { setData({...u}); }
+  function bewerken(u) { setData({...u}); setTimeout(()=>refGewas.current?.focus(),50); }
 
   const gefilterd = [...uitval]
     .filter(u=>(!filtGewas||u.gewas===filtGewas)&&(!filtSoort||u.soort===filtSoort)&&(!filtWeek||u.week===filtWeek))
@@ -6682,7 +6740,6 @@ function Uitval({ gewassen, uitval, setUitval, verpDef }) {
 
   const totaalTrays = gefilterd.reduce((s,u)=>s+Number(u.trays||0),0);
   const totaalPlanten = gefilterd.reduce((s,u)=>s+Math.round(Number(u.trays||0)*Number(u.aantalPerTray||0)),0);
-
   const alleWeken = [...new Set(uitval.map(u=>u.week))].sort((a,b)=>b.localeCompare(a));
   const alleSoorten = [...new Set(uitval.filter(u=>!filtGewas||u.gewas===filtGewas).map(u=>u.soort))].sort((a,b)=>a.localeCompare(b,"nl"));
 
@@ -6690,83 +6747,78 @@ function Uitval({ gewassen, uitval, setUitval, verpDef }) {
   const sTD = {padding:"5px 8px",fontSize:12,borderBottom:`1px solid ${rand}`};
   const sTDR = {...sTD,textAlign:"right"};
 
+  // Weken dropdown (huidige ±8)
+  const wkOpties = (()=>{
+    const nu=new Date(); const opts=[];
+    for(let i=-8;i<=4;i++){
+      const d=new Date(nu); d.setDate(nu.getDate()+i*7);
+      const ds=d.toISOString().split("T")[0];
+      const lbl=String(getJaar(ds)).slice(-2)+String(getWeekNr(ds)).padStart(2,"0");
+      if(!opts.includes(lbl)) opts.push(lbl);
+    }
+    return opts;
+  })();
+
   return (
     <div style={{display:"flex",height:"calc(100vh - 50px)",overflow:"hidden"}}>
-
       {/* Linker formulier */}
-      <div style={{width:260,borderRight:`1px solid ${rand}`,background:"#f9fcfb",padding:14,display:"flex",flexDirection:"column",gap:10,overflowY:"auto",flexShrink:0}}>
-        <div style={{fontWeight:700,fontSize:13,color:groen,marginBottom:4}}>{data.id?"✏️ Bewerken":"➕ Nieuwe uitval"}</div>
+      <div style={{width:260,borderRight:`1px solid ${rand}`,background:"#f9fcfb",padding:14,display:"flex",flexDirection:"column",gap:8,overflowY:"auto",flexShrink:0}}>
+        <div style={{fontWeight:700,fontSize:13,color:groen,marginBottom:2}}>{data.id?"✏️ Bewerken":"➕ Nieuwe uitval"}</div>
 
+        {/* Gewas */}
         <div style={gs.veldGroep}>
-          <label style={gs.label}>Week <span style={{fontSize:10,color:subtekst}}>(↑↓ kiezen, Enter→gewas)</span></label>
-          {(()=>{
-            // Genereer weken: 8 weken terug t/m 4 weken vooruit
-            const wkOpties = [];
-            const nu = new Date();
-            for(let i=-8;i<=4;i++){
-              const d=new Date(nu); d.setDate(nu.getDate()+i*7);
-              const ds=d.toISOString().split("T")[0];
-              const lbl=String(getJaar(ds)).slice(-2)+String(getWeekNr(ds)).padStart(2,"0");
-              if(!wkOpties.includes(lbl)) wkOpties.push(lbl);
-            }
-            return (
-              <select ref={refWeek} autoFocus style={gs.input} value={data.week}
-                onChange={e=>setData({...data,week:e.target.value})}
-                onKeyDown={e=>{if(e.key==="Enter"&&data.week&&!e.shiftKey){e.preventDefault();volgende(refGewas);}}}>
-                {wkOpties.map(w=><option key={w} value={w}>{w}</option>)}
-              </select>
-            );
-          })()}
-        </div>
-
-        <div style={gs.veldGroep}>
-          <label style={gs.label}>Gewas <span style={{fontSize:10,color:subtekst}}>(↑↓ kiezen, Enter→soort)</span></label>
+          <label style={gs.label}>Gewas <span style={{fontSize:10,color:subtekst}}>(letter=zoek, ↓=lijst, Tab→soort)</span></label>
           <select ref={refGewas} style={gs.input} value={data.gewas}
-            onChange={e=>setData({...data,gewas:e.target.value,soort:""})}
+            onChange={e=>setGewas(e.target.value)}
             onKeyDown={e=>{
-              if(e.key==="Enter"&&data.gewas&&!e.shiftKey){e.preventDefault();volgende(refSoort);}
-              if(e.shiftKey&&e.key==="Enter"){e.preventDefault();volgende(refWeek);}
+              if(e.key==="Tab"&&!e.shiftKey){e.preventDefault();focus(refSoort);}
+              if(e.key==="Tab"&&e.shiftKey){e.preventDefault();} // laat browser teruggaan
+              if(e.key.length===1&&e.key.match(/[a-zA-Z]/i)){
+                e.preventDefault();
+                cycleLetter(e.key,gesorteerdeGewassen,g=>g.naam,g=>setGewas(g.naam),gewasLetterRef);
+              }
             }}>
-            <option value="">— Kies gewas —</option>
-            {(gewassen||[]).sort((a,b)=>a.naam.localeCompare(b.naam,"nl")).map(g=>(
-              <option key={g.naam} value={g.naam}>{g.naam}</option>
-            ))}
+            {gesorteerdeGewassen.map(g=><option key={g.naam} value={g.naam}>{g.naam}</option>)}
           </select>
         </div>
 
+        {/* Soort */}
         <div style={gs.veldGroep}>
-          <label style={gs.label}>Soort <span style={{fontSize:10,color:subtekst}}>(↑↓ kiezen, Enter→fust)</span></label>
+          <label style={gs.label}>Soort <span style={{fontSize:10,color:subtekst}}>(letter=zoek, ↓=lijst, Tab→fust)</span></label>
           <select ref={refSoort} style={gs.input} value={data.soort}
-            onChange={e=>setData({...data,soort:e.target.value})}
+            onChange={e=>setSoort(e.target.value)}
             onKeyDown={e=>{
-              if(e.key==="Enter"&&data.soort&&!e.shiftKey){e.preventDefault();volgende(refFust);}
-              if(e.shiftKey&&e.key==="Enter"){e.preventDefault();volgende(refGewas);}
+              if(e.key==="Tab"&&!e.shiftKey){e.preventDefault();focus(refFust);}
+              if(e.key==="Tab"&&e.shiftKey){e.preventDefault();focus(refGewas);}
+              if(e.key.length===1&&e.key.match(/[a-zA-Z]/i)){
+                e.preventDefault();
+                cycleLetter(e.key,soorten,s=>s,s=>setSoort(s),soortLetterRef);
+              }
             }}>
-            <option value="">— Kies soort —</option>
-            {soorten.sort((a,b)=>a.localeCompare(b,"nl")).map(s=>(
-              <option key={s} value={s}>{s}</option>
-            ))}
+            {soorten.map(s=><option key={s} value={s}>{s}</option>)}
           </select>
         </div>
 
+        {/* Fust */}
         <div style={gs.veldGroep}>
-          <label style={gs.label}>Verpakking <span style={{fontSize:10,color:subtekst}}>(↑↓ kiezen, Enter→trays)</span></label>
+          <label style={gs.label}>Fust <span style={{fontSize:10,color:subtekst}}>(letter=zoek, ↓=lijst, Tab→trays)</span></label>
           <select ref={refFust} style={gs.input} value={data.verpakking}
-            onChange={e=>{
-              const vd=verpDef.find(v=>v.naam===e.target.value);
-              setData({...data,verpakking:e.target.value,aantalPerTray:vd?.aantal||0});
-            }}
+            onChange={e=>setFust(e.target.value)}
             onKeyDown={e=>{
-              if(e.key==="Enter"&&data.verpakking&&!e.shiftKey){e.preventDefault();volgende(refTrays);}
-              if(e.shiftKey&&e.key==="Enter"){e.preventDefault();volgende(refSoort);}
+              if(e.key==="Tab"&&!e.shiftKey){e.preventDefault();focus(refTrays);}
+              if(e.key==="Tab"&&e.shiftKey){e.preventDefault();focus(refSoort);}
+              if(e.key.length===1&&e.key.match(/[a-zA-Z]/i)){
+                e.preventDefault();
+                cycleLetter(e.key,verpakkingen,v=>v.naam,v=>setFust(v.naam),fustLetterRef);
+              }
             }}>
-            <option value="">— Kies fust —</option>
             {verpakkingen.map(v=><option key={v.naam} value={v.naam}>{v.naam} ({v.aantal} pl.)</option>)}
           </select>
         </div>
 
+        {/* Trays */}
         <div style={gs.veldGroep}>
-          <label style={gs.label}>Trays uitval <span style={{fontSize:10,color:subtekst}}>(↑↓ = ±0,25)</span></label>
+          <label style={gs.label}>Trays uitval <span style={{fontSize:10,color:subtekst}}>(↑↓ = ±0,25, Tab→toevoegen)</span></label>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
             <button tabIndex={-1} style={{...gs.knopSecundair,padding:"2px 8px",fontSize:14}}
               onClick={()=>setData(prev=>({...prev,trays:Math.max(0,Math.round((Number(prev.trays||0)-0.25)*100)/100)}))}>−</button>
@@ -6775,10 +6827,10 @@ function Uitval({ gewassen, uitval, setUitval, verpDef }) {
               value={data.trays}
               onChange={e=>setData({...data,trays:Number(e.target.value)||0})}
               onKeyDown={e=>{
-                if(e.key==="ArrowUp")  { e.preventDefault(); setData(prev=>({...prev,trays:Math.round((Number(prev.trays||0)+0.25)*100)/100})); }
-                if(e.key==="ArrowDown"){ e.preventDefault(); setData(prev=>({...prev,trays:Math.max(0,Math.round((Number(prev.trays||0)-0.25)*100)/100)})); }
-                if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();volgende(refOpslaan);}
-                if(e.shiftKey&&e.key==="Enter"){e.preventDefault();volgende(refFust);}
+                if(e.key==="ArrowUp"){e.preventDefault();setData(prev=>({...prev,trays:Math.round((Number(prev.trays||0)+0.25)*100)/100}));}
+                if(e.key==="ArrowDown"){e.preventDefault();setData(prev=>({...prev,trays:Math.max(0,Math.round((Number(prev.trays||0)-0.25)*100)/100)}));}
+                if(e.key==="Tab"&&!e.shiftKey){e.preventDefault();focus(refOpslaan);}
+                if(e.key==="Tab"&&e.shiftKey){e.preventDefault();focus(refFust);}
               }}
             />
             <button tabIndex={-1} style={{...gs.knopSecundair,padding:"2px 8px",fontSize:14}}
@@ -6791,25 +6843,45 @@ function Uitval({ gewassen, uitval, setUitval, verpDef }) {
           )}
         </div>
 
-        <button ref={refOpslaan} style={{...gs.knopPrimair,marginTop:4}} onClick={opslaan}
-          onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){opslaan();setTimeout(()=>refWeek.current?.focus(),100);}if(e.shiftKey&&e.key==="Enter"){e.preventDefault();volgende(refTrays);}}}
-          disabled={!data.week||!data.gewas||!data.soort||!data.verpakking||!data.trays}>
+        {/* Toevoegen knop */}
+        <button ref={refOpslaan}
+          style={{...gs.knopPrimair,marginTop:2}}
+          disabled={!data.week||!data.gewas||!data.soort||!data.verpakking||!data.trays}
+          onKeyDown={e=>{
+            if(e.key==="Enter"){e.preventDefault();if(opslaan()){};}
+            if(e.key==="Tab"&&!e.shiftKey){e.preventDefault();focus(refOpmerk);}
+            if(e.key==="Tab"&&e.shiftKey){e.preventDefault();focus(refTrays);}
+          }}
+          onClick={opslaan}>
           {data.id?"💾 Opslaan":"➕ Toevoegen"}
         </button>
-        {data.id&&<button style={gs.knopSecundair} onClick={()=>setData(leeg())}>Annuleren</button>}
+        {data.id&&<button style={gs.knopSecundair} onClick={()=>{setData(leegData());setTimeout(()=>refGewas.current?.focus(),50);}}>Annuleren</button>}
 
+        {/* Week — onder toevoegen */}
         <div style={gs.veldGroep}>
-          <label style={gs.label}>Opmerking <span style={{fontSize:10,color:subtekst}}>(optioneel)</span></label>
+          <label style={gs.label}>Week</label>
+          <select tabIndex={-1} style={gs.input} value={data.week}
+            onChange={e=>setData({...data,week:e.target.value})}>
+            {wkOpties.map(w=><option key={w} value={w}>{w}</option>)}
+          </select>
+        </div>
+
+        {/* Opmerking — onder toevoegen */}
+        <div style={gs.veldGroep}>
+          <label style={gs.label}>Opmerking <span style={{fontSize:10,color:subtekst}}>(optioneel, Enter=opslaan)</span></label>
           <input ref={refOpmerk} style={gs.input} placeholder="bijv. te klein, slechte kieming..."
             value={data.opmerking||""}
             onChange={e=>setData({...data,opmerking:e.target.value})}
-            onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); opslaan(); setTimeout(()=>refWeek.current?.focus(),100); } }}
+            onKeyDown={e=>{
+              if(e.key==="Enter"){e.preventDefault();opslaan();}
+              if(e.key==="Tab"&&e.shiftKey){e.preventDefault();focus(refOpslaan);}
+            }}
           />
         </div>
 
         <hr style={{border:`1px solid ${rand}`,margin:"4px 0"}}/>
 
-        {/* Filters */}
+        {/* Filter */}
         <div style={{fontSize:11,fontWeight:700,color:groen}}>Filter</div>
         <div style={gs.veldGroep}>
           <label style={gs.label}>Week</label>
@@ -6822,9 +6894,7 @@ function Uitval({ gewassen, uitval, setUitval, verpDef }) {
           <label style={gs.label}>Gewas</label>
           <select style={gs.input} value={filtGewas} onChange={e=>{setFiltGewas(e.target.value);setFiltSoort("");}}>
             <option value="">Alle gewassen</option>
-            {(gewassen||[]).sort((a,b)=>a.naam.localeCompare(b.naam,"nl")).map(g=>(
-              <option key={g.naam} value={g.naam}>{g.naam}</option>
-            ))}
+            {gesorteerdeGewassen.map(g=><option key={g.naam} value={g.naam}>{g.naam}</option>)}
           </select>
         </div>
         <div style={gs.veldGroep}>
@@ -6885,10 +6955,11 @@ function Uitval({ gewassen, uitval, setUitval, verpDef }) {
   );
 }
 
+
 function Dashboard({ gewassen, zaadinkoop, uitval, orders, prijzen, verpDef, teeltduur, kiemkracht, leveranciers, klanten }) {
   const [selGewas, setSelGewas] = useState("");
   const [selSoort, setSelSoort] = useState("");
-  const [openBlok, setOpenBlok] = useState({inkoop:false,zaai:false,inboet:false,lever:false});
+  const [openBlok, setOpenBlok] = useState({inkoop:false,zaai:false,inboet:false,lever:false,uitval:false});
   const toggle = k => setOpenBlok(prev=>({...prev,[k]:!prev[k]}));
 
   const gewasSoorten = selGewas ? (gewassen.find(g=>g.naam===selGewas)?.soorten||[]) : [];
@@ -6993,6 +7064,14 @@ function Dashboard({ gewassen, zaadinkoop, uitval, orders, prijzen, verpDef, tee
   const nogTeInboeten = Math.max(0, totZaaiZaden - totInboetPlanten);
   const nogTeLeveren = Math.max(0, totPlanten - totGeleverd);
   const nogTeLeverenBedrag = Math.max(0, totBedrag - totGeleverdBedrag);
+
+  // Uitval voor geselecteerde soort (buiten IIFE zodat blok er bij kan)
+  const uitvalDezesoort = toonData ? (uitval||[]).filter(u=>u.gewas===selGewas&&u.soort===selSoort) : [];
+  const uitvalTrays = uitvalDezesoort.reduce((s,u)=>s+Number(u.trays||0),0);
+  const uitvalPlanten = uitvalDezesoort.reduce((s,u)=>{
+    const vd=(verpDef||[]).find(v=>v.naam===u.verpakking);
+    return s+Math.round(Number(u.trays||0)*(vd?.aantal||u.aantalPerTray||0));
+  },0);
 
   const fmt=n=>n>0?n.toLocaleString("nl-NL"):"—";
   const eur=n=>n>0?"€ "+n.toFixed(0):"—";
@@ -7146,9 +7225,11 @@ function Dashboard({ gewassen, zaadinkoop, uitval, orders, prijzen, verpDef, tee
                 const teVeel = Math.max(0, huidigeVoorraad - nogTeZaaienRest);
                 return ["Te veel einde seizoen", teVeel>0?fmt(teVeel):"—", teVeel>0?"zaden over":"geen overschot", false];
               })(),
+              ["Uitval",             uitvalTrays>0?uitvalTrays.toLocaleString("nl-NL",{maximumFractionDigits:2})+" trays":"—",
+                                     uitvalPlanten>0?fmt(uitvalPlanten)+" planten":"", uitvalTrays>0],
             ];
             return (
-              <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:8}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:8}}>
                 {items.map(([lbl,v1,v2,alarm])=>(
                   <div key={lbl} style={{
                     background:alarm?"#fff8f0":G.bg1,
@@ -7165,6 +7246,43 @@ function Dashboard({ gewassen, zaadinkoop, uitval, orders, prijzen, verpDef, tee
 
           {/* 4 uitvouwbare blokken in 2x2 */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+
+            {/* Uitval blok */}
+            {toonData&&uitvalDezesoort.length>0&&<div style={blokStijl(openBlok.uitval)}>
+              <div style={blokHeader(openBlok.uitval)} onClick={()=>toggle("uitval")}>
+                <div style={{fontSize:12,fontWeight:600,color:G.donker}}>
+                  🍂 Uitval
+                  <span style={{fontWeight:400,color:G.midden,marginLeft:8,fontSize:11}}>
+                    {uitvalDezesoort.length}× · {uitvalTrays.toLocaleString("nl-NL",{maximumFractionDigits:2})} trays · {fmt(uitvalPlanten)} planten
+                  </span>
+                </div>
+                <span style={{color:G.midden,fontSize:11}}>{openBlok.uitval?"▲":"▼"}</span>
+              </div>
+              {openBlok.uitval&&<table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead><tr>
+                  {["Week","Fust","Trays","Planten","Opmerking"].map((h,i)=>(
+                    <th key={h} style={{...TH3,textAlign:i>=2&&i<=3?"right":"left"}}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>{uitvalDezesoort.sort((a,b)=>b.week.localeCompare(a.week)).map((u,i)=>{
+                  const vd=(verpDef||[]).find(v=>v.naam===u.verpakking);
+                  const pl=Math.round(Number(u.trays||0)*(vd?.aantal||u.aantalPerTray||0));
+                  return <tr key={u.id} style={{background:i%2===0?G.wit:G.bg1}}>
+                    <td style={{...TD3,color:subtekst,fontSize:11}}>{u.week}</td>
+                    <td style={TD3}><span style={gs.badge}>{u.verpakking}</span></td>
+                    <td style={{...TDr}}>{Number(u.trays).toLocaleString("nl-NL",{maximumFractionDigits:2})}</td>
+                    <td style={{...TDr,color:G.midden,fontWeight:600}}>{pl.toLocaleString("nl-NL")}</td>
+                    <td style={{...TD3,fontSize:11,color:subtekst}}>{u.opmerking||"—"}</td>
+                  </tr>;
+                })}</tbody>
+                <tfoot><tr style={{background:G.bg2,fontWeight:700,borderTop:`1px solid ${G.rand}`}}>
+                  <td colSpan={2} style={{...TD3,color:G.donker}}>Totaal</td>
+                  <td style={{...TDr,color:G.donker}}>{uitvalTrays.toLocaleString("nl-NL",{maximumFractionDigits:2})}</td>
+                  <td style={{...TDr,color:G.donker}}>{fmt(uitvalPlanten)}</td>
+                  <td style={TD3}></td>
+                </tr></tfoot>
+              </table>}
+            </div>}
 
             {/* Inkoop */}
             <div style={blokStijl(openBlok.inkoop)}>
@@ -9752,6 +9870,7 @@ function LeveranciersBeheer({ leveranciers, setLeveranciers, gewassen, setGewass
 }
 
 function Inkoopprijzen({ gewassen, setGewassen }) {
+  const [ontgrendeld, setOntgrendeld] = React.useState(false);
   const [openGewas, setOpenGewas] = useState(()=>
     Object.fromEntries((gewassen||[]).map(g=>["open_"+g.naam, false]))
   );
@@ -9771,7 +9890,8 @@ function Inkoopprijzen({ gewassen, setGewassen }) {
   const mTD = {padding:"4px 8px",fontSize:12,borderBottom:`1px solid ${rand}`};
 
   return (
-    <div style={{display:"flex",height:"calc(100vh - 50px)"}}>
+    <div style={{display:"flex",height:"calc(100vh - 50px)",position:"relative"}}>
+      {!ontgrendeld&&<BeveiligingsOverlay onOntgrendel={()=>setOntgrendeld(true)} label="Inkoopprijzen zaad" />}
       {/* Info */}
       <div style={{width:200,borderRight:`1px solid ${rand}`,background:wit,padding:14,flexShrink:0}}>
         <div style={{fontSize:11,fontWeight:700,color:groen,marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>Inkoopprijzen</div>

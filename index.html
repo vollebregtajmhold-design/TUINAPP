@@ -1239,8 +1239,12 @@ function WeekGroep({ wk, weekOrders, klanten, ges, verpDef, onOpen, onKopie, pla
   return (
     <div style={{marginBottom:4}}>
       {/* Week header */}
-      <div onClick={handleWeekKlik} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-        padding:"5px 8px",background:"#d4e8dc",borderRadius:4,cursor:"pointer",marginBottom:2}}>
+      <div onClick={handleWeekKlik} tabIndex={0}
+        onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();handleWeekKlik();}}}
+        style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+        padding:"5px 8px",background:"#d4e8dc",borderRadius:4,cursor:"pointer",marginBottom:2,outline:"none"}}
+        onFocus={e=>e.currentTarget.style.outline="2px solid #2d6a4f"}
+        onBlur={e=>e.currentTarget.style.outline="none"}>
         <span style={{fontWeight:700,fontSize:12,color:"#1e3a2f",letterSpacing:0.5}}>
           {weekOrders.length===1 ? "▸" : open ? "▾" : "▸"} {wk}
         </span>
@@ -1382,9 +1386,10 @@ function MatrixFilterPaneel({ klanten, gewassen, orders, verpDef, weken }) {
       if(!matrixData[rijKey]) matrixData[rijKey]={klantId:rijKlant,klantNaam:filtKlant==="TOTAAL"?"Alle klanten":klantNaam,gewas:filtGewas==="TOTAAL"?"Alle teelten":r.gewas,soort:filtSoort==="TOTAAL"?"Alle soorten":r.soort,verpakking:filtVerp==="TOTAAL"?"Alle verpakkingen":r.verpakking,weken:{}};
 
       let waarde=0;
-      if(filtWaarde==="planten"||filtWaarde==="duizend") waarde=plantenPerRegel(r);
+      const planten=r.vastPlanten??plantenPerRegel(r);
+      if(filtWaarde==="planten"||filtWaarde==="duizend") waarde=planten;
       else if(filtWaarde==="trays") waarde=r.aantal;
-      else if(filtWaarde==="bedrag") waarde=Number(r.prijs||0)*r.aantal;
+      else if(filtWaarde==="bedrag") waarde=Number(r.prijs||0)*planten;
 
       matrixData[rijKey].weken[wk]=(matrixData[rijKey].weken[wk]||0)+waarde;
     });
@@ -1458,7 +1463,7 @@ function MatrixFilterPaneel({ klanten, gewassen, orders, verpDef, weken }) {
   const eenheid = filtWaarde==="bedrag" ? "€" : filtWaarde==="duizend" ? "x1000" : filtWaarde==="planten" ? "pl." : "trays";
   const formatWaarde = (v)=>{
     if(v===0||!v) return <span style={{color:"#ccc"}}>—</span>;
-    if(filtWaarde==="bedrag") return `€ ${v.toFixed(2)}`;
+    if(filtWaarde==="bedrag") return `€ ${Math.round(v).toLocaleString("nl-NL")}`;
     if(filtWaarde==="duizend") return (v/1000).toFixed(1);
     return v.toLocaleString();
   };
@@ -1670,6 +1675,8 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
   },[]);
   const [regel,setRegel]=useState({...legeRegel}); const [ges,setGes]=useState(null);
   const [delId,setDelId]=useState(null); const [filtS,setFiltS]=useState(""); const [filtK,setFiltK]=useState(0);
+  const [klantZoek,setKlantZoek]=useState(""); const [klantZoekOpen,setKlantZoekOpen]=useState(false); const refKlantZoek=React.useRef(); const refKlantLijst=React.useRef();
+  const letterCycleRef=React.useRef({letter:"",idx:0});
   const [kopO,setKopO]=useState(null); const [kopODat,setKopODat]=useState(defWeek.datum);
   const [kopR,setKopR]=useState(null); const [kopRDoel,setKopRDoel]=useState("");
   const [kopRKlant,setKopRKlant]=useState(""); const [kopRWk,setKopRWk]=useState("");
@@ -2699,18 +2706,96 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
         {/* Vaste bovenkant */}
         <div style={{padding:"8px 10px",borderBottom:`1px solid ${rand}`,flexShrink:0}}>
 
-          {/* Klant — verplicht, altijd als eerste */}
-          <select style={{...gs.input,marginBottom:6,fontSize:14,fontWeight:700,
-            color:"#fff",
-            background:groen,
-            borderColor:groen}}
-            value={filtK} onChange={e=>{setFiltK(e.target.value);setGes(null);setForm(false);if(e.target.value)setShowMatrix(true);}}>
-            <option value={0}>— Kies een klant —</option>
-            {klanten.sort((a,b)=>a.naam.localeCompare(b.naam)).map(k=><option key={k.id} value={k.id}>{k.naam}</option>)}
-          </select>
+          {/* Klant — type-ahead zoeken */}
+          {(()=>{
+            const geselecteerd = klanten.find(k=>k.id===Number(filtK));
+            const zoekResultaten = klantZoek
+              ? klanten.filter(k=>k.naam.toLowerCase().includes(klantZoek.toLowerCase())).sort((a,b)=>a.naam.localeCompare(b.naam))
+              : klanten.sort((a,b)=>a.naam.localeCompare(b.naam));
+            return (
+              <div style={{position:"relative",marginBottom:6}}>
+                <div style={{display:"flex",gap:0}}>
+                <input ref={refKlantZoek} autoFocus
+                  style={{...gs.input,fontSize:13,fontWeight:700,
+                    color:geselecteerd?"#fff":groen,
+                    background:geselecteerd?groen:"#e8f5ee",
+                    borderColor:groen,borderRadius:"6px 0 0 6px",flex:1}}
+                  placeholder="🔍 Typ of gebruik ▼"
+                  value={klantZoekOpen?klantZoek:(geselecteerd?.naam||"")}
+                  onFocus={()=>{setKlantZoekOpen(true);setKlantZoek("");}}
+                  onChange={e=>{setKlantZoek(e.target.value);setKlantZoekOpen(true);}}
+                  onKeyDown={e=>{
+                    if(e.key==="Escape"){setKlantZoekOpen(false);setKlantZoek("");return;}
+                    if(e.key==="ArrowDown"){e.preventDefault();setKlantZoekOpen(true);setTimeout(()=>refKlantLijst.current?.querySelector("div[tabindex]")?.focus(),50);return;}
+                    if(e.key==="Enter"&&zoekResultaten.length===1){
+                      const k=zoekResultaten[0];
+                      setFiltK(k.id);setGes(null);setForm(false);setShowMatrix(true);
+                      setKlantZoek("");setKlantZoekOpen(false);return;
+                    }
+                    // Enter zonder zoekresultaat = nieuwe order voor gekozen klant
+                    if(e.key==="Enter"&&!klantZoekOpen&&filtK){
+                      e.preventDefault();
+                      const nieuwData={...maakLeeg(),klantId:Number(filtK)};
+                      setData(nieuwData);setRegel(maakLegeRegel(Number(filtK)));
+                      setForm(true);setGes(null);setTab("lijst");return;
+                    }
+                    // Letter-cycling: één letter → spring door klanten met die letter
+                    if(e.key.length===1&&e.key.match(/[a-zA-Z]/i)){
+                      e.preventDefault();
+                      const letter=e.key.toLowerCase();
+                      const gesorteerd=klanten.slice().sort((a,b)=>a.naam.localeCompare(b.naam,"nl"));
+                      const matches=gesorteerd.filter(k=>k.naam.toLowerCase().startsWith(letter));
+                      if(matches.length===0) return;
+                      const ref=letterCycleRef.current;
+                      if(ref.letter!==letter){ref.letter=letter;ref.idx=0;}
+                      else{ref.idx=(ref.idx+1)%matches.length;}
+                      const k=matches[ref.idx];
+                      setFiltK(k.id);setGes(null);setForm(false);setShowMatrix(true);
+                      setKlantZoek("");setKlantZoekOpen(false);
+                    }
+                  }}
+                />
+                <button
+                  tabIndex={-1}
+                  style={{background:groen,color:"#fff",border:"none",borderRadius:"0 6px 6px 0",
+                    padding:"0 10px",cursor:"pointer",fontSize:14,flexShrink:0}}
+                  onClick={()=>{
+                    setKlantZoek("");
+                    setKlantZoekOpen(true);
+                    setTimeout(()=>refKlantZoek.current?.focus(),50);
+                  }}
+                  title="Toon alle klanten">▼</button>
+                </div>
+                {klantZoekOpen&&zoekResultaten.length>0&&(
+                  <div ref={refKlantLijst} style={{position:"absolute",top:"100%",left:0,right:0,
+                    background:wit,border:`1px solid ${groen}`,borderRadius:6,zIndex:100,
+                    maxHeight:220,overflowY:"auto",boxShadow:"0 4px 12px rgba(0,0,0,0.15)"}}>
+                    {zoekResultaten.map((k,i)=>(
+                      <div key={k.id} tabIndex={0}
+                        style={{padding:"6px 10px",fontSize:13,cursor:"pointer",
+                          background:k.id===Number(filtK)?lichtGroen:wit,
+                          fontWeight:k.id===Number(filtK)?700:400,
+                          color:k.id===Number(filtK)?groen:tekst}}
+                        onClick={()=>{setFiltK(k.id);setGes(null);setForm(false);setShowMatrix(true);setKlantZoek("");setKlantZoekOpen(false);}}
+                        onMouseEnter={e=>e.currentTarget.style.background="#f0f7f4"}
+                        onMouseLeave={e=>e.currentTarget.style.background=k.id===Number(filtK)?lichtGroen:wit}
+                        onKeyDown={e=>{
+                          if(e.key==="Enter"){setFiltK(k.id);setGes(null);setForm(false);setShowMatrix(true);setKlantZoek("");setKlantZoekOpen(false);refKlantZoek.current?.focus();}
+                          if(e.key==="ArrowDown"){e.preventDefault();const next=e.currentTarget.nextSibling;if(next)next.focus();}
+                          if(e.key==="ArrowUp"){e.preventDefault();const prev=e.currentTarget.previousSibling;if(prev)prev.focus();else refKlantZoek.current?.focus();}
+                          if(e.key==="Escape"){setKlantZoekOpen(false);setKlantZoek("");refKlantZoek.current?.focus();}
+                        }}>
+                        {k.naam}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Import knop — altijd zichtbaar */}
-          <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",background:"#e8f5ee",border:`1px solid ${lichtGroen}`,borderRadius:6,padding:"5px 10px",marginBottom:6}}>
+          <label tabIndex={-1} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",background:"#e8f5ee",border:`1px solid ${lichtGroen}`,borderRadius:6,padding:"5px 10px",marginBottom:6}}>
             <span style={{fontSize:13}}>📥</span>
             <span style={{fontSize:12,fontWeight:600,color:groen}}>Importeer Excel</span>
             <input type="file" accept=".xlsx,.xls,.csv" style={{display:"none"}}
@@ -2719,19 +2804,19 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
 
           {filtK ? <>
             {/* Zoek */}
-            <input style={{...gs.input,marginBottom:6,fontSize:12}} placeholder="🔍 Zoek order..." value={zoek||""} onChange={e=>setZoek(e.target.value)} />
+            <input tabIndex={-1} style={{...gs.input,marginBottom:6,fontSize:12}} placeholder="🔍 Zoek order..." value={zoek||""} onChange={e=>setZoek(e.target.value)} />
             {/* Week van/tot */}
             <div style={{display:"flex",flexDirection:"column",gap:3,marginBottom:4}}>
               <div style={{display:"flex",gap:4,alignItems:"center"}}>
                 <span style={{fontSize:11,color:subtekst,width:24}}>Van</span>
-                <select style={{flex:1,padding:"4px 5px",border:`1px solid ${rand}`,borderRadius:5,background:wit,fontSize:11}} value={filtVanWeek} onChange={e=>setFiltVanWeek(e.target.value)}>
+                <select style={{flex:1,padding:"4px 5px",border:`1px solid ${rand}`,borderRadius:5,background:wit,fontSize:11}} tabIndex={-1} value={filtVanWeek} onChange={e=>setFiltVanWeek(e.target.value)}>
                   <option value="">Alle</option>
                   {alleWeken.map(w=><option key={w}>{w}</option>)}
                 </select>
               </div>
               <div style={{display:"flex",gap:4,alignItems:"center"}}>
                 <span style={{fontSize:11,color:subtekst,width:24}}>Tot</span>
-                <select style={{flex:1,padding:"4px 5px",border:`1px solid ${rand}`,borderRadius:5,background:wit,fontSize:11}} value={filtTotWeek} onChange={e=>setFiltTotWeek(e.target.value)}>
+                <select style={{flex:1,padding:"4px 5px",border:`1px solid ${rand}`,borderRadius:5,background:wit,fontSize:11}} tabIndex={-1} value={filtTotWeek} onChange={e=>setFiltTotWeek(e.target.value)}>
                   <option value="">Alle</option>
                   {alleWeken.map(w=><option key={w}>{w}</option>)}
                 </select>
@@ -2743,7 +2828,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
         <div style={{overflowY:"auto",flex:1,padding:"6px 8px"}}>
           {/* + Nieuwe order — alleen als klant gekozen */}
           {filtK
-            ? <button style={{...gs.knopPrimair,width:"100%",marginBottom:8,padding:"7px"}}
+            ? <button tabIndex={-1} style={{...gs.knopPrimair,width:"100%",marginBottom:8,padding:"7px"}}
                 onClick={()=>{
                   const nieuwData={...maakLeeg(),klantId:Number(filtK)};
                   setData(nieuwData);
@@ -2754,8 +2839,8 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
           }
           {filtK ? <>
           <div style={{display:"flex",gap:4,marginBottom:6}}>
-            <button style={{...gs.knopSecundair,flex:1,padding:"2px",fontSize:10}} onClick={()=>{setAlleWkenOpen(true);setTimeout(()=>setAlleWkenOpen(null),100);}}>▼ Alles open</button>
-            <button style={{...gs.knopSecundair,flex:1,padding:"2px",fontSize:10}} onClick={()=>{setAlleWkenOpen(false);setTimeout(()=>setAlleWkenOpen(null),100);}}>▲ Alles dicht</button>
+            <button tabIndex={-1} style={{...gs.knopSecundair,flex:1,padding:"2px",fontSize:10}} onClick={()=>{setAlleWkenOpen(true);setTimeout(()=>setAlleWkenOpen(null),100);}}>▼ Alles open</button>
+            <button tabIndex={-1} style={{...gs.knopSecundair,flex:1,padding:"2px",fontSize:10}} onClick={()=>{setAlleWkenOpen(false);setTimeout(()=>setAlleWkenOpen(null),100);}}>▲ Alles dicht</button>
           </div>
           {(()=>{
             const perWeek = {};
@@ -3002,7 +3087,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                               value={data.klaartijd||""}
                               onChange={e=>setData(prev=>({...prev,klaartijd:e.target.value}))}
                             />
-                          </div>;
+                          </div>
                         })()}
                         {/* Pakbon knop */}
                         <div style={{display:"flex",gap:4,alignItems:"center"}}>
@@ -5197,7 +5282,7 @@ function MultiBevestigingPrint({ data, bedrijf, verpDef, onSluit }) {
                   </tfoot>
                 </table>
               </div>
-            ));
+            ))
           })()}
 
           {/* Slottekst */}
@@ -6800,7 +6885,7 @@ function Uitval({ gewassen, uitval, setUitval, verpDef }) {
   );
 }
 
-function Dashboard({ gewassen, zaadinkoop, orders, prijzen, verpDef, teeltduur, kiemkracht, leveranciers, klanten }) {
+function Dashboard({ gewassen, zaadinkoop, uitval, orders, prijzen, verpDef, teeltduur, kiemkracht, leveranciers, klanten }) {
   const [selGewas, setSelGewas] = useState("");
   const [selSoort, setSelSoort] = useState("");
   const [openBlok, setOpenBlok] = useState({inkoop:false,zaai:false,inboet:false,lever:false});
@@ -6971,7 +7056,29 @@ function Dashboard({ gewassen, zaadinkoop, orders, prijzen, verpDef, teeltduur, 
           <div style={{marginLeft:"auto",display:"flex",gap:10,alignItems:"center",
             background:G.bg2,border:`1px solid ${G.rand}`,borderRadius:6,padding:"5px 12px",fontSize:11,color:G.donker,flexWrap:"wrap"}}>
             {leverancier&&<span><span style={{color:G.midden}}>Leverancier: </span><strong>{leverancier}</strong></span>}
-            {kiemSetting&&<span><span style={{color:G.midden}}>Kiem: </span><strong>{kiemSetting.waarde}%</strong></span>}
+            {kiemSetting&&<span><span style={{color:G.midden}}>Kiem ingesteld: </span><strong>{kiemSetting.waarde}%</strong></span>}
+            {(()=>{
+              // Werkelijke kieming = (verkoop + uitval) / gezaaid × 100
+              const totVerkoop = klantLijst.reduce((s,k)=>s+k.planten,0);
+              const totUitvalPlanten = (uitval||[])
+                .filter(u=>u.gewas===selGewas&&u.soort===selSoort)
+                .reduce((s,u)=>{
+                  const vd=(verpDef||[]).find(v=>v.naam===u.verpakking);
+                  return s+Math.round(Number(u.trays||0)*(vd?.aantal||u.aantalPerTray||0));
+                },0);
+              if(totZaaiZaden<=0) return null;
+              const werkKiem = Math.round((totVerkoop+totUitvalPlanten)/totZaaiZaden*100);
+              const pctGeleverd = totPlanten>0?Math.round(totGeleverd/totPlanten*100):0;
+              const voldoendeData = pctGeleverd>=50;
+              const kleur = !voldoendeData?"#999":Math.abs(werkKiem-(kiemSetting?.waarde||90))<=3?"#166534":"#b45309";
+              return (
+                <span style={{borderLeft:`1px solid ${G.rand}`,paddingLeft:8}}>
+                  <span style={{color:G.midden}}>Kiem werkelijk: </span>
+                  <strong style={{color:kleur}}>{werkKiem}%</strong>
+                  {!voldoendeData&&<span style={{fontSize:9,color:"#999",marginLeft:3}}>(onvolledig)</span>}
+                </span>
+              );
+            })()}
             {(()=>{
               // Toon per fust de teelttijden
               const fustTijden = (teeltduur||[]).filter(t=>
@@ -8693,7 +8800,7 @@ function App() {
       {pagina==="teelten"      && <Teelten     gewassen={gewassen} setGewassen={setGewassen} orders={orders} setOrders={setOrders} zaadinkoop={zaadinkoop} setZaadinkoop={setZaadinkoop} />}
       {pagina==="prijzen"      && <Prijzen     klanten={klanten} gewassen={gewassen} prijzen={prijzen} setPrijzen={setPrijzen} verpDef={verpDef} />}
       {pagina==="uitval"    && <Uitval gewassen={gewassen} uitval={uitval} setUitval={setUitval} verpDef={verpDef} />}
-      {pagina==="dashboard" && <Dashboard gewassen={gewassen} zaadinkoop={zaadinkoop} orders={orders} prijzen={prijzen} verpDef={verpDef} teeltduur={teeltduur} kiemkracht={kiemkracht} leveranciers={leveranciers} klanten={klanten} />}
+      {pagina==="dashboard" && <Dashboard gewassen={gewassen} zaadinkoop={zaadinkoop} uitval={uitval} orders={orders} prijzen={prijzen} verpDef={verpDef} teeltduur={teeltduur} kiemkracht={kiemkracht} leveranciers={leveranciers} klanten={klanten} />}
       {pagina==="overzichten"  && <div style={{padding:16,overflowY:"auto",height:"calc(100vh - 50px)"}}><MatrixFilterPaneel klanten={klanten} gewassen={gewassen} orders={orders} verpDef={verpDef} weken={weekOpties()} /></div>}
       {pagina==="mailing" && <MailingPagina klanten={klanten} orders={orders} />}
       {pagina==="offertes" && <Offertes klanten={klanten} gewassen={gewassen} prijzen={prijzen} verpDef={verpDef} bedrijf={bedrijf} />}

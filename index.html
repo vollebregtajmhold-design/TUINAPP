@@ -250,7 +250,7 @@ const gs = {
   veldGroep:  { marginBottom:10 },
   label:      { display:"block",fontSize:11,color:subtekst,marginBottom:3,fontWeight:500 },
   input:      { width:"100%",padding:"6px 8px",border:`1px solid ${rand}`,borderRadius:6,fontSize:14,boxSizing:"border-box",background:wit },
-  badge:      { background:lichtGroen,color:groen,borderRadius:20,padding:"2px 8px",fontSize:11,fontWeight:600,display:"inline-block" },
+  badge:      { background:lichtGroen,color:groen,borderRadius:20,padding:"2px 8px",fontSize:11,fontWeight:600,display:"inline-block",whiteSpace:"nowrap" },
   knopPrimair:  { background:groen,color:wit,border:"none",borderRadius:6,padding:"7px 14px",cursor:"pointer",fontSize:14,fontWeight:600 },
   knopSecundair:{ background:wit,color:tekst,border:`1px solid ${rand}`,borderRadius:6,padding:"7px 14px",cursor:"pointer",fontSize:14 },
   knopKlein:    { background:lichtGroen,color:groen,border:"none",borderRadius:5,padding:"4px 8px",cursor:"pointer",fontSize:11,fontWeight:600 },
@@ -1070,7 +1070,7 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
         </div>
       </td></tr>
     )}
-    <tr style={{lineHeight:1.3}} onMouseEnter={e=>e.currentTarget.style.background="#ffe082"} onMouseLeave={e=>e.currentTarget.style.background=""}>
+    <tr style={{lineHeight:1.3,whiteSpace:"nowrap"}} onMouseEnter={e=>e.currentTarget.style.background="#ffe082"} onMouseLeave={e=>e.currentTarget.style.background=""}>
       {/* Gewas */}
       <td style={cel}>{bewerkbaar
         ? <select style={inp(125)} value={r.gewas} onChange={e=>{

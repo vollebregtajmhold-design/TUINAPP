@@ -269,7 +269,7 @@ function BevestigModal({ tekst, onJa, onNee }) {
         <div style={{fontWeight:700,fontSize:15,marginBottom:6}}>{tekst}</div>
         <div style={{color:subtekst,fontSize:12,marginBottom:16}}>Dit kan niet ongedaan worden gemaakt.</div>
         <div style={{display:"flex",gap:8,justifyContent:"center"}}>
-          <button style={gs.knopRood} onClick={onJa}>{waarschuwing.veld==="__verwijder__"?"Ja, verwijderen":"Ja, wijzigen"}</button>
+          <button style={gs.knopRood} onClick={onJa}>Ja, verwijderen</button>
           <button style={gs.knopSecundair} onClick={onNee}>Annuleren</button>
         </div>
       </div>
@@ -6543,6 +6543,263 @@ function Zaadinkoop({ gewassen, zaadinkoop, setZaadinkoop, orders, teeltduur, ki
   );
 }
 
+function Uitval({ gewassen, uitval, setUitval, verpDef }) {
+  const huidigWk = String(getJaar(new Date().toISOString().split("T")[0])).slice(-2)+String(getWeekNr(new Date().toISOString().split("T")[0])).padStart(2,"0");
+  const leeg = ()=>({id:null,week:huidigWk,gewas:"",soort:"",verpakking:"",trays:0,aantalPerTray:0});
+  const [data,  setData]  = useState(leeg());
+  const [delId, setDelId] = useState(null);
+  const [filtGewas, setFiltGewas] = useState("");
+  const [filtSoort, setFiltSoort] = useState("");
+  const [filtWeek,  setFiltWeek]  = useState("");
+
+  const soorten = data.gewas ? (gewassen.find(g=>g.naam===data.gewas)?.soorten||[]) : [];
+  const verpakkingen = verpDef||[];
+
+  // Refs voor keyboard navigatie
+  const refWeek    = React.useRef();
+  const refGewas   = React.useRef();
+  const refSoort   = React.useRef();
+  const refFust    = React.useRef();
+  const refTrays   = React.useRef();
+  const refOpmerk  = React.useRef();
+  const refOpslaan = React.useRef();
+
+  function volgende(ref) { setTimeout(()=>ref.current?.focus(),50); }
+
+  // Enter op input → volgende veld; op select → open dropdown (browser doet dit al)
+  function keyEnterWeek(e)   { if(e.key==="Enter"||e.key==="ArrowDown") { e.preventDefault(); volgende(refGewas); } }
+  function keyEnterGewas(e)  { if(e.key==="Enter") { e.preventDefault(); volgende(refSoort); } }
+  function keyEnterSoort(e)  { if(e.key==="Enter") { e.preventDefault(); volgende(refFust); } }
+  function keyEnterFust(e)   { if(e.key==="Enter") { e.preventDefault(); volgende(refTrays); } }
+  function keyEnterTrays(e)  {
+    if(e.key==="Enter"||e.key==="ArrowDown") { e.preventDefault(); volgende(refOpmerk); }
+    if(e.key==="ArrowUp")   { e.preventDefault(); setData(prev=>({...prev,trays:Math.round((Number(prev.trays||0)+0.25)*100)/100})); }
+    if(e.key==="ArrowDown") { e.preventDefault(); setData(prev=>({...prev,trays:Math.max(0,Math.round((Number(prev.trays||0)-0.25)*100)/100)})); }
+  }
+  function keyEnterOpmerk(e) { if(e.key==="Enter") { e.preventDefault(); volgende(refOpslaan); } }
+
+  function opslaan() {
+    if(!data.week||!data.gewas||!data.soort||!data.verpakking||!data.trays) return;
+    if(data.id) {
+      setUitval(prev=>prev.map(u=>u.id===data.id?{...data}:u));
+    } else {
+      setUitval(prev=>[...prev,{...data,id:Date.now()}]);
+    }
+    setData(leeg());
+  }
+
+  function verwijder(id) { setUitval(prev=>prev.filter(u=>u.id!==id)); setDelId(null); }
+  function bewerken(u) { setData({...u}); }
+
+  const gefilterd = [...uitval]
+    .filter(u=>(!filtGewas||u.gewas===filtGewas)&&(!filtSoort||u.soort===filtSoort)&&(!filtWeek||u.week===filtWeek))
+    .sort((a,b)=>b.week.localeCompare(a.week)||a.gewas.localeCompare(b.gewas,"nl")||a.soort.localeCompare(b.soort,"nl"));
+
+  const totaalTrays = gefilterd.reduce((s,u)=>s+Number(u.trays||0),0);
+  const totaalPlanten = gefilterd.reduce((s,u)=>s+Math.round(Number(u.trays||0)*Number(u.aantalPerTray||0)),0);
+
+  const alleWeken = [...new Set(uitval.map(u=>u.week))].sort((a,b)=>b.localeCompare(a));
+  const alleSoorten = [...new Set(uitval.filter(u=>!filtGewas||u.gewas===filtGewas).map(u=>u.soort))].sort((a,b)=>a.localeCompare(b,"nl"));
+
+  const sTH = {...TH,padding:"5px 8px",fontSize:11};
+  const sTD = {padding:"5px 8px",fontSize:12,borderBottom:`1px solid ${rand}`};
+  const sTDR = {...sTD,textAlign:"right"};
+
+  return (
+    <div style={{display:"flex",height:"calc(100vh - 50px)",overflow:"hidden"}}>
+
+      {/* Linker formulier */}
+      <div style={{width:260,borderRight:`1px solid ${rand}`,background:"#f9fcfb",padding:14,display:"flex",flexDirection:"column",gap:10,overflowY:"auto",flexShrink:0}}>
+        <div style={{fontWeight:700,fontSize:13,color:groen,marginBottom:4}}>{data.id?"✏️ Bewerken":"➕ Nieuwe uitval"}</div>
+
+        <div style={gs.veldGroep}>
+          <label style={gs.label}>Week <span style={{fontSize:10,color:subtekst}}>(↑↓ kiezen, Enter→gewas)</span></label>
+          {(()=>{
+            // Genereer weken: 8 weken terug t/m 4 weken vooruit
+            const wkOpties = [];
+            const nu = new Date();
+            for(let i=-8;i<=4;i++){
+              const d=new Date(nu); d.setDate(nu.getDate()+i*7);
+              const ds=d.toISOString().split("T")[0];
+              const lbl=String(getJaar(ds)).slice(-2)+String(getWeekNr(ds)).padStart(2,"0");
+              if(!wkOpties.includes(lbl)) wkOpties.push(lbl);
+            }
+            return (
+              <select ref={refWeek} autoFocus style={gs.input} value={data.week}
+                onChange={e=>setData({...data,week:e.target.value})}
+                onKeyDown={e=>{if(e.key==="Enter"&&data.week&&!e.shiftKey){e.preventDefault();volgende(refGewas);}}}>
+                {wkOpties.map(w=><option key={w} value={w}>{w}</option>)}
+              </select>
+            );
+          })()}
+        </div>
+
+        <div style={gs.veldGroep}>
+          <label style={gs.label}>Gewas <span style={{fontSize:10,color:subtekst}}>(↑↓ kiezen, Enter→soort)</span></label>
+          <select ref={refGewas} style={gs.input} value={data.gewas}
+            onChange={e=>setData({...data,gewas:e.target.value,soort:""})}
+            onKeyDown={e=>{
+              if(e.key==="Enter"&&data.gewas&&!e.shiftKey){e.preventDefault();volgende(refSoort);}
+              if(e.shiftKey&&e.key==="Enter"){e.preventDefault();volgende(refWeek);}
+            }}>
+            <option value="">— Kies gewas —</option>
+            {(gewassen||[]).sort((a,b)=>a.naam.localeCompare(b.naam,"nl")).map(g=>(
+              <option key={g.naam} value={g.naam}>{g.naam}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={gs.veldGroep}>
+          <label style={gs.label}>Soort <span style={{fontSize:10,color:subtekst}}>(↑↓ kiezen, Enter→fust)</span></label>
+          <select ref={refSoort} style={gs.input} value={data.soort}
+            onChange={e=>setData({...data,soort:e.target.value})}
+            onKeyDown={e=>{
+              if(e.key==="Enter"&&data.soort&&!e.shiftKey){e.preventDefault();volgende(refFust);}
+              if(e.shiftKey&&e.key==="Enter"){e.preventDefault();volgende(refGewas);}
+            }}>
+            <option value="">— Kies soort —</option>
+            {soorten.sort((a,b)=>a.localeCompare(b,"nl")).map(s=>(
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={gs.veldGroep}>
+          <label style={gs.label}>Verpakking <span style={{fontSize:10,color:subtekst}}>(↑↓ kiezen, Enter→trays)</span></label>
+          <select ref={refFust} style={gs.input} value={data.verpakking}
+            onChange={e=>{
+              const vd=verpDef.find(v=>v.naam===e.target.value);
+              setData({...data,verpakking:e.target.value,aantalPerTray:vd?.aantal||0});
+            }}
+            onKeyDown={e=>{
+              if(e.key==="Enter"&&data.verpakking&&!e.shiftKey){e.preventDefault();volgende(refTrays);}
+              if(e.shiftKey&&e.key==="Enter"){e.preventDefault();volgende(refSoort);}
+            }}>
+            <option value="">— Kies fust —</option>
+            {verpakkingen.map(v=><option key={v.naam} value={v.naam}>{v.naam} ({v.aantal} pl.)</option>)}
+          </select>
+        </div>
+
+        <div style={gs.veldGroep}>
+          <label style={gs.label}>Trays uitval <span style={{fontSize:10,color:subtekst}}>(↑↓ = ±0,25)</span></label>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <button tabIndex={-1} style={{...gs.knopSecundair,padding:"2px 8px",fontSize:14}}
+              onClick={()=>setData(prev=>({...prev,trays:Math.max(0,Math.round((Number(prev.trays||0)-0.25)*100)/100)}))}>−</button>
+            <input ref={refTrays} type="number" step="0.25" min="0"
+              style={{...gs.input,textAlign:"center",width:80}}
+              value={data.trays}
+              onChange={e=>setData({...data,trays:Number(e.target.value)||0})}
+              onKeyDown={e=>{
+                if(e.key==="ArrowUp")  { e.preventDefault(); setData(prev=>({...prev,trays:Math.round((Number(prev.trays||0)+0.25)*100)/100})); }
+                if(e.key==="ArrowDown"){ e.preventDefault(); setData(prev=>({...prev,trays:Math.max(0,Math.round((Number(prev.trays||0)-0.25)*100)/100)})); }
+                if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();volgende(refOpslaan);}
+                if(e.shiftKey&&e.key==="Enter"){e.preventDefault();volgende(refFust);}
+              }}
+            />
+            <button tabIndex={-1} style={{...gs.knopSecundair,padding:"2px 8px",fontSize:14}}
+              onClick={()=>setData(prev=>({...prev,trays:Math.round((Number(prev.trays||0)+0.25)*100)/100}))}>+</button>
+          </div>
+          {data.verpakking&&data.trays>0&&(
+            <div style={{fontSize:11,color:subtekst,marginTop:3}}>
+              = {Math.round(data.trays*data.aantalPerTray).toLocaleString("nl-NL")} planten
+            </div>
+          )}
+        </div>
+
+        <button ref={refOpslaan} style={{...gs.knopPrimair,marginTop:4}} onClick={opslaan}
+          onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){opslaan();setTimeout(()=>refWeek.current?.focus(),100);}if(e.shiftKey&&e.key==="Enter"){e.preventDefault();volgende(refTrays);}}}
+          disabled={!data.week||!data.gewas||!data.soort||!data.verpakking||!data.trays}>
+          {data.id?"💾 Opslaan":"➕ Toevoegen"}
+        </button>
+        {data.id&&<button style={gs.knopSecundair} onClick={()=>setData(leeg())}>Annuleren</button>}
+
+        <div style={gs.veldGroep}>
+          <label style={gs.label}>Opmerking <span style={{fontSize:10,color:subtekst}}>(optioneel)</span></label>
+          <input ref={refOpmerk} style={gs.input} placeholder="bijv. te klein, slechte kieming..."
+            value={data.opmerking||""}
+            onChange={e=>setData({...data,opmerking:e.target.value})}
+            onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); opslaan(); setTimeout(()=>refWeek.current?.focus(),100); } }}
+          />
+        </div>
+
+        <hr style={{border:`1px solid ${rand}`,margin:"4px 0"}}/>
+
+        {/* Filters */}
+        <div style={{fontSize:11,fontWeight:700,color:groen}}>Filter</div>
+        <div style={gs.veldGroep}>
+          <label style={gs.label}>Week</label>
+          <select style={gs.input} value={filtWeek} onChange={e=>setFiltWeek(e.target.value)}>
+            <option value="">Alle weken</option>
+            {alleWeken.map(w=><option key={w} value={w}>{w}</option>)}
+          </select>
+        </div>
+        <div style={gs.veldGroep}>
+          <label style={gs.label}>Gewas</label>
+          <select style={gs.input} value={filtGewas} onChange={e=>{setFiltGewas(e.target.value);setFiltSoort("");}}>
+            <option value="">Alle gewassen</option>
+            {(gewassen||[]).sort((a,b)=>a.naam.localeCompare(b.naam,"nl")).map(g=>(
+              <option key={g.naam} value={g.naam}>{g.naam}</option>
+            ))}
+          </select>
+        </div>
+        <div style={gs.veldGroep}>
+          <label style={gs.label}>Soort</label>
+          <select style={gs.input} value={filtSoort} onChange={e=>setFiltSoort(e.target.value)}>
+            <option value="">Alle soorten</option>
+            {alleSoorten.map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        {(filtWeek||filtGewas||filtSoort)&&<button style={gs.knopSecundair} onClick={()=>{setFiltWeek("");setFiltGewas("");setFiltSoort("");}}>✕ Wis filter</button>}
+      </div>
+
+      {/* Rechter tabel */}
+      <div style={{flex:1,overflowY:"auto",overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",minWidth:600}}>
+          <thead>
+            <tr>
+              {["Week","Gewas","Soort","Fust","Trays","Planten","Opmerking",""].map((h,i)=>(
+                <th key={h+i} style={{...sTH,textAlign:i>=4&&i<=5?"right":"left",position:"sticky",top:0,zIndex:2}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {gefilterd.length===0&&(
+              <tr><td colSpan={8} style={{...sTD,textAlign:"center",color:subtekst,padding:24}}>Nog geen uitval geregistreerd</td></tr>
+            )}
+            {gefilterd.map((u,i)=>(
+              <tr key={u.id} style={{background:i%2===0?wit:"#f0f7f4"}}>
+                <td style={{...sTD,color:subtekst,fontSize:11}}>{u.week}</td>
+                <td style={{...sTD,fontWeight:700,color:groen}}>{u.gewas}</td>
+                <td style={sTD}>{u.soort}</td>
+                <td style={sTD}><span style={gs.badge}>{u.verpakking}</span></td>
+                <td style={{...sTDR,fontWeight:600}}>{Number(u.trays).toLocaleString("nl-NL",{maximumFractionDigits:2})}</td>
+                <td style={{...sTDR,color:groen,fontWeight:600}}>{Math.round(Number(u.trays)*Number(u.aantalPerTray||0)).toLocaleString("nl-NL")}</td>
+                <td style={{...sTD,fontSize:11,color:subtekst}}>{u.opmerking||"—"}</td>
+                <td style={{...sTD,textAlign:"right"}}>
+                  <button style={{...gs.knopKlein,marginRight:4}} onClick={()=>bewerken(u)}>✏️</button>
+                  <button style={gs.knopVerwijder} onClick={()=>setDelId(u.id)}>🗑️</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          {gefilterd.length>0&&(
+            <tfoot>
+              <tr style={{background:"#e8f5ee",borderTop:"2px solid #2d6a4f",fontWeight:700}}>
+                <td colSpan={4} style={{...sTD,color:groen}}>Totaal</td>
+                <td style={{...sTDR,color:groen}}>{totaalTrays.toLocaleString("nl-NL",{maximumFractionDigits:2})}</td>
+                <td style={{...sTDR,color:groen}}>{totaalPlanten.toLocaleString("nl-NL")}</td>
+                <td colSpan={2} style={sTD}></td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+
+      {delId&&<BevestigModal tekst="Uitval verwijderen?" onJa={()=>verwijder(delId)} onNee={()=>setDelId(null)} />}
+    </div>
+  );
+}
+
 function Dashboard({ gewassen, zaadinkoop, orders, prijzen, verpDef, teeltduur, kiemkracht, leveranciers, klanten }) {
   const [selGewas, setSelGewas] = useState("");
   const [selSoort, setSelSoort] = useState("");
@@ -8101,6 +8358,7 @@ function App() {
   const [kiemkracht,setKiemkracht] = useState(()=>laad("ta_kiemkracht", []));
   const [teeltduur,setTeeltduur]   = useState(()=>laad("ta_teeltduur", []));
   const [zaadinkoop,setZaadinkoop] = useState(()=>laad("ta_zaadinkoop", []));
+  const [uitval, setUitval] = useState(()=>laad("ta_uitval",[]));
   const [traykosten,setTraykosten] = useState(()=>laad("ta_traykosten", {}));
   const [leveranciers,setLeveranciers] = useState(()=>laad("ta_leveranciers", []));
   const [bedrijf,setBedrijf]   = useState(()=>laad("ta_bedrijf", {
@@ -8143,6 +8401,7 @@ function App() {
   useEffect(()=>{if(!geladen)return;bewaar("ta_kiemkracht",kiemkracht);},[kiemkracht]);
   useEffect(()=>{if(!geladen)return;bewaar("ta_teeltduur",teeltduur);},[teeltduur]);
   useEffect(()=>{if(!geladen)return;bewaar("ta_zaadinkoop",zaadinkoop);},[zaadinkoop]);
+  useEffect(()=>{if(!geladen)return;bewaar("ta_uitval",uitval);},[uitval]);
   useEffect(()=>{if(!geladen)return;bewaar("ta_bedrijf",bedrijf);},[bedrijf]);
   useEffect(()=>{if(!geladen)return;bewaar("ta_traykosten",traykosten);},[traykosten]);
   useEffect(()=>{if(!geladen)return;bewaar("ta_leveranciers",leveranciers);},[leveranciers]);
@@ -8300,6 +8559,7 @@ function App() {
                   borderRadius:8,padding:4,zIndex:300,minWidth:200,boxShadow:"0 4px 16px rgba(0,0,0,0.15)"}}>
                   {[
                     {id:"dashboard",  label:"🏠 Dashboard"},
+                    {id:"uitval",     label:"🍂 Uitval"},
                     {id:"overzichten",label:"📊 Overzichten"},
                     {id:"margeoverzicht",label:"💹 Marge"},
                   ].map(m=>(
@@ -8432,6 +8692,7 @@ function App() {
       />}
       {pagina==="teelten"      && <Teelten     gewassen={gewassen} setGewassen={setGewassen} orders={orders} setOrders={setOrders} zaadinkoop={zaadinkoop} setZaadinkoop={setZaadinkoop} />}
       {pagina==="prijzen"      && <Prijzen     klanten={klanten} gewassen={gewassen} prijzen={prijzen} setPrijzen={setPrijzen} verpDef={verpDef} />}
+      {pagina==="uitval"    && <Uitval gewassen={gewassen} uitval={uitval} setUitval={setUitval} verpDef={verpDef} />}
       {pagina==="dashboard" && <Dashboard gewassen={gewassen} zaadinkoop={zaadinkoop} orders={orders} prijzen={prijzen} verpDef={verpDef} teeltduur={teeltduur} kiemkracht={kiemkracht} leveranciers={leveranciers} klanten={klanten} />}
       {pagina==="overzichten"  && <div style={{padding:16,overflowY:"auto",height:"calc(100vh - 50px)"}}><MatrixFilterPaneel klanten={klanten} gewassen={gewassen} orders={orders} verpDef={verpDef} weken={weekOpties()} /></div>}
       {pagina==="mailing" && <MailingPagina klanten={klanten} orders={orders} />}

@@ -29291,7 +29291,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
     }
     if(d.id){setOrders(prev=>prev.map(o=>o.id===d.id?d:o));setGes(d);}
     else{const nr=d.eigenOrderNr?.trim()||maakOrderNr(d.klantId,d.leverdatum,orders,null);const n={...d,id:Date.now(),orderNr:nr};setOrders(prev=>[...prev,n]);setGes(n);}
-    setForm(false); setGewijzigd(false);
+    setGewijzigd(false);
   }
 
   function opslaan(){
@@ -29390,7 +29390,23 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
   }
   function verwijder(id){setOrders(orders.filter(o=>o.id!==id));setGes(null);setForm(false);setDelId(null);setGewijzigd(false);}
   function setSt(o,st){const b=orders.map(x=>x.id===o.id?{...x,status:st}:x);setOrders(b);setGes({...o,status:st});}
-  function kopOUit(){if(!kopODat)return;const nr=maakOrderNr(kopO.klantId,kopODat,orders,null);setOrders([...orders,{...kopO,id:Date.now(),orderNr:nr,leverdatum:kopODat,status:"reservering",aanmaakdatum:new Date().toISOString().split("T")[0]}]);setKopO(null);}
+  function kopOUit(){
+    if(!kopODat)return;
+    const nr=maakOrderNr(kopO.klantId,kopODat,orders,null);
+    setOrders([...orders,{
+      ...kopO,
+      id:Date.now(),
+      orderNr:nr,
+      leverdatum:kopODat,
+      status:"reservering",
+      aanmaakdatum:new Date().toISOString().split("T")[0],
+      // een kopie is een nieuwe, nog niet bevestigde order — deze velden horen niet mee te komen
+      bevestigingNr:null, bevestigdOp:null, bevestigingGemaild:null,
+      betaaldOp:null, transportDatum:"",
+      pakbonNr:"", pakbonGedrukt:null, afleverNr:"", factuurNr:null,
+    }]);
+    setKopO(null);
+  }
 
   function verplaatsRegelUit(){
     if(!verplaatsRegel || !verplaatsRegel.regels || verplaatsRegel.regels.length===0) return;
@@ -30555,6 +30571,31 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                 </select>
                 &nbsp;·&nbsp; 📅 Week {weekLabel(data.leverdatum)}
               </span>
+              <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                <button title="Kopiëren (hele order)" style={{background:lichtGroen,color:groenTekst,border:"none",borderRadius:4,padding:"2px 7px",cursor:"pointer",fontSize:11,fontWeight:600}} onClick={()=>setKopO(data)}>📋</button>
+                {data.bevestigingNr&&(()=>{
+                  const kl2 = klanten.find(k=>k.id===data.klantId)||{};
+                  const isSeizoen = kl2.bevestigingVoorkeur==="seizoen";
+                  return (
+                    <button title={isSeizoen?"Seizoensmatrix afdrukken":"Bevestiging afdrukken"}
+                      style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:4,padding:"2px 7px",cursor:"pointer",fontSize:11,fontWeight:600}}
+                      onClick={()=>drukEnkeleBevestiging(data)}>
+                      🖨️
+                    </button>
+                  );
+                })()}
+                {data.bevestigingNr&&klanten.find(k=>k.id===data.klantId)?.email&&(
+                  <button title="Bevestiging mailen" style={{background:"#1d4ed8",color:"#fff",border:"none",borderRadius:4,padding:"2px 7px",cursor:"pointer",fontSize:11,fontWeight:600}}
+                    onClick={()=>mailBevestiging(data)}>📧</button>
+                )}
+                {data.bevestigingNr&&(
+                  <button title="Bevestiging opslaan in Google Drive" style={{background:"#0f9d58",color:"#fff",border:"none",borderRadius:4,padding:"2px 7px",cursor:"pointer",fontSize:11,fontWeight:600}}
+                    onClick={()=>opslaanBevestigingInDrive(data)}>☁️</button>
+                )}
+                {data.id&&(
+                  <button title="Order verwijderen" style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:4,padding:"2px 7px",cursor:"pointer",fontSize:11}} onClick={()=>setDelId(data.id)}>🗑️</button>
+                )}
+              </div>
               {(()=>{
                 const eersteRegel=(data.regels||[])[0];
                 if(!eersteRegel) return null;
@@ -30687,7 +30728,6 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                                 if(data.id){setOrders(orders.map(o=>o.id===data.id?bevestigd:o));setGes(bevestigd);}
                                 else{const nr=data.eigenOrderNr?.trim()||maakOrderNr(data.klantId,data.leverdatum,orders,null);const n={...bevestigd,id:Date.now(),orderNr:nr};setOrders([...orders,n]);setGes(n);}
                                 setData(prev=>({...prev,...bevestigd}));
-                                setForm(false);
                               }}>✅ Vastzetten</button>
                             {data.bevestigingNr
                               ? <div style={{background:"#7c3aed",color:"#fff",borderRadius:4,padding:"3px 6px",fontSize:10,fontWeight:700,flex:1,textAlign:"center"}}>
@@ -30702,7 +30742,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                         <button title="Herbereken vastzetten"
                           style={{background:"#cfe6d8",color:groenTekst,border:`1px solid ${groen}`,borderRadius:5,padding:"4px",fontSize:11,cursor:"pointer",width:"100%",marginTop:2}}
                           onClick={()=>{
-                            const bijgewerkt={...data,regels:data.regels.map(r=>{const vd=verpDef.find(v=>v.naam===r.verpakking);return {...r,vastPlanten:(vd?.aantal||0)*r.aantal};})};
+                            const bijgewerkt={...data,status:"bevestigd",regels:data.regels.map(r=>{const vd=verpDef.find(v=>v.naam===r.verpakking);return {...r,vastPlanten:(vd?.aantal||0)*r.aantal};})};
                             setData(bijgewerkt);
                             if(bijgewerkt.id) setOrders(orders.map(o=>o.id===bijgewerkt.id?bijgewerkt:o));
                           }}>🔄 Herbereken vastzetten</button>
@@ -30864,6 +30904,20 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                           📋 Pro forma factuur
                         </button>
                       </div>
+                      {/* Opslaan — altijd zichtbaar, ook als "Nieuwe regel"-paneel dicht staat */}
+                      {gewijzigd
+                    ? <button onClick={opslaan}
+                        style={{width:"100%",padding:"8px",background:"#f59e0b",color:"#fff",border:"none",
+                          borderRadius:6,fontSize:12,fontWeight:700,cursor:"pointer",
+                          boxShadow:"0 2px 6px rgba(245,158,11,0.4)",animation:"pulse 1.5s infinite"}}>
+                        💾 Opslaan
+                      </button>
+                    : <button onClick={opslaan}
+                        style={{width:"100%",padding:"8px",background:groen,color:"#fff",border:"none",
+                          borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                        💾 Opslaan
+                      </button>
+                  }
                       {/* Mail factuur + betaalstatus */}
                       {data.factuurNr&&(
                         <div style={{display:"flex",flexDirection:"column",gap:3,marginTop:2}}>
@@ -31229,19 +31283,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                       </div>
                     );
                   })()}
-                  {gewijzigd
-                    ? <button onClick={opslaan}
-                        style={{width:"100%",padding:"8px",background:"#f59e0b",color:"#fff",border:"none",
-                          borderRadius:6,fontSize:12,fontWeight:700,cursor:"pointer",
-                          boxShadow:"0 2px 6px rgba(245,158,11,0.4)",animation:"pulse 1.5s infinite"}}>
-                        💾 Opslaan
-                      </button>
-                    : <button onClick={opslaan}
-                        style={{width:"100%",padding:"8px",background:groen,color:"#fff",border:"none",
-                          borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer"}}>
-                        💾 Opslaan
-                      </button>
-                  }
+                  
 
                   {data.bevestigingNr&&data.status==="bevestigd"&&gewijzigd&&(
                     <button style={{background:"#f59e0b",color:"#fff",border:"none",borderRadius:5,padding:"5px",fontSize:11,fontWeight:700,cursor:"pointer",width:"100%",animation:"pulse 1.5s infinite"}}
@@ -31371,6 +31413,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                       <tbody>{gesorteerd.map(r=>(
                         <RegelRij key={r.id} r={r} verpDef={verpDef} gewassen={gewassen} bewerkbaar={true} status={data.status||"reservering"} teeltduur={teeltduur} leverdatum={data.leverdatum}
                           gemarkeerd={r.id===gemarkeerdeRegelId}
+                          onKopie={()=>{setKopR({regel:r,vanId:data.id});setKopRDoel("");}}
                           onActief={()=>setActieveRegelId(r.id)}
                           geselecteerd={meerdereSelectie.includes(r.id)}
                           onVerplaats={(regel)=>setMeerdereSelectie(prev=>prev.includes(regel.id)?prev.filter(x=>x!==regel.id):[...prev,regel.id])}

@@ -26758,6 +26758,20 @@ function getJaar(datum) { return new Date(datum).getFullYear(); }
 function weekLabel(datum) {
   return `${String(getJaar(datum)).slice(-2)}${String(getWeekNr(datum)).padStart(2,"0")}`;
 }
+// Zoek teeltduur-record op gewas+soort+fust, met fallback op legacy id (zoals ook in Teeltplanning gebeurt)
+function vindTeeltduurRecord(teeltduur, gewas, soort, fust) {
+  const gl=gewas?.toLowerCase().trim(), sl=soort?.toLowerCase().trim(), fl=fust?.toLowerCase().trim();
+  let gevonden = (teeltduur||[]).find(t=>
+    t.gewas?.toLowerCase().trim()===gl &&
+    t.soort?.toLowerCase().trim()===sl &&
+    t.fust?.toLowerCase().trim()===fl
+  );
+  if(!gevonden){
+    const id = ('t_'+gewas+'_'+soort+'_'+fust).replace(/[\/]/g,'_').trim();
+    gevonden = (teeltduur||[]).find(t=>t.id===id);
+  }
+  return gevonden;
+}
 function zaterdagVanWeek(jaar, week) {
   const jan4 = new Date(jaar, 0, 4);
   const startWeek1 = new Date(jan4);
@@ -27790,7 +27804,7 @@ function PrijsVeldRegel({ waarde, onSave, stijl, type="number", min="0", step="0
   );
 }
 
-function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKopie, onUpdate, i, teeltduur, leverdatum, onActief, onVerplaats, geselecteerd, gemarkeerd, orders, klanten }) {
+function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKopie, onUpdate, i, teeltduur, leverdatum, onActief, onVerplaats, geselecteerd, gemarkeerd, orders, klanten, kiemkracht, realisatie, eigenKlantId }) {
   const [waarschuwing, setWaarschuwing] = useState(null);
   const [tijdelijkeSoort, setTijdelijkeSoort] = useState(r.soort);
   const [resetTeller, setResetTeller] = useState(0);
@@ -27831,24 +27845,53 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
   const inp  = (w)=>({padding:"2px 4px",border:`1px solid ${rand}`,borderRadius:3,fontSize:16,width:w,background:"#fafffe"});
   const soorten = gewassen?.find(g=>g.naam===r.gewas)?.soorten||[];
   const veldLabel = {"gewas":"Gewas","soort":"Soort","verpakking":"Fust","aantal":"Trays","prijs":"Prijs"};
-  // Werklijst-koppeling: welke klanten/aantallen staan er (obv alle orders) voor dit gewas/soort/fust in dezelfde leverweek
-  const werklijstMatches = [];
+  // ── Werklijst-koppeling: verschil tussen werkelijk (werklijst) en deze order ──
+  const teeltRecordWL = vindTeeltduurRecord(teeltduur, r.gewas, r.soort, r.verpakking);
+  function wlWeekVerschuif(datum, weken){
+    let wkNr=getWeekNr(datum)-weken, jr=getJaar(datum);
+    if(wkNr<=0){wkNr+=52;jr--;}
+    return String(jr).slice(-2)+String(wkNr).padStart(2,"0");
+  }
+  let werklijstInfo = null;
+  if(leverdatum && teeltRecordWL){
+    const eigenTrays = (r.vastPlanten!=null && vd?.aantal) ? Math.round(r.vastPlanten/vd.aantal) : r.aantal;
+    if(teeltRecordWL.inboet!=null){
+      const inboetWeek = wlWeekVerschuif(leverdatum, Number(teeltRecordWL.inboet));
+      const inboetKey = r.gewas+"||"+r.soort+"||"+r.verpakking;
+      const ruw = realisatie?.[inboetWeek]?.inboet?.[inboetKey];
+      if(ruw!==undefined && ruw!=='' && ruw!==null){
+        const werkelijk = Number(ruw);
+        werklijstInfo = {label:"Inboet wk "+inboetWeek, werkelijk, verschil: Math.round((werkelijk-eigenTrays)*10)/10};
+      }
+    }
+    if(!werklijstInfo && teeltRecordWL.uitzaai!=null){
+      const zaaiWeek = wlWeekVerschuif(leverdatum, Number(teeltRecordWL.uitzaai));
+      const fl=(r.verpakking||"").toLowerCase();
+      const zaaiFust = fl.includes("65")||fl.includes("66")?"Zaaitray 264":fl.includes("179")||fl.includes("180")?"Zaaitray 180":fl.includes("260")||fl.includes("264")?"Zaaitray 264":r.verpakking;
+      const zaaiKey = r.gewas+"||"+r.soort+"||"+zaaiFust;
+      const ruw = realisatie?.[zaaiWeek]?.zaai?.[zaaiKey];
+      if(ruw!==undefined && ruw!=='' && ruw!==null){
+        const werkelijk = Number(ruw);
+        werklijstInfo = {label:"Zaailijst wk "+zaaiWeek, werkelijk, verschil: Math.round((werkelijk-eigenTrays)*10)/10};
+      }
+    }
+  }
+  const werklijstTooltip = werklijstInfo
+    ? werklijstInfo.label+": werkelijk "+werklijstInfo.werkelijk+" — "+(werklijstInfo.verschil===0?"precies goed":werklijstInfo.verschil>0?"+"+werklijstInfo.verschil+" over":werklijstInfo.verschil+" tekort")
+    : "Nog geen werkelijk aantal vastgezet in de werklijst";
+  const werklijstKleur = !werklijstInfo ? "#9ca3af" : werklijstInfo.verschil<0 ? "#dc2626" : werklijstInfo.verschil>0 ? "#2563eb" : groenTekst;
+  // Ook door andere klanten besteld — zelfde gewas/soort/fust, zelfde leverweek
+  let ookAnderenAantal = 0;
   if(leverdatum && orders && orders.length){
     const doelWk = weekLabel(leverdatum);
     orders.forEach(o=>{
+      if(o.klantId===eigenKlantId) return;
       if(weekLabel(o.leverdatum)!==doelWk) return;
       (o.regels||[]).forEach(reg=>{
-        if(reg.gewas===r.gewas && reg.soort===r.soort && reg.verpakking===r.verpakking){
-          const kl2 = klanten?.find(k=>k.id===o.klantId);
-          werklijstMatches.push({klantNaam:kl2?.naam||"?", aantal:reg.aantal||0});
-        }
+        if(reg.gewas===r.gewas && reg.soort===r.soort && reg.verpakking===r.verpakking) ookAnderenAantal+=reg.aantal||0;
       });
     });
   }
-  const werklijstTotaal = werklijstMatches.reduce((s,m)=>s+m.aantal,0);
-  const werklijstTooltip = werklijstMatches.length
-    ? "In werklijst week "+weekLabel(leverdatum)+":\n"+werklijstMatches.map(m=>"• "+m.klantNaam+": "+m.aantal+" trays").join("\n")+"\n\nTotaal: "+werklijstTotaal+" trays"
-    : "Geen regels gevonden in de werklijst voor deze week";
   return (
     <>
     {waarschuwing&&(
@@ -27883,7 +27926,8 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
             {soorten.map(s=><option key={s}>{s}</option>)}
           </select>
         : r.soort}
-        {orders && <span title={werklijstTooltip} style={{marginLeft:5,fontSize:11,cursor:"help",color:werklijstMatches.length?groenTekst:"#bbb"}}>📋{werklijstMatches.length>1?" "+werklijstTotaal:""}</span>}
+        {orders && <span title={werklijstTooltip} style={{marginLeft:5,fontSize:11,cursor:"help",color:werklijstKleur,fontWeight:600}}>📋{werklijstInfo?" "+(werklijstInfo.verschil>0?"+":"")+werklijstInfo.verschil:""}</span>}
+        {orders && ookAnderenAantal>0 && <span title={"Ook besteld door andere klanten: "+ookAnderenAantal+" trays (zelfde week)"} style={{marginLeft:4,fontSize:10,color:subtekst}}>({ookAnderenAantal})</span>}
       </td>
       {/* Intern nr */}
       {heeftNummers && (
@@ -28085,7 +28129,7 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
 }
 
 function OrderDetail({ ges, kl, klanten, verpDef, gewassen, setSt, setTab, setData, setRegel, legeRegel, setForm,
-  setKopO, setKopR, setKopRDoel, setDelId, defWeek, WEKEN, orders, setOrders, plantenTotaal, totaal, checkGewijzigd, drukEnkeleBevestiging, mailBevestiging, opslaanBevestigingInDrive, teeltduur }) {
+  setKopO, setKopR, setKopRDoel, setDelId, defWeek, WEKEN, orders, setOrders, plantenTotaal, totaal, checkGewijzigd, drukEnkeleBevestiging, mailBevestiging, opslaanBevestigingInDrive, teeltduur, kiemkracht, realisatie }) {
   return (
     <div style={{fontSize:12}}>
       {/* TOPBALK */}
@@ -28146,7 +28190,7 @@ function OrderDetail({ ges, kl, klanten, verpDef, gewassen, setSt, setTab, setDa
             {ges.regels.map((r,i)=>(
               <RegelRij key={r.id} r={r} verpDef={verpDef} bewerkbaar={false} i={i} teeltduur={teeltduur} leverdatum={ges.leverdatum}
                 onKopie={()=>{setKopR({regel:r,vanId:ges.id});setKopRDoel("");}} gewassen={gewassen} bewerkbaar={false}
-                orders={orders} klanten={klanten}
+                orders={orders} klanten={klanten} kiemkracht={kiemkracht} realisatie={realisatie} eigenKlantId={ges.klantId}
               />
             ))}
           </tbody>
@@ -28724,7 +28768,7 @@ function DupModal({ data, klanten, orders, WEKEN, gs, groen, subtekst, onSluit, 
   );
 }
 
-function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, verpDef, bedrijf, teeltduur=[], kiemkracht=[], orderOmTeOpenen, orderRegelOmTeMarkeren, huidigePagina }) {
+function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, verpDef, bedrijf, teeltduur=[], kiemkracht=[], realisatie, orderOmTeOpenen, orderRegelOmTeMarkeren, huidigePagina }) {
   const wit = "#f3efe6"; // gebroken wit, alleen in dit scherm
   const WEKEN = weekOpties();
   const verpNamen = verpDef.map(v=>v.naam);
@@ -31432,7 +31476,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                       </thead>
                       <tbody>{gesorteerd.map(r=>(
                         <RegelRij key={r.id} r={r} verpDef={verpDef} gewassen={gewassen} bewerkbaar={true} status={data.status||"reservering"} teeltduur={teeltduur} leverdatum={data.leverdatum}
-                          orders={orders} klanten={klanten}
+                          orders={orders} klanten={klanten} kiemkracht={kiemkracht} realisatie={realisatie} eigenKlantId={data.klantId}
                           gemarkeerd={r.id===gemarkeerdeRegelId}
                           onKopie={()=>{setKopR({regel:r,vanId:data.id});setKopRDoel("");}}
                           onActief={()=>setActieveRegelId(r.id)}
@@ -31485,7 +31529,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
               plantenTotaal={plantenTotaal} totaal={totaal} checkGewijzigd={checkGewijzigd}
               drukEnkeleBevestiging={drukEnkeleBevestiging}
               mailBevestiging={mailBevestiging} opslaanBevestigingInDrive={opslaanBevestigingInDrive}
-              teeltduur={teeltduur}
+              teeltduur={teeltduur} kiemkracht={kiemkracht} realisatie={realisatie}
             />
           );
         })() : (
@@ -43652,6 +43696,7 @@ function App() {
     bedrijf: bedrijf,
     teeltduur: teeltduur,
     kiemkracht: kiemkracht,
+    realisatie: realisatie,
     orderOmTeOpenen: orderOmTeOpenen,
     orderRegelOmTeMarkeren: orderRegelOmTeMarkeren,
     huidigePagina: pagina

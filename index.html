@@ -28057,7 +28057,7 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
                  <div style={{position:"absolute",top:"100%",right:0,zIndex:300,background:wit,border:`1px solid ${rand}`,borderRadius:6,padding:6,boxShadow:"0 4px 16px rgba(0,0,0,0.15)",width:340}}>
                    <textarea autoFocus rows={2} style={{width:"100%",fontSize:11,padding:4,border:`1px solid ${rand}`,borderRadius:4,resize:"vertical",boxSizing:"border-box"}}
                      defaultValue={r.notitie||""}
-                     onBlur={e=>{upd("notitie", e.target.value); setNotitieOpen(false);}}
+                     onBlur={e=>{upd("notitie", e.target.value.trim()); setNotitieOpen(false);}}
                      placeholder="Korte notitie..."/>
                  </div>
                }
@@ -42577,6 +42577,19 @@ function App() {
       setPinInvoer("");
     }
   }
+  // Als de sessie al liep (bv. via GitHub Pages geopend zonder opnieuw in te loggen),
+  // wordt er geen loginknop geklikt — browsers staan alleen fullscreen toe na een
+  // echte gebruikersactie. Daarom: bij de eerstvolgende klik alsnog fullscreen aanvragen.
+  ue(() => {
+    if (ingelogd && !document.fullscreenElement) {
+      const vraagFullscreen = () => {
+        document.documentElement.requestFullscreen?.().catch(() => {});
+        window.removeEventListener("click", vraagFullscreen);
+      };
+      window.addEventListener("click", vraagFullscreen, { once: true });
+      return () => window.removeEventListener("click", vraagFullscreen);
+    }
+  }, []);
   // ── MEDEWERKER MODUS (alleen werklijsten) ──
   const MEDEWERKER_PIN = localStorage.getItem("ta_medewerkerpincode") || "";
   const [medewerkerModus, setMedewerkerModus] = useState(() => {

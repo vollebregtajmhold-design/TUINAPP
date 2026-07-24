@@ -43606,7 +43606,24 @@ function App() {
       cursor: "pointer",
       fontSize: 11
     }
-  }, isFullscreen ? "\u2921 Verlaten" : "\u26F6 Volledig scherm"), false)), pagina === "samenvatting" && /*#__PURE__*/React.createElement(Samenvatting, {
+  }, isFullscreen ? "\u2921 Verlaten" : "\u26F6 Volledig scherm"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      if (window.confirm("Weet u zeker dat u wilt uitloggen?")) {
+        sessionStorage.removeItem("ta_sessie");
+        setIngelogd(false);
+      }
+    },
+    title: "Uitloggen",
+    style: {
+      background: "rgba(255,255,255,0.15)",
+      color: wit,
+      border: "1px solid rgba(255,255,255,0.3)",
+      borderRadius: 5,
+      padding: "3px 9px",
+      cursor: "pointer",
+      fontSize: 11
+    }
+  }, "\uD83D\uDD12 Uitloggen"), false)), pagina === "samenvatting" && /*#__PURE__*/React.createElement(Samenvatting, {
     orders: orders,
     klanten: klanten
   }), /*#__PURE__*/React.createElement("div", {

@@ -27790,7 +27790,7 @@ function PrijsVeldRegel({ waarde, onSave, stijl, type="number", min="0", step="0
   );
 }
 
-function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKopie, onUpdate, i, teeltduur, leverdatum, onActief, onVerplaats, geselecteerd, gemarkeerd }) {
+function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKopie, onUpdate, i, teeltduur, leverdatum, onActief, onVerplaats, geselecteerd, gemarkeerd, orders, klanten }) {
   const [waarschuwing, setWaarschuwing] = useState(null);
   const [tijdelijkeSoort, setTijdelijkeSoort] = useState(r.soort);
   const [resetTeller, setResetTeller] = useState(0);
@@ -27831,6 +27831,24 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
   const inp  = (w)=>({padding:"2px 4px",border:`1px solid ${rand}`,borderRadius:3,fontSize:16,width:w,background:"#fafffe"});
   const soorten = gewassen?.find(g=>g.naam===r.gewas)?.soorten||[];
   const veldLabel = {"gewas":"Gewas","soort":"Soort","verpakking":"Fust","aantal":"Trays","prijs":"Prijs"};
+  // Werklijst-koppeling: welke klanten/aantallen staan er (obv alle orders) voor dit gewas/soort/fust in dezelfde leverweek
+  const werklijstMatches = [];
+  if(leverdatum && orders && orders.length){
+    const doelWk = weekLabel(leverdatum);
+    orders.forEach(o=>{
+      if(weekLabel(o.leverdatum)!==doelWk) return;
+      (o.regels||[]).forEach(reg=>{
+        if(reg.gewas===r.gewas && reg.soort===r.soort && reg.verpakking===r.verpakking){
+          const kl2 = klanten?.find(k=>k.id===o.klantId);
+          werklijstMatches.push({klantNaam:kl2?.naam||"?", aantal:reg.aantal||0});
+        }
+      });
+    });
+  }
+  const werklijstTotaal = werklijstMatches.reduce((s,m)=>s+m.aantal,0);
+  const werklijstTooltip = werklijstMatches.length
+    ? "In werklijst week "+weekLabel(leverdatum)+":\n"+werklijstMatches.map(m=>"• "+m.klantNaam+": "+m.aantal+" trays").join("\n")+"\n\nTotaal: "+werklijstTotaal+" trays"
+    : "Geen regels gevonden in de werklijst voor deze week";
   return (
     <>
     {waarschuwing&&(
@@ -27865,6 +27883,7 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
             {soorten.map(s=><option key={s}>{s}</option>)}
           </select>
         : r.soort}
+        {orders && <span title={werklijstTooltip} style={{marginLeft:5,fontSize:11,cursor:"help",color:werklijstMatches.length?groenTekst:"#bbb"}}>📋{werklijstMatches.length>1?" "+werklijstTotaal:""}</span>}
       </td>
       {/* Intern nr */}
       {heeftNummers && (
@@ -28035,7 +28054,7 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
                  </div>
                }
                {notitieOpen &&
-                 <div style={{position:"absolute",top:"100%",right:0,zIndex:300,background:wit,border:`1px solid ${rand}`,borderRadius:6,padding:6,boxShadow:"0 4px 16px rgba(0,0,0,0.15)",width:170}}>
+                 <div style={{position:"absolute",top:"100%",right:0,zIndex:300,background:wit,border:`1px solid ${rand}`,borderRadius:6,padding:6,boxShadow:"0 4px 16px rgba(0,0,0,0.15)",width:340}}>
                    <textarea autoFocus rows={2} style={{width:"100%",fontSize:11,padding:4,border:`1px solid ${rand}`,borderRadius:4,resize:"vertical",boxSizing:"border-box"}}
                      defaultValue={r.notitie||""}
                      onBlur={e=>{upd("notitie", e.target.value); setNotitieOpen(false);}}
@@ -28127,6 +28146,7 @@ function OrderDetail({ ges, kl, klanten, verpDef, gewassen, setSt, setTab, setDa
             {ges.regels.map((r,i)=>(
               <RegelRij key={r.id} r={r} verpDef={verpDef} bewerkbaar={false} i={i} teeltduur={teeltduur} leverdatum={ges.leverdatum}
                 onKopie={()=>{setKopR({regel:r,vanId:ges.id});setKopRDoel("");}} gewassen={gewassen} bewerkbaar={false}
+                orders={orders} klanten={klanten}
               />
             ))}
           </tbody>
@@ -31412,6 +31432,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                       </thead>
                       <tbody>{gesorteerd.map(r=>(
                         <RegelRij key={r.id} r={r} verpDef={verpDef} gewassen={gewassen} bewerkbaar={true} status={data.status||"reservering"} teeltduur={teeltduur} leverdatum={data.leverdatum}
+                          orders={orders} klanten={klanten}
                           gemarkeerd={r.id===gemarkeerdeRegelId}
                           onKopie={()=>{setKopR({regel:r,vanId:data.id});setKopRDoel("");}}
                           onActief={()=>setActieveRegelId(r.id)}

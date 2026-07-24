@@ -38185,6 +38185,50 @@ function Instellingen({ bedrijf, setBedrijf, ideeen, setIdeeen, verpDef, setVerp
         })()}
       </OpklapbareSectie>
 
+      {/* MEDEWERKERSNAMEN SECTIE */}
+      <OpklapbareSectie titel="🧑‍🌾 Medewerkersnamen" beschrijving="Namen om uit te kiezen bij inloggen">
+        <div style={{fontSize:11,color:subtekst,marginBottom:12,lineHeight:1.6}}>
+          Namen die medewerkers bij het inloggen uit een lijst kunnen kiezen, in plaats van zelf te typen.
+        </div>
+        {(()=>{
+          const [namen, setNamen] = React.useState(()=>{
+            try{ return JSON.parse(localStorage.getItem("ta_medewerkernamen")||"[]"); }catch(e){ return []; }
+          });
+          const [nieuweNaam, setNieuweNaam] = React.useState("");
+          function opslaanNamen(lijst){
+            setNamen(lijst);
+            localStorage.setItem("ta_medewerkernamen", JSON.stringify(lijst));
+          }
+          function toevoegen(){
+            const naam = nieuweNaam.trim();
+            if(!naam || namen.includes(naam)) return;
+            opslaanNamen([...namen, naam]);
+            setNieuweNaam("");
+          }
+          return (
+            <div>
+              <div style={{display:"flex",gap:8,marginBottom:10}}>
+                <input style={{...gs.input,flex:1}} placeholder="Naam toevoegen..." value={nieuweNaam}
+                  onChange={e=>setNieuweNaam(e.target.value)}
+                  onKeyDown={e=>{if(e.key==="Enter") toevoegen();}}
+                />
+                <button style={{...gs.knopPrimair,fontSize:12}} onClick={toevoegen}>+ Toevoegen</button>
+              </div>
+              {namen.length===0
+                ? <div style={{fontSize:11,color:subtekst}}>Nog geen namen ingesteld — medewerkers typen dan zelf hun naam.</div>
+                : namen.map((naam,i)=>(
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 8px",background:lichtGroen,borderRadius:4,marginBottom:4}}>
+                      <span style={{fontSize:12,color:groenTekst,fontWeight:600}}>{naam}</span>
+                      <button style={{background:"transparent",border:"none",color:"#dc2626",cursor:"pointer",fontSize:12,fontWeight:700}}
+                        onClick={()=>opslaanNamen(namen.filter((_,j)=>j!==i))}>✕</button>
+                    </div>
+                  ))
+              }
+            </div>
+          );
+        })()}
+      </OpklapbareSectie>
+
       {/* BACKUP SECTIE */}
       <OpklapbareSectie titel="💾 Automatische backup herinnering" beschrijving="Herinnering om data te downloaden">
         <div style={{fontSize:11,color:subtekst,marginBottom:12,lineHeight:1.6}}>
@@ -42519,6 +42563,7 @@ function App() {
   });
   const [medewerkerNaam, setMedewerkerNaam] = useState(() => sessionStorage.getItem("ta_medewerker_naam") || "");
   const [medewerkerNaamInvoer, setMedewerkerNaamInvoer] = useState("");
+  const [medewerkerNaamAnders, setMedewerkerNaamAnders] = useState(false);
 
   const [pagina, setPagina] = useState("orders");
   const [vorigePagina, setVorigePagina] = useState(null);
@@ -43126,22 +43171,29 @@ function App() {
       fontSize: 14
     }),
     onClick: checkPin
-  }, "Inloggen"), MEDEWERKER_PIN && /*#__PURE__*/React.createElement("input", {
-    style: {
-      width: "100%",
-      padding: "8px 12px",
-      borderRadius: 8,
-      border: `1px solid ${rand}`,
-      fontSize: 13,
-      outline: "none",
-      boxSizing: "border-box",
-      marginTop: 10
-    },
-    type: "text",
-    value: medewerkerNaamInvoer,
-    onChange: e => setMedewerkerNaamInvoer(e.target.value),
-    placeholder: "Jouw naam (voor werklijst-registratie)"
-  }), MEDEWERKER_PIN && /*#__PURE__*/React.createElement("button", {
+  }, "Inloggen"), MEDEWERKER_PIN && (()=>{
+    let medewerkerNamenLijst = [];
+    try { medewerkerNamenLijst = JSON.parse(localStorage.getItem("ta_medewerkernamen")||"[]"); } catch(e) {}
+    const veldStijl = {width:"100%",padding:"8px 12px",borderRadius:8,border:`1px solid ${rand}`,fontSize:13,outline:"none",boxSizing:"border-box",marginTop:10};
+    if(medewerkerNamenLijst.length===0 || medewerkerNaamAnders){
+      return (
+        <input style={veldStijl} type="text" value={medewerkerNaamInvoer}
+          onChange={e=>setMedewerkerNaamInvoer(e.target.value)}
+          placeholder="Jouw naam (voor werklijst-registratie)" />
+      );
+    }
+    return (
+      <select style={{...veldStijl,background:"#fff"}} value={medewerkerNaamInvoer}
+        onChange={e=>{
+          if(e.target.value==="__anders__"){ setMedewerkerNaamAnders(true); setMedewerkerNaamInvoer(""); }
+          else setMedewerkerNaamInvoer(e.target.value);
+        }}>
+        <option value="">— kies je naam —</option>
+        {medewerkerNamenLijst.map(n=><option key={n} value={n}>{n}</option>)}
+        <option value="__anders__">Anders (zelf typen)...</option>
+      </select>
+    );
+  })(), MEDEWERKER_PIN && /*#__PURE__*/React.createElement("button", {
     style: _objectSpread(_objectSpread({}, gs.knopSecundair), {}, {
       width: "100%",
       marginTop: 8,

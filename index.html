@@ -26,6 +26,9 @@
     table { border-collapse: collapse; width: 100%; }
     input[type=number]::-webkit-inner-spin-button { opacity: 1; }
     .sb { padding:1px 3px;border:1px solid #c8e6c9;border-radius:2px;font-size:11px;width:40px;text-align:right;background:#fafffe; }
+    /* Eigen +/- knoppen bij Werkelijk en 2e sortering — geen dubbele pijltjes van de browser zelf */
+    .geen-eigen-pijltjes::-webkit-outer-spin-button, .geen-eigen-pijltjes::-webkit-inner-spin-button { -webkit-appearance:none; opacity:0; margin:0; }
+    .geen-eigen-pijltjes { -moz-appearance:textfield; }
 </style>
 <script>function ownKeys(e, r) { var t = Object.keys(e); if (Object.getOwnPropertySymbols) { var o = Object.getOwnPropertySymbols(e); r && (o = o.filter(function (r) { return Object.getOwnPropertyDescriptor(e, r).enumerable; })), t.push.apply(t, o); } return t; }
 function _objectSpread(e) { for (var r = 1; r < arguments.length; r++) { var t = null != arguments[r] ? arguments[r] : {}; r % 2 ? ownKeys(Object(t), !0).forEach(function (r) { _defineProperty(e, r, t[r]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function (r) { Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r)); }); } return e; }
@@ -27804,7 +27807,7 @@ function PrijsVeldRegel({ waarde, onSave, stijl, type="number", min="0", step="0
   );
 }
 
-function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKopie, onUpdate, i, teeltduur, leverdatum, onActief, onVerplaats, geselecteerd, gemarkeerd, orders, klanten, kiemkracht, realisatie, eigenKlantId }) {
+function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKopie, onUpdate, i, teeltduur, leverdatum, onActief, onVerplaats, geselecteerd, gemarkeerd, orders, klanten, kiemkracht, realisatie, eindcontrole, eigenKlantId }) {
   const [waarschuwing, setWaarschuwing] = useState(null);
   const [tijdelijkeSoort, setTijdelijkeSoort] = useState(r.soort);
   const [resetTeller, setResetTeller] = useState(0);
@@ -27853,27 +27856,19 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
     return String(jr).slice(-2)+String(wkNr).padStart(2,"0");
   }
   let werklijstInfo = null;
-  if(leverdatum && teeltRecordWL){
+  let eindcontroleWaarde = null;
+  if(leverdatum && teeltRecordWL && teeltRecordWL.inboet!=null){
     const eigenTrays = (r.vastPlanten!=null && vd?.aantal) ? Math.round(r.vastPlanten/vd.aantal) : r.aantal;
-    if(teeltRecordWL.inboet!=null){
-      const inboetWeek = wlWeekVerschuif(leverdatum, Number(teeltRecordWL.inboet));
-      const inboetKey = r.gewas+"||"+r.soort+"||"+r.verpakking;
-      const ruw = realisatie?.[inboetWeek]?.inboet?.[inboetKey];
-      if(ruw!==undefined && ruw!=='' && ruw!==null){
-        const werkelijk = Number(ruw);
-        werklijstInfo = {label:"Inboet wk "+inboetWeek, werkelijk, verschil: Math.round((werkelijk-eigenTrays)*10)/10};
-      }
+    const inboetWeek = wlWeekVerschuif(leverdatum, Number(teeltRecordWL.inboet));
+    const inboetKey = r.gewas+"||"+r.soort+"||"+r.verpakking;
+    const ruw = realisatie?.[inboetWeek]?.inboet?.[inboetKey];
+    if(ruw!==undefined && ruw!=='' && ruw!==null){
+      const werkelijk = Number(ruw);
+      werklijstInfo = {label:"Inboet wk "+inboetWeek, werkelijk, verschil: Math.round((werkelijk-eigenTrays)*10)/10};
     }
-    if(!werklijstInfo && teeltRecordWL.uitzaai!=null){
-      const zaaiWeek = wlWeekVerschuif(leverdatum, Number(teeltRecordWL.uitzaai));
-      const fl=(r.verpakking||"").toLowerCase();
-      const zaaiFust = fl.includes("65")||fl.includes("66")?"Zaaitray 264":fl.includes("179")||fl.includes("180")?"Zaaitray 180":fl.includes("260")||fl.includes("264")?"Zaaitray 264":r.verpakking;
-      const zaaiKey = r.gewas+"||"+r.soort+"||"+zaaiFust;
-      const ruw = realisatie?.[zaaiWeek]?.zaai?.[zaaiKey];
-      if(ruw!==undefined && ruw!=='' && ruw!==null){
-        const werkelijk = Number(ruw);
-        werklijstInfo = {label:"Zaailijst wk "+zaaiWeek, werkelijk, verschil: Math.round((werkelijk-eigenTrays)*10)/10};
-      }
+    const ruwEind = eindcontrole?.[inboetWeek]?.[eigenKlantId+"||"+inboetKey];
+    if(ruwEind!==undefined && ruwEind!=="" && ruwEind!==null){
+      eindcontroleWaarde = Number(ruwEind);
     }
   }
   const werklijstTooltip = werklijstInfo
@@ -27926,6 +27921,7 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
             {soorten.map(s=><option key={s}>{s}</option>)}
           </select>
         : r.soort}
+        {orders && eindcontroleWaarde!==null && <span title={"Definitief in de kas: "+eindcontroleWaarde} style={{marginLeft:5,fontSize:11,fontWeight:700,color:"#2d6a4f"}}>{eindcontroleWaarde}</span>}
         {orders && <span title={werklijstTooltip} style={{marginLeft:5,fontSize:11,cursor:"help",color:werklijstKleur,fontWeight:600}}>📋{werklijstInfo?" "+(werklijstInfo.verschil>0?"+":"")+werklijstInfo.verschil:""}</span>}
         {orders && ookAnderenAantal>0 && <span title={"Ook besteld door andere klanten: "+ookAnderenAantal+" trays (zelfde week)"} style={{marginLeft:4,fontSize:10,color:subtekst}}>({ookAnderenAantal})</span>}
       </td>
@@ -28129,7 +28125,7 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
 }
 
 function OrderDetail({ ges, kl, klanten, verpDef, gewassen, setSt, setTab, setData, setRegel, legeRegel, setForm,
-  setKopO, setKopR, setKopRDoel, setDelId, defWeek, WEKEN, orders, setOrders, plantenTotaal, totaal, checkGewijzigd, drukEnkeleBevestiging, mailBevestiging, opslaanBevestigingInDrive, teeltduur, kiemkracht, realisatie }) {
+  setKopO, setKopR, setKopRDoel, setDelId, defWeek, WEKEN, orders, setOrders, plantenTotaal, totaal, checkGewijzigd, drukEnkeleBevestiging, mailBevestiging, opslaanBevestigingInDrive, teeltduur, kiemkracht, realisatie, eindcontrole }) {
   return (
     <div style={{fontSize:12}}>
       {/* TOPBALK */}
@@ -28190,7 +28186,7 @@ function OrderDetail({ ges, kl, klanten, verpDef, gewassen, setSt, setTab, setDa
             {ges.regels.map((r,i)=>(
               <RegelRij key={r.id} r={r} verpDef={verpDef} bewerkbaar={false} i={i} teeltduur={teeltduur} leverdatum={ges.leverdatum}
                 onKopie={()=>{setKopR({regel:r,vanId:ges.id});setKopRDoel("");}} gewassen={gewassen} bewerkbaar={false}
-                orders={orders} klanten={klanten} kiemkracht={kiemkracht} realisatie={realisatie} eigenKlantId={ges.klantId}
+                orders={orders} klanten={klanten} kiemkracht={kiemkracht} realisatie={realisatie} eindcontrole={eindcontrole} eigenKlantId={ges.klantId}
               />
             ))}
           </tbody>
@@ -28768,7 +28764,7 @@ function DupModal({ data, klanten, orders, WEKEN, gs, groen, subtekst, onSluit, 
   );
 }
 
-function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, verpDef, bedrijf, teeltduur=[], kiemkracht=[], realisatie, orderOmTeOpenen, orderRegelOmTeMarkeren, huidigePagina }) {
+function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, verpDef, bedrijf, teeltduur=[], kiemkracht=[], realisatie, eindcontrole, orderOmTeOpenen, orderRegelOmTeMarkeren, huidigePagina }) {
   const wit = "#f3efe6"; // gebroken wit, alleen in dit scherm
   const WEKEN = weekOpties();
   const verpNamen = verpDef.map(v=>v.naam);
@@ -31476,7 +31472,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                       </thead>
                       <tbody>{gesorteerd.map(r=>(
                         <RegelRij key={r.id} r={r} verpDef={verpDef} gewassen={gewassen} bewerkbaar={true} status={data.status||"reservering"} teeltduur={teeltduur} leverdatum={data.leverdatum}
-                          orders={orders} klanten={klanten} kiemkracht={kiemkracht} realisatie={realisatie} eigenKlantId={data.klantId}
+                          orders={orders} klanten={klanten} kiemkracht={kiemkracht} realisatie={realisatie} eindcontrole={eindcontrole} eigenKlantId={data.klantId}
                           gemarkeerd={r.id===gemarkeerdeRegelId}
                           onKopie={()=>{setKopR({regel:r,vanId:data.id});setKopRDoel("");}}
                           onActief={()=>setActieveRegelId(r.id)}
@@ -31529,7 +31525,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
               plantenTotaal={plantenTotaal} totaal={totaal} checkGewijzigd={checkGewijzigd}
               drukEnkeleBevestiging={drukEnkeleBevestiging}
               mailBevestiging={mailBevestiging} opslaanBevestigingInDrive={opslaanBevestigingInDrive}
-              teeltduur={teeltduur} kiemkracht={kiemkracht} realisatie={realisatie}
+              teeltduur={teeltduur} kiemkracht={kiemkracht} realisatie={realisatie} eindcontrole={eindcontrole}
             />
           );
         })() : (
@@ -32094,7 +32090,7 @@ function Teeltduur({ gewassen, verpDef, teeltduur, setTeeltduur }) {
 // ════════════════════════════════════════════════════════
 // MODULE — TEELTPLANNING
 // ════════════════════════════════════════════════════════
-function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkracht, bedrijf, realisatie: realisatieProp, setRealisatie: setRealisatieProp, werklijstVoorkeuze, setWerklijstVoorkeuze, medewerkerModus, medewerkerNaam }) {
+function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkracht, bedrijf, realisatie: realisatieProp, setRealisatie: setRealisatieProp, eindcontrole: eindcontroleProp, setEindcontrole: setEindcontroleProp, werklijstVoorkeuze, setWerklijstVoorkeuze, medewerkerModus, medewerkerNaam }) {
   const wit = "#f3efe6"; // gebroken wit, alleen in dit scherm
   const nu2 = new Date();
   let volWk = getWeekNr(nu2)+1, volJr = getJaar(nu2);
@@ -32116,10 +32112,9 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
   const [filtTot, setFiltTot] = useState(()=>laad("ta_werklijstTot", ""));
   useEffect(()=>bewaar("ta_werklijstVan", filtVan),[filtVan]);
   useEffect(()=>bewaar("ta_werklijstTot", filtTot),[filtTot]);
-  const [aantalWeken, setAantalWeken] = useState(4);
+  const [aantalWeken, setAantalWeken] = useState(8);
   const [matrixGewas, setMatrixGewas] = useState("");
   const [matrixFust, setMatrixFust] = useState("");
-  const [printActielijst, setPrintActielijst] = useState(null);
   const [gekozenLijst, setGekozenLijst] = useState(null);
   const [handmatig, setHandmatig] = useState(()=>laad("ta_handmatig_werklijst", {}));
   useEffect(()=>bewaar("ta_handmatig_werklijst", handmatig),[handmatig]);
@@ -32128,7 +32123,31 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
   useEffect(()=>bewaar("ta_afgedrukt_werklijst", afgedrukt),[afgedrukt]);
   const [gedaan, setGedaan] = useState(()=>laad("ta_werklijst_gedaan", {}));
   const [toonMatrix, setToonMatrix] = useState(false);
+  useEffect(() => {
+    function onKey(e){
+      if(e.key==="Backspace" && toonMatrix){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        setToonMatrix(false);
+      }
+    }
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [toonMatrix]);
+  const [printOverzicht, setPrintOverzicht] = useState(null);
   const [orderKeuzeRij, setOrderKeuzeRij] = useState(null); // key van rij waarvoor het order-keuzemenu open staat
+  // Genereer week-labels rond vandaag (offset in weken t.o.v. nu), voor Gedaan/Nodig-overzichten
+  function wkOffsetLijst(vanaf, tot) {
+    const nu=new Date(); const basisJaar=getJaar(nu), basisWk=getWeekNr(nu);
+    const resultaat=[];
+    for(let offset=vanaf; offset<=tot; offset++){
+      let w=basisWk+offset, j=basisJaar;
+      while(w<=0){w+=52;j--;}
+      while(w>52){w-=52;j++;}
+      resultaat.push(String(j).slice(-2)+String(w).padStart(2,"0"));
+    }
+    return resultaat;
+  }
   useEffect(()=>bewaar("ta_werklijst_gedaan", gedaan),[gedaan]);
   function markeerAfgedrukt(blokKey, type) {
     setAfgedrukt(prev=>({...prev,[blokKey]:{...(prev[blokKey]||{}),[type]:true}}));
@@ -32160,6 +32179,10 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
   const realisatie = realisatieProp !== undefined ? realisatieProp : _realisatieLocal;
   const setRealisatie = setRealisatieProp !== undefined ? setRealisatieProp : _setRealisatieLocal;
   useEffect(()=>bewaar("ta_realisatie",realisatie),[realisatie]);
+  const [_eindcontroleLocal, _setEindcontroleLocal] = useState(()=>laad("ta_eindcontrole", {}));
+  const eindcontrole = eindcontroleProp !== undefined ? eindcontroleProp : _eindcontroleLocal;
+  const setEindcontrole = setEindcontroleProp !== undefined ? setEindcontroleProp : _setEindcontroleLocal;
+  useEffect(()=>bewaar("ta_eindcontrole",eindcontrole),[eindcontrole]);
 
   function setReal(wk, type, rijKey, waarde) {
     setRealisatie(prev=>({
@@ -32173,6 +32196,23 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
   }
   function getReal(wk, type, rijKey) {
     return realisatie?.[wk]?.[type]?.[rijKey]??'';
+  }
+
+  // ── 2e sortering (alleen inboet) — aparte telling naast "Werkelijk", start op 0, stap 0,25 ──
+  const [sortering2, setSortering2] = useState(()=>laad("ta_sortering2", {}));
+  useEffect(()=>bewaar("ta_sortering2", sortering2),[sortering2]);
+  function getSort2(wk, type, rijKey) {
+    return sortering2?.[wk]?.[type]?.[rijKey] ?? '';
+  }
+  function setSort2(wk, type, rijKey, waarde) {
+    setSortering2(prev=>({
+      ...prev,
+      [wk]: {...(prev[wk]||{}),
+        [type]: {...(prev[wk]?.[type]||{}),
+          [rijKey]: waarde===''||waarde===null ? undefined : Number(waarde)
+        }
+      }
+    }));
   }
 
   function getKiem(gewas, soort) {
@@ -32307,12 +32347,30 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
       <div>
 
         {/* Over/tekort — vaste plek, boven de printknoppen */}
-        <div style={{display:"flex",marginBottom:4}}>
+        <div style={{display:"flex",gap:6,marginBottom:4}}>
           <button onClick={()=>setToonMatrix(v=>!v)}
-            style={{background:toonMatrix?"#16a34a":"#fff",color:toonMatrix?"#fff":"#16a34a",
+            style={{background:toonMatrix?"#16a34a":wit,color:toonMatrix?"#fff":"#16a34a",
               border:"1px solid #16a34a",borderRadius:5,padding:"3px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
             📊 {toonMatrix?"Over/tekort sluiten":"Over/tekort"}
           </button>
+          <button onClick={()=>setPrintOverzicht({modus:"gedaan", actieType, rijen, weken:wkOffsetLijst(-7,0), label, blokKey, fustFilter:blokSuffix})}
+            title="Werkelijk ingevulde aantallen van de afgelopen 8 weken, van deze werklijst"
+            style={{background:wit,color:"#0891b2",border:"1px solid #0891b2",borderRadius:5,padding:"3px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+            ✅ Gedaan
+          </button>
+          <button onClick={()=>setPrintOverzicht({modus:"nodig", actieType, rijen, weken:wkOffsetLijst(0,4), label, blokKey, fustFilter:blokSuffix})}
+            title="Nodige aantallen van vandaag t/m 4 weken vooruit, van deze werklijst"
+            style={{background:wit,color:"#7c3aed",border:"1px solid #7c3aed",borderRadius:5,padding:"3px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+            📅 Nodig
+          </button>
+          {/* 2e sortering: Tray 65 heeft geen eigen lijst — dat gaat mee in de 260-lijst (worden fysiek 260-trays) */}
+          {actieType!=="zaai"&&blokSuffix!=="inboet65"&&
+            <button onClick={()=>setPrintOverzicht({modus:"sortering2", actieType, rijen, weken:wkOffsetLijst(-4,0), label, blokKey, fustFilter: blokSuffix==="inboet260"?"inboet260of65":blokSuffix})}
+              title="2e sortering aantallen (trays) — huidige week en 4 weken terug"
+              style={{background:wit,color:"#b45309",border:"1px solid #b45309",borderRadius:5,padding:"3px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              🔀 2e sortering
+            </button>
+          }
         </div>
 
         {/* Blok header — lichter groen dan weekbalk */}
@@ -32367,7 +32425,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
             }
             {!isZaai&&
               <button style={{background:"#e0f2e9",color:"#2d6a4f",border:"1px solid #2d6a4f",borderRadius:5,padding:"5px 11px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center"}}
-                onClick={()=>setPrintWegzetlijst({wk,orders,klanten,gewassen,verpDef,teeltduur,kiemkracht,fustFilter:blokSuffix,realisatie,blokKey,afdrukType:"controlelijst"})}>Controlelijst<AfdrukStip actief={afgedrukt[blokKey]?.controlelijst}/></button>
+                onClick={()=>setPrintWegzetlijst({wk,orders,klanten,gewassen,verpDef,teeltduur,kiemkracht,fustFilter:blokSuffix,realisatie,eindcontrole,setEindcontrole,blokKey,afdrukType:"controlelijst"})}>Controlelijst<AfdrukStip actief={afgedrukt[blokKey]?.controlelijst}/></button>
             }
             <button style={{background:"#fef3c7",color:"#92400e",border:"1px solid #92400e",borderRadius:5,padding:"5px 11px",cursor:"pointer",fontSize:13,fontWeight:600}}
               title="Handmatige regel toevoegen (niet gekoppeld aan een order)"
@@ -32386,6 +32444,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
               <th style={{...sTH,textAlign:"right",minWidth:50,fontWeight:700}}>{"Nodig "+(label.match(/\d+/)?.[0]||label)}</th>
               <th style={{...sTH,textAlign:"right",minWidth:65}}>Werkelijk</th>
               <th style={{...sTH,textAlign:"right",minWidth:55}}>Verschil</th>
+              {!isZaai&&<th style={{...sTH,textAlign:"right",minWidth:65}}>2e sortering</th>}
             </tr>
           </thead>
           <tbody>
@@ -32520,7 +32579,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                           fontSize:13,fontWeight:700,cursor:"pointer",padding:0,lineHeight:1}}
                         onClick={e=>{e.stopPropagation();const b=heeftWaarde?Number(opgeslagen):gepland;setReal(wk,actieType,rijKey,String(Math.max(0,Math.round((b-0.25)*100)/100)));}}
                       >−</button>
-                      <input type="number" min="0" step="0.25"
+                      <input type="number" min="0" step="0.25" className="geen-eigen-pijltjes"
                         style={{width:52,padding:"1px 2px",textAlign:"center",
                           border:`1px solid ${heeftWaarde?"#d4a800":rand}`,borderRadius:0,fontSize:15,
                           background:heeftWaarde?"#fef9c3":"#fff",fontWeight:heeftWaarde?600:400,
@@ -32543,6 +32602,36 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                       : verschil>0 ? <span style={{color:"#1d4ed8",fontWeight:700}}>{"+"+verschil.toFixed(1)}</span>
                       : <span style={{color:"#dc2626",fontWeight:700}}>{verschil.toFixed(1)}</span>}
                   </td>
+                  {!isZaai&&(()=>{
+                    const opgeslagenS2=getSort2(wk,actieType,rijKey);
+                    const heeftS2 = opgeslagenS2!=='' && opgeslagenS2!==null && opgeslagenS2!==undefined;
+                    const basisS2 = heeftS2?Number(opgeslagenS2):0;
+                    const pctS2 = (heeftS2 && heeftWaarde && werkelijk>0) ? (basisS2/werkelijk*100).toFixed(1) : null;
+                    return (
+                      <td style={{...sTDR,padding:"2px 2px"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:4}}>
+                          <div style={{display:"flex",alignItems:"center",gap:1}}>
+                            <input type="number" min="0" step="0.25" className="geen-eigen-pijltjes"
+                              style={{width:52,padding:"1px 2px",textAlign:"center",
+                                border:`1px solid ${heeftS2?"#d4a800":rand}`,borderRadius:"3px 0 0 3px",fontSize:15,
+                                background:heeftS2?"#fef9c3":"#fff",fontWeight:heeftS2?600:400,
+                                color:heeftS2?"#854d0e":"#333"}}
+                              value={heeftS2?String(opgeslagenS2):''}
+                              placeholder="0"
+                              onFocus={e=>e.target.select()}
+                              onChange={e=>setSort2(wk,actieType,rijKey,e.target.value===''?'':e.target.value)}
+                            />
+                            <button style={{width:20,height:24,border:"none",borderRadius:"0 3px 3px 0",
+                                background:heeftS2?"#f59e0b":"#e5e7eb",color:heeftS2?"#fff":"#6b7280",
+                                fontSize:13,fontWeight:700,cursor:"pointer",padding:0,lineHeight:1}}
+                              onClick={e=>{e.stopPropagation();setSort2(wk,actieType,rijKey,String(Math.round((basisS2+0.25)*100)/100));}}
+                            >+</button>
+                          </div>
+                          {pctS2!==null && <span style={{fontSize:11,color:"#854d0e",fontWeight:600}}>({pctS2}%)</span>}
+                        </div>
+                      </td>
+                    );
+                  })()}
                 </tr>
               );
             })}
@@ -32557,6 +32646,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
               <td style={{...sTDR,borderTop:`2px solid ${groen}`,padding:"3px 6px",color:groenTekst}}>
                 {(()=>{const tot=Math.round((rijen.reduce((s,r)=>{const o=getReal(wk,actieType,r.gewas+"||"+r.soort+"||"+r.fust);return s+(o===''?r[veld]||0:Number(o));},0)-totTrays)*10)/10;return tot===0?"✓":tot>0?"+"+tot.toFixed(1):tot.toFixed(1);})()}
               </td>
+              {!isZaai&&<td style={{...sTDR,borderTop:`2px solid ${groen}`,padding:"3px 6px",color:"#854d0e"}}>{rijen.reduce((s,r)=>{const o=getSort2(wk,actieType,r.gewas+"||"+r.soort+"||"+r.fust);return s+(o===''?0:Number(o));},0)}</td>}
             </tr>
           </tfoot>
        </table>}
@@ -32792,7 +32882,8 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
       </div>{/* einde weeklijsten */}
       {/* Verschil matrix — rechts */}
       {toonMatrix && (
-      <div style={{width:"38%",borderLeft:`1px solid ${rand}`,overflowY:"auto",display:"flex",flexDirection:"column"}}>
+      <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",zIndex:500,overflowY:"auto",padding:20}} onClick={()=>setToonMatrix(false)}>
+      <div style={{maxWidth:"95vw",width:1400,maxHeight:"88vh",margin:"0 auto",background:wit,borderRadius:8,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,0.3)",display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
       {(()=>{
         // Bereken beschikbare weken met data
         const alleWkn = Object.keys(planning).sort();
@@ -32821,66 +32912,39 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
           return Number(opgeslagen) - gepland;
         }
 
-        const mTH2 = {padding:"2px 3px",background:"#e8f5ee",color:"#2d6a4f",fontSize:10,border:"1px solid #c8e6c9",textAlign:"center",whiteSpace:"nowrap"};
-        const mTD2 = {padding:"1px 3px",fontSize:11,border:"1px solid #e0e0e0",verticalAlign:"middle"};
+        const mTH2 = {padding:"5px 8px",background:"#e8f5ee",color:"#2d6a4f",fontSize:14,border:"1px solid #c8e6c9",textAlign:"center",whiteSpace:"nowrap"};
+        const mTD2 = {padding:"4px 8px",fontSize:14,border:"1px solid #e0e0e0",verticalAlign:"middle"};
 
         return (
-          <div style={{background:wit,flex:1,display:"flex",flexDirection:"column"}}>
-            <div style={{background:"#cfe6d8",padding:"5px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:`1px solid ${rand}`}}>
-              <span style={{fontWeight:700,fontSize:11,color:groenTekst}}>📊 Verschil matrix</span>
-              <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <span style={{fontSize:11,color:subtekst}}>Weken terug:</span>
-                <select style={{padding:"2px 6px",border:`1px solid ${rand}`,borderRadius:4,fontSize:11,background:wit}}
+          <div style={{background:wit,flex:1,display:"flex",flexDirection:"column",minHeight:0}}>
+            <div style={{background:"#cfe6d8",padding:"8px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:`1px solid ${rand}`,flexWrap:"wrap",gap:8}}>
+              <span style={{fontWeight:700,fontSize:16,color:groenTekst}}>📊 Verschil matrix</span>
+              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                <span style={{fontSize:13,color:subtekst}}>Weken terug:</span>
+                <select style={{padding:"3px 8px",border:`1px solid ${rand}`,borderRadius:4,fontSize:13,background:wit}}
                   value={aantalWeken} onChange={e=>setAantalWeken(Number(e.target.value))}>
                   {[4,6,8,10,12,16,20].map(n=><option key={n} value={n}>{n} weken</option>)}
                 </select>
-                <span style={{fontSize:11,color:subtekst}}>Gewas:</span>
-                <select style={{padding:"2px 6px",border:`1px solid ${rand}`,borderRadius:4,fontSize:11,background:wit}}
+                <span style={{fontSize:13,color:subtekst}}>Gewas:</span>
+                <select style={{padding:"3px 8px",border:`1px solid ${rand}`,borderRadius:4,fontSize:13,background:wit}}
                   value={matrixGewas} onChange={e=>setMatrixGewas(e.target.value)}>
                   <option value="">Alle gewassen</option>
                   {[...new Set(Object.keys(rijSet).map(k=>rijSet[k].gewas))].sort().map(g=><option key={g}>{g}</option>)}
                 </select>
-                <span style={{fontSize:11,color:subtekst}}>Fust:</span>
-                <select style={{padding:"2px 6px",border:`1px solid ${rand}`,borderRadius:4,fontSize:11,background:wit}}
+                <span style={{fontSize:13,color:subtekst}}>Fust:</span>
+                <select style={{padding:"3px 8px",border:`1px solid ${rand}`,borderRadius:4,fontSize:13,background:wit}}
                   value={matrixFust} onChange={e=>setMatrixFust(e.target.value)}>
                   <option value="">Alle fusten</option>
                   {[...new Set([...Object.values(planning).flatMap(b=>[...Object.values(b.zaai||{}),...Object.values(b.inboet||{})].map(r=>r.fust))])].sort().map(f=><option key={f}>{f}</option>)}
                 </select>
-                <button style={{...gs.knopSecundair,fontSize:11,padding:"3px 8px"}} onClick={()=>{
-                  const nu=new Date(); const nuWk=getWeekNr(nu), nuJr=getJaar(nu); const nuAbs=nuJr*52+nuWk;
-                  const rijen=[];
-                  Object.keys(planning).forEach(wk=>{
-                    const inboetData=planning[wk]?.inboet||{};
-                    Object.entries(inboetData).forEach(([rijKey,r])=>{
-                      const opgeslagen=realisatie?.[wk]?.["inboet"]?.[rijKey];
-                      if(opgeslagen===undefined||opgeslagen==='') return;
-                      const verschil=Number(opgeslagen)-(r.inboetTrays||0);
-                      if(verschil===0) return;
-                      const t=teeltduur.find(x=>
-                        x.gewas?.toLowerCase().trim()===r.gewas?.toLowerCase().trim()&&
-                        x.soort?.toLowerCase().trim()===r.soort?.toLowerCase().trim()&&
-                        x.fust?.toLowerCase().trim()===r.fust?.toLowerCase().trim()
-                      );
-                      if(t?.inboet==null) return;
-                      const wkJr=2000+Number(wk.slice(0,2)), wkNr=Number(wk.slice(2));
-                      let leverWk=wkNr+t.inboet, leverJr=wkJr;
-                      while(leverWk>52){leverWk-=52;leverJr++;}
-                      const leverAbs=leverJr*52+leverWk;
-                      if(leverAbs-nuAbs>1) return; // nog niet binnen 1 week voor levering
-                      rijen.push({gewas:r.gewas,soort:r.soort,fust:r.fust,
-                        leverWeek:String(leverJr).slice(-2)+String(leverWk).padStart(2,"0"),verschil});
-                    });
-                  });
-                  rijen.sort((a,b)=>Math.abs(b.verschil)-Math.abs(a.verschil));
-                  setPrintActielijst(rijen);
-                }}>📋 Actielijst</button>
-                <button style={{...gs.knopSecundair,fontSize:11,padding:"3px 8px"}} onClick={()=>{
+                <button style={{...gs.knopSecundair,fontSize:13,padding:"4px 10px"}} onClick={()=>{
                   const el=document.getElementById("verschil-matrix-inhoud");
                   const w=window.open("","_blank");
                   w.document.write(`<html><head><title>Verschil matrix</title><style>
-                    body{font-family:Arial,sans-serif;padding:20px;margin:0}
+                    @page{size:A4 landscape;margin:10mm}
+                    body{font-family:Arial,sans-serif;padding:20px;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
                     table{border-collapse:collapse;margin-bottom:20px}
-                    th,td{border:2px solid #999;padding:3px 6px;font-size:11px}
+                    th,td{border:2px solid #999;padding:3px 6px;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
                     th{background:#e0e0e0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
                     @media print{button{display:none}}
                   </style></head><body>
@@ -32888,11 +32952,12 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                     ${el.innerHTML}
                   </body></html>`);
                   w.document.close();
-                  w.print();
+                  setTimeout(()=>w.print(),400);
                 }}>🖨️ Printen</button>
+                <button style={{background:wit,color:"#1b1b1b",border:"1px solid #e2e8e4",borderRadius:6,padding:"4px 12px",cursor:"pointer",fontSize:13}} onClick={()=>setToonMatrix(false)}>✕ Sluiten</button>
               </div>
             </div>
-            <div id="verschil-matrix-inhoud" style={{overflowX:"auto",overflowY:"auto",flex:1,padding:8}}>
+            <div id="verschil-matrix-inhoud" style={{overflowX:"auto",overflowY:"auto",flex:1,padding:12}}>
               {["zaai","inboet"].map(actieType=>{
                 const label = actieType==="zaai"?"🌰 Zaai":"🪴 Inboet";
                 const relevWkn = alleWkn.filter(wk=>Object.keys(planning[wk]?.[actieType]||{}).length>0&&wk<=nuWk).slice(-aantalWeken);
@@ -32931,14 +32996,28 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
 
                 return (
                   <div key={actieType} style={{marginBottom:16}}>
-                    <div style={{fontSize:11,fontWeight:700,color:actieType==="zaai"?"#1d4ed8":"#0891b2",marginBottom:4,position:"sticky",left:0}}>{label}</div>
-                    <table style={{borderCollapse:"collapse",fontSize:11}}>
+                    <div style={{fontSize:15,fontWeight:700,color:actieType==="zaai"?"#1d4ed8":"#0891b2",marginBottom:6,position:"sticky",left:0}}>{label}</div>
+                    <table style={{borderCollapse:"collapse",fontSize:14}}>
                       <thead>
                         <tr>
                           <th style={{...mTH2,textAlign:"left",minWidth:100,position:"sticky",left:0,zIndex:2}}>Gewas</th>
                           <th style={{...mTH2,textAlign:"left",minWidth:130}}>Soort</th>
                           <th style={{...mTH2,textAlign:"left",minWidth:70}}>Fust</th>
-                          {relevWkn.map(wk=><th key={wk} style={mTH2}>{wk}</th>)}
+                          {relevWkn.map(wk=>{
+                            const lwTellingen={};
+                            relevRijen.forEach(k=>{
+                              const lw=planning[wk]?.[actieType]?.[k]?.leverWeek;
+                              if(lw) lwTellingen[lw]=(lwTellingen[lw]||0)+1;
+                            });
+                            let afl=null, aflN=0;
+                            Object.entries(lwTellingen).forEach(([lw,n])=>{ if(n>aflN){afl=lw;aflN=n;} });
+                            return (
+                              <th key={wk} style={mTH2}>
+                                <div style={{fontSize:10,fontWeight:400,color:"#5a8a72"}}>{afl||" "}</div>
+                                {wk}
+                              </th>
+                            );
+                          })}
                           <th style={{...mTH2,minWidth:60,borderLeft:"2px solid #2d6a4f"}}>Totaal</th>
                         </tr>
                       </thead>
@@ -32949,8 +33028,8 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                           const totRood  = rood<0?rood:"";
                           const totGroen = groen>0?"✓".repeat(Math.min(groen,3)):"";
                           return (
-                            <tr key={k} style={{background:i%2===0?wit:"#cfe6d8"}}>
-                              <td style={{...mTD2,position:"sticky",left:0,background:i%2===0?wit:"#cfe6d8",zIndex:1}}><strong>{r.gewas}</strong></td>
+                            <tr key={k} style={{background:wit}}>
+                              <td style={{...mTD2,position:"sticky",left:0,background:wit,zIndex:1}}><strong>{r.gewas}</strong></td>
                               <td style={mTD2}>{r.soort}</td>
                               <td style={mTD2}><span style={gs.badge}>{r.fust}</span></td>
                               {relevWkn.map(wk=>{
@@ -32970,13 +33049,13 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                                   <td key={wk} style={{...mTD2,textAlign:"center",
                                     background:v===null?"#f9f9f9":v===0?"#dcfce7":v>0?"#dbeafe":"#fee2e2",
                                     color:v===null?"#ccc":v===0?"#16a34a":v>0?"#1d4ed8":"#dc2626",
-                                    fontWeight:v!==null?700:400,fontSize:11}}
+                                    fontWeight:v!==null?700:400,fontSize:14}}
                                     title={kiemTitel}>
                                     {v===null?"":v===0?"":v>0?"+"+v:v}
                                   </td>
                                 );
                               })}
-                              <td style={{...mTD2,textAlign:"center",borderLeft:"2px solid #2d6a4f",fontSize:11,fontWeight:700,
+                              <td style={{...mTD2,textAlign:"center",borderLeft:"2px solid #2d6a4f",fontSize:14,fontWeight:700,
                                 color:(blauw+rood)>0?"#1d4ed8":(blauw+rood)<0?"#dc2626":"#333"}}>
                                 {(blauw+rood)===0?"—":(blauw+rood)>0?"+"+(blauw+rood):(blauw+rood)}
                               </td>
@@ -32992,12 +33071,13 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
           </div>
         );
       })()}
+      </div>
       </div>)}{/* einde matrix */}
       {printWerklijst&&<WerklijstPrint data={printWerklijst} bedrijf={bedrijf} onSluit={()=>setPrintWerklijst(null)} />}
+      {printOverzicht&&<OverzichtWerklijstPrint data={printOverzicht} bedrijf={bedrijf} verpDef={verpDef} realisatie={realisatie} planning={planning} sortering2={sortering2} onSluit={()=>setPrintOverzicht(null)} />}
       {printWegzetlijst&&<ControlelijstPrint data={printWegzetlijst} bedrijf={bedrijf} onSluit={()=>setPrintWegzetlijst(null)} />}
       {printNieuweWegzetlijst&&<WegzetlijstMatrixPrint data={printNieuweWegzetlijst} bedrijf={bedrijf} onSluit={()=>setPrintNieuweWegzetlijst(null)} />}
       {printUitDeCel&&<UitDeCelPrint data={printUitDeCel} bedrijf={bedrijf} onSluit={()=>setPrintUitDeCel(null)} />}
-      {printActielijst&&<ActielijstPrint rijen={printActielijst} bedrijf={bedrijf} onSluit={()=>setPrintActielijst(null)} />}
       {nieuweHandmatigeRegel&&(()=>{
         const gwOpties=(gewassen||[]).map(g=>g.naam).sort();
         return (
@@ -33988,6 +34068,17 @@ function MultiBevestigingPrint({ data, bedrijf, verpDef, onSluit }) {
 // ════════════════════════════════════════════════════════
 function WegzetlijstMatrixPrint({ data, bedrijf, onSluit }) {
   const { wk, orders, klanten, gewassen, verpDef, teeltduur, kiemkracht, realisatie, fustFilter, blokKey, afdrukType } = data;
+  React.useEffect(() => {
+    function onKeyBackspaceSluit(e){
+      if(e.key==="Backspace" && !["INPUT","TEXTAREA"].includes(document.activeElement?.tagName)){
+        e.preventDefault();
+        e.stopImmediatePropagation(); // voorkomt dat de algemene 'terug naar vorige pagina'-backspace ook afgaat
+        onSluit();
+      }
+    }
+    window.addEventListener("keydown", onKeyBackspaceSluit, true); // capture-fase: gaat voor op de globale handler
+    return () => window.removeEventListener("keydown", onKeyBackspaceSluit, true);
+  }, []);
   const vandaag = new Date().toLocaleDateString("nl-NL");
 
   function fustPastBijFilter(verpakking) {
@@ -34308,6 +34399,17 @@ function WegzetlijstMatrixPrint({ data, bedrijf, onSluit }) {
 
 function ControlelijstPrint({ data, bedrijf, onSluit }) {
   const { wk, orders, klanten, gewassen, verpDef, teeltduur, kiemkracht, realisatie, fustFilter, blokKey, afdrukType } = data;
+  React.useEffect(() => {
+    function onKeyBackspaceSluit(e){
+      if(e.key==="Backspace" && !["INPUT","TEXTAREA"].includes(document.activeElement?.tagName)){
+        e.preventDefault();
+        e.stopImmediatePropagation(); // voorkomt dat de algemene 'terug naar vorige pagina'-backspace ook afgaat
+        onSluit();
+      }
+    }
+    window.addEventListener("keydown", onKeyBackspaceSluit, true); // capture-fase: gaat voor op de globale handler
+    return () => window.removeEventListener("keydown", onKeyBackspaceSluit, true);
+  }, []);
   const vandaag = new Date().toLocaleDateString("nl-NL");
 
   function fustPastBijFilter(verpakking) {
@@ -34376,6 +34478,9 @@ function ControlelijstPrint({ data, bedrijf, onSluit }) {
 
   function printDoc() {
     const el = document.getElementById("controlelijst-print-inhoud");
+    // Zorg dat ingevulde waarden (tafelnr, definitief aantal) ook meekomen in de afdruk —
+    // innerHTML pakt anders alleen het value-attribuut, niet de live ingevulde waarde.
+    el.querySelectorAll("input").forEach(inp=>{ inp.setAttribute("value", inp.value); });
     const w = window.open("","_blank");
     w.document.write(`<html><head><title>Controlelijst week ${wk}</title><style>
       @page{size:A4 portrait;margin:10mm}
@@ -34385,6 +34490,9 @@ function ControlelijstPrint({ data, bedrijf, onSluit }) {
       td{padding:2px 7px;border:1px solid #ddd;font-size:15px;vertical-align:middle}
       .subtotaal td{background:#eef6f1!important;color:#1e4d38!important;font-weight:700;border-top:2px solid #2d6a4f;-webkit-print-color-adjust:exact;print-color-adjust:exact}
       .pagina-break{page-break-before:always}
+      input{font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+      input[type=number]{-moz-appearance:textfield}
       @media print{button{display:none}}
     </style></head><body>${el.innerHTML}</body></html>`);
     w.document.close();
@@ -34406,6 +34514,7 @@ function ControlelijstPrint({ data, bedrijf, onSluit }) {
       return n;
     });
   }
+
   const klantTotalenAlles = {};
   rijen.forEach(r=>{
     if(!klantTotalenAlles[r.klantId]) klantTotalenAlles[r.klantId]={naam:r.klantNaam,totaal:0};
@@ -34415,14 +34524,14 @@ function ControlelijstPrint({ data, bedrijf, onSluit }) {
 
   return (
     <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",zIndex:500,overflowY:"auto",padding:20}}>
-      <div style={{maxWidth:1000,margin:"0 auto",background:"#fff",borderRadius:8,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,0.3)"}}>
+      <div style={{maxWidth:"95vw",width:1500,margin:"0 auto",background:"#fff",borderRadius:8,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,0.3)"}}>
         <div style={{display:"flex",gap:8,padding:"10px 16px",background:"#cfe6d8",borderBottom:`1px solid ${rand}`}}>
           <button style={gs.knopPrimair} onClick={printDoc}>🖨️ Afdrukken / PDF</button>
           <button style={gs.knopSecundair} onClick={onSluit}>✕ Sluiten</button>
           <span style={{fontSize:12,color:subtekst,alignSelf:"center"}}>Week {wk} · {traysGesorteerd.length} traymaat/maten</span>
         </div>
 
-        <div id="controlelijst-print-inhoud" style={{padding:"20px 24px",fontFamily:"Arial,sans-serif",fontSize:10}}>
+        <div id="controlelijst-print-inhoud" style={{padding:"20px 24px",fontFamily:"Arial,sans-serif",fontSize:14}}>
           {traysGesorteerd.map((tray,ti)=>{
             const t = perTray[tray];
             // Groepeer per klant voor subtotalen
@@ -34471,20 +34580,20 @@ function ControlelijstPrint({ data, bedrijf, onSluit }) {
                 {/* Header — 4 vakken met grote cijfers/letters */}
                 <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:10}}>
                   <div style={{border:"2px solid #2d6a4f",borderRadius:6,padding:"3px 4px",textAlign:"center",background:"#eef6f1"}}>
-                    <div style={{fontSize:10,fontWeight:700,color:"#3a6b52",textTransform:"uppercase",letterSpacing:0.5}}>Wegzetten</div>
-                    <div style={{fontSize:20,fontWeight:800,color:"#1a1a1a",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tray}</div>
+                    <div style={{fontSize:12,fontWeight:700,color:"#3a6b52",textTransform:"uppercase",letterSpacing:0.5}}>Wegzetten</div>
+                    <div style={{fontSize:27,fontWeight:800,color:"#1a1a1a",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tray}</div>
                   </div>
                   <div style={{border:"2px solid #2d6a4f",borderRadius:6,padding:"3px 4px",textAlign:"center",background:"#eef6f1"}}>
-                    <div style={{fontSize:10,fontWeight:700,color:"#3a6b52",textTransform:"uppercase",letterSpacing:0.5}}>Inboetweek</div>
-                    <div style={{fontSize:20,fontWeight:800,color:"#1a1a1a",marginTop:1}}>{wk}</div>
+                    <div style={{fontSize:12,fontWeight:700,color:"#3a6b52",textTransform:"uppercase",letterSpacing:0.5}}>Inboetweek</div>
+                    <div style={{fontSize:27,fontWeight:800,color:"#1a1a1a",marginTop:1}}>{wk}</div>
                   </div>
                   <div style={{border:"2px solid #2d6a4f",borderRadius:6,padding:"3px 4px",textAlign:"center",background:"#eef6f1"}}>
-                    <div style={{fontSize:10,fontWeight:700,color:"#3a6b52",textTransform:"uppercase",letterSpacing:0.5}}>Afleverweek</div>
-                    <div style={{fontSize:20,fontWeight:800,color:"#1a1a1a",marginTop:1}}>{[...new Set(t.rijen.map(r=>r.afleverWeek))].sort().join(", ")}</div>
+                    <div style={{fontSize:12,fontWeight:700,color:"#3a6b52",textTransform:"uppercase",letterSpacing:0.5}}>Afleverweek</div>
+                    <div style={{fontSize:27,fontWeight:800,color:"#1a1a1a",marginTop:1}}>{[...new Set(t.rijen.map(r=>r.afleverWeek))].sort().join(", ")}</div>
                   </div>
                   <div style={{border:"2px solid #2d6a4f",borderRadius:6,padding:"3px 4px",textAlign:"center",background:"#eef6f1"}}>
-                    <div style={{fontSize:10,fontWeight:700,color:"#3a6b52",textTransform:"uppercase",letterSpacing:0.5}}>Aantal trays totaal</div>
-                    <div style={{fontSize:20,fontWeight:800,color:"#1a1a1a",marginTop:1}}>{t.totaal}</div>
+                    <div style={{fontSize:12,fontWeight:700,color:"#3a6b52",textTransform:"uppercase",letterSpacing:0.5}}>Aantal trays totaal</div>
+                    <div style={{fontSize:27,fontWeight:800,color:"#1a1a1a",marginTop:1}}>{t.totaal}</div>
                   </div>
                 </div>
 
@@ -34492,11 +34601,11 @@ function ControlelijstPrint({ data, bedrijf, onSluit }) {
                 <table>
                   <thead>
                     <tr>
-                      <th style={{minWidth:70,maxWidth:80}}>Serie</th>
-                      <th style={{minWidth:190}}>Kleur</th>
-                      <th style={{minWidth:38,textAlign:"right"}}>Nodig</th>
-                      <th style={{minWidth:48,textAlign:"right"}}>Aanwezig</th>
-                      <th style={{minWidth:38,textAlign:"center"}}>Verschil</th>
+                      <th style={{minWidth:60,maxWidth:70}}>Serie</th>
+                      <th style={{minWidth:150}}>Kleur</th>
+                      <th style={{minWidth:34,textAlign:"right"}}>Nodig</th>
+                      <th style={{minWidth:44,textAlign:"right"}}>Aanwezig</th>
+                      <th style={{minWidth:34,textAlign:"center"}}>Δ</th>
                       <th style={{minWidth:45}}></th>
                       <th style={{minWidth:45}}></th>
                       <th style={{minWidth:52}}>Init.</th>
@@ -34520,11 +34629,11 @@ function ControlelijstPrint({ data, bedrijf, onSluit }) {
                         <tr style={{background:"#2d6a4f"}}>
                           <td colSpan={8} style={{color:"#fff",padding:"6px 10px",border:"none",background:"#2d6a4f",WebkitPrintColorAdjust:"exact",printColorAdjust:"exact"}}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-                              <span style={{fontSize:16,fontWeight:700}}>{kd.naam}</span>
-                              <div style={{display:"flex",gap:16,alignItems:"center",fontSize:13}}>
+                              <span style={{fontSize:20,fontWeight:700}}>{kd.naam}</span>
+                              <div style={{display:"flex",gap:16,alignItems:"center",fontSize:15}}>
                                 {tafelNr && <span>🪑 Tafel: <strong>{tafelNr}</strong></span>}
                                 <span>📅 {[...dagenSet].sort().join(", ")}</span>
-                                <span style={{fontWeight:700,fontSize:15}}>{kd.totaal} trays</span>
+                                <span style={{fontWeight:700,fontSize:18}}>{kd.totaal} trays</span>
                               </div>
                             </div>
                           </td>
@@ -34540,13 +34649,13 @@ function ControlelijstPrint({ data, bedrijf, onSluit }) {
                           const totNodigSoort=regelsZelfdeSoort.reduce((s,x)=>s+x.aantal,0);
                           return (
                           <tr key={ri} style={{background:ri%2===0?wit:"#cfe6d8"}}>
-                            <td style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:80,fontSize:10}}>{r.gewas}</td>
+                            <td style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:80,fontSize:12}}>{r.gewas}</td>
                             <td style={{whiteSpace:"nowrap",position:"relative"}}>
                               {r.soort}
-                              {gedeeld && <span title={"Ook bij "+(aantalKlanten-1)+" andere klant(en) — totaal nodig: "+totNodigSoort} style={{position:"absolute",top:0,right:2,color:"#dc2626",fontWeight:700,fontSize:13}}>*</span>}
+                              {gedeeld && <span title={"Ook bij "+(aantalKlanten-1)+" andere klant(en) — totaal nodig: "+totNodigSoort} style={{position:"absolute",top:0,right:2,color:"#dc2626",fontWeight:700,fontSize:15}}>*</span>}
                             </td>
                             <td style={{textAlign:"right",fontWeight:600}}>
-                              {gedeeld && <span style={{fontWeight:400,color:"#888",fontSize:11}}>({totNodigSoort}) </span>}
+                              {gedeeld && <span style={{fontWeight:400,color:"#888",fontSize:13}}>({totNodigSoort}) </span>}
                               {r.aantal}
                             </td>
                             <td style={{textAlign:"right",fontWeight:600}}>{heeftWerkelijk?toe.toegewezen:""}</td>
@@ -34628,6 +34737,17 @@ function ControlelijstPrint({ data, bedrijf, onSluit }) {
 
 function WerklijstPrint({ data, bedrijf, onSluit }) {
   const { wk, blok, type, rijen: rijdenIn, label, kiemkracht, blokKey, afdrukType, orders, klanten, teeltduur } = data;
+  React.useEffect(() => {
+    function onKeyBackspaceSluit(e){
+      if(e.key==="Backspace" && !["INPUT","TEXTAREA"].includes(document.activeElement?.tagName)){
+        e.preventDefault();
+        e.stopImmediatePropagation(); // voorkomt dat de algemene 'terug naar vorige pagina'-backspace ook afgaat
+        onSluit();
+      }
+    }
+    window.addEventListener("keydown", onKeyBackspaceSluit, true); // capture-fase: gaat voor op de globale handler
+    return () => window.removeEventListener("keydown", onKeyBackspaceSluit, true);
+  }, []);
   function getDuurWL(gewas, soort, fust, veld) {
     return (teeltduur||[]).find(t=>
       t.gewas?.toLowerCase()===gewas?.toLowerCase()&&
@@ -34709,7 +34829,7 @@ function WerklijstPrint({ data, bedrijf, onSluit }) {
       @media print{button{display:none}}
     </style></head><body>${el.innerHTML}</body></html>`);
     w.document.close();
-    w.print();
+    setTimeout(()=>w.print(),400);
     if(blokKey&&afdrukType) window.dispatchEvent(new CustomEvent("ta-lijst-afgedrukt",{detail:{blokKey,type:afdrukType}}));
   }
 
@@ -34919,8 +35039,192 @@ function WerklijstPrint({ data, bedrijf, onSluit }) {
   );
 }
 
+function OverzichtWerklijstPrint({ data, bedrijf, verpDef, realisatie, planning, sortering2, onSluit }) {
+  const { modus, actieType, rijen, weken, label, fustFilter } = data;
+  const gebrokenWit = "#f3efe6"; // gebroken wit, alleen in dit scherm
+  function fustPastBijFilter(verpakking) {
+    if (!fustFilter) return true;
+    const v = (verpakking||"").toLowerCase();
+    if (fustFilter === "inboet260") return v.includes("260");
+    if (fustFilter === "inboet179") return v.includes("179");
+    if (fustFilter === "inboet65") return v.includes("65") || v.includes("66");
+    // 2e sortering: Tray 65 hoort bij de 260-lijst (worden fysiek 260-trays)
+    if (fustFilter === "inboet260of65") return v.includes("260") || v.includes("65") || v.includes("66");
+    return true;
+  }
+  function wkPlus(labelWk, n){
+    let jr = 2000+Number(labelWk.slice(0,2)), wkNr = Number(labelWk.slice(2))+n;
+    while(wkNr>52){wkNr-=52;jr++;}
+    while(wkNr<=0){wkNr+=52;jr--;}
+    return String(jr).slice(-2)+String(wkNr).padStart(2,"0");
+  }
+  const [eenheid, setEenheid] = React.useState("trays"); // trays | aantallen
+  React.useEffect(() => {
+    function onKey(e){
+      if(e.key==="Backspace"){
+        e.preventDefault();
+        e.stopImmediatePropagation(); // voorkomt dat de algemene 'terug naar vorige pagina'-backspace ook afgaat
+        onSluit();
+      }
+    }
+    window.addEventListener("keydown", onKey, true); // capture-fase: gaat voor op de globale handler
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+  const isGedaan = modus === "gedaan";
+  const isSortering2 = modus === "sortering2";
+  const titel = (isSortering2 ? "2E SORTERING — HUIDIGE WEEK + "+(weken.length-1)+" WEKEN TERUG" : isGedaan ? "GEDAAN — LAATSTE "+weken.length+" WEKEN" : "NODIG — KOMENDE "+weken.length+" WEKEN") + (label ? " · "+label : "");
+
+  function waardeVoor(r, wk) {
+    const rowKey = r.gewas+"||"+r.soort+"||"+r.fust;
+    let trays;
+    if(isSortering2){
+      const ruw = sortering2?.[wk]?.[actieType]?.[rowKey];
+      trays = (ruw===undefined||ruw===''||ruw===null) ? null : Number(ruw);
+    } else if(isGedaan){
+      const ruw = realisatie?.[wk]?.[actieType]?.[rowKey];
+      trays = (ruw===undefined||ruw===''||ruw===null) ? null : Number(ruw);
+    } else {
+      const blokData = actieType==="zaai" ? planning[wk]?.zaai : planning[wk]?.inboet;
+      const rec = blokData?.[rowKey];
+      trays = rec ? (actieType==="zaai" ? (rec.zaaiTrays||0) : (rec.inboetTrays||0)) : null;
+    }
+    if(trays===null) return null;
+    if(actieveEenheid==="trays") return trays;
+    const vd = (verpDef||[]).find(v=>v.naam===r.fust);
+    return Math.round(trays*(vd?.aantal||0));
+  }
+
+  function printDoc() {
+    const el = document.getElementById("ov-print-inhoud");
+    const w = window.open("","_blank");
+    w.document.write(`<html><head><title>${titel}</title><style>
+      @page{size:A4 ${isGedaan?"landscape":"portrait"};margin:10mm}
+      body{font-family:Arial,sans-serif;font-size:11px;color:#1a1a1a;padding:0;margin:0}
+      table{border-collapse:collapse;width:100%}
+      th{background:#e0e0e0!important;color:#000;padding:3px 6px;text-align:center;font-size:11px;border:1.5px solid #888;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      td{padding:3px 6px;border:1px solid #999;font-size:11px;text-align:right}
+      td:first-child, td:nth-child(2){text-align:left}
+      @media print{button{display:none}}
+    </style></head><body>${el.innerHTML}</body></html>`);
+    w.document.close();
+    setTimeout(()=>w.print(),400);
+  }
+
+  // Alleen bij inboet is er een zinnig aantal planten per tray (bij zaai bestaat geen "aantallen"-conversie voor een zaaitray)
+  const heeftAantallenOptie = actieType !== "zaai";
+  const actieveEenheid = heeftAantallenOptie ? eenheid : "trays";
+  // Rijenlijst opbouwen over ALLE gevraagde weken heen (niet alleen het blok van de week waarvandaan geopend is) —
+  // anders vallen producten uit voorgaande/volgende weken die niet in de huidige weekblok zitten uit de lijst.
+  const alleRijenMap = {};
+  weken.forEach(wk=>{
+    const blokData = actieType==="zaai" ? planning?.[wk]?.zaai : planning?.[wk]?.inboet;
+    Object.entries(blokData||{}).forEach(([rowKey,rec])=>{
+      if(!fustPastBijFilter(rec.fust)) return;
+      if(!alleRijenMap[rowKey]) alleRijenMap[rowKey] = {gewas:rec.gewas, soort:rec.soort, fust:rec.fust};
+    });
+  });
+  (rijen||[]).forEach(r=>{
+    if(!fustPastBijFilter(r.fust)) return;
+    const rowKey = r.gewas+"||"+r.soort+"||"+r.fust;
+    if(!alleRijenMap[rowKey]) alleRijenMap[rowKey] = {gewas:r.gewas, soort:r.soort, fust:r.fust};
+  });
+  const alleRijen = Object.values(alleRijenMap);
+  const rijenMetData = alleRijen.filter(r=>weken.some(wk=>waardeVoor(r,wk)!==null));
+  const rijenGesorteerd = [...rijenMetData].sort((a,b)=>a.gewas.localeCompare(b.gewas,"nl")||a.soort.localeCompare(b.soort,"nl"));
+
+  return (
+    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",zIndex:500,overflowY:"auto",padding:20}}>
+      <div style={{maxWidth:"95vw",width:1300,margin:"0 auto",background:gebrokenWit,borderRadius:8,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,0.3)"}}>
+        <div style={{display:"flex",gap:8,padding:"10px 16px",background:"#cfe6d8",borderBottom:"1px solid #e2e8e4",alignItems:"center"}}>
+          <button style={{background:"#2d6a4f",color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:14,fontWeight:600}} onClick={printDoc}>🖨️ Afdrukken / PDF</button>
+          <button style={{background:gebrokenWit,color:"#1b1b1b",border:"1px solid #e2e8e4",borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:14}} onClick={onSluit}>✕ Sluiten</button>
+          {heeftAantallenOptie ? (
+            <div style={{marginLeft:"auto",display:"flex",gap:6,alignItems:"center"}}>
+              <span style={{fontSize:12,color:"#555"}}>Eenheid:</span>
+              <button style={{background:actieveEenheid==="trays"?"#2d6a4f":gebrokenWit,color:actieveEenheid==="trays"?"#fff":"#2d6a4f",border:"1px solid #2d6a4f",borderRadius:5,padding:"3px 10px",fontSize:12,cursor:"pointer"}} onClick={()=>setEenheid("trays")}>Trays</button>
+              <button style={{background:actieveEenheid==="aantallen"?"#2d6a4f":gebrokenWit,color:actieveEenheid==="aantallen"?"#fff":"#2d6a4f",border:"1px solid #2d6a4f",borderRadius:5,padding:"3px 10px",fontSize:12,cursor:"pointer"}} onClick={()=>setEenheid("aantallen")}>Aantallen</button>
+            </div>
+          ) : (
+            <span style={{marginLeft:"auto",fontSize:12,color:"#555"}} title="Bij een zaailijst is er geen plantenaantal per zaaitray — alleen trays beschikbaar">🌱 Zaaitrays</span>
+          )}
+        </div>
+        <div id="ov-print-inhoud" style={{padding:"20px 24px",fontFamily:"Arial, sans-serif",fontSize:15,background:gebrokenWit}}>
+          <h3 style={{margin:"0 0 14px",fontSize:20}}>{titel}</h3>
+          <table style={{borderCollapse:"collapse",width:"100%"}}>
+            <thead>
+              <tr>
+                <th style={{padding:"6px 10px",border:"1.5px solid #888",background:"#e0e0e0",textAlign:"left",fontSize:15}}>Gewas</th>
+                <th style={{padding:"6px 10px",border:"1.5px solid #888",background:"#e0e0e0",textAlign:"left",fontSize:15}}>Soort</th>
+                {weken.map(wk=>{
+                  const lwTellingen={};
+                  rijenGesorteerd.forEach(r=>{
+                    const rowKey=r.gewas+"||"+r.soort+"||"+r.fust;
+                    const lw=planning?.[wk]?.[actieType]?.[rowKey]?.leverWeek;
+                    if(lw) lwTellingen[lw]=(lwTellingen[lw]||0)+1;
+                  });
+                  let afl=null, aflN=0;
+                  Object.entries(lwTellingen).forEach(([lw,n])=>{ if(n>aflN){afl=lw;aflN=n;} });
+                  if(isSortering2 && afl) afl = wkPlus(afl, 2);
+                  return (
+                    <th key={wk} style={{padding:"6px 10px",border:"1.5px solid #888",background:"#e0e0e0",textAlign:"right",fontSize:15}}>
+                      {isSortering2 ? (
+                        <>
+                          {wk}
+                          <div style={{fontSize:10,fontWeight:400,color:"#5a8a72"}}>{afl||" "}</div>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{fontSize:10,fontWeight:400,color:"#5a8a72"}}>{afl||" "}</div>
+                          {wk}
+                        </>
+                      )}
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {rijenGesorteerd.map((r,i)=>(
+                <tr key={i} style={{background:gebrokenWit}}>
+                  <td style={{padding:"5px 10px",border:"1px solid #999",fontSize:15}}>{r.gewas}</td>
+                  <td style={{padding:"5px 10px",border:"1px solid #999",fontSize:15}}>{r.soort}</td>
+                  {weken.map(wk=>{
+                    const v = waardeVoor(r, wk);
+                    return <td key={wk} style={{padding:"5px 10px",border:"1px solid #999",textAlign:"right",fontSize:15,fontWeight:600,color:v===null?"#bbb":undefined}}>{v===null?"—":v.toLocaleString("nl-NL")}</td>;
+                  })}
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{background:"#e0e0e0"}}>
+                <td style={{padding:"6px 10px",border:"1.5px solid #888",fontSize:15,fontWeight:700}} colSpan={2}>Totaal</td>
+                {weken.map(wk=>{
+                  const waarden = rijenGesorteerd.map(r=>waardeVoor(r,wk)).filter(v=>v!==null);
+                  const totaal = waarden.reduce((s,v)=>s+v,0);
+                  return <td key={wk} style={{padding:"6px 10px",border:"1.5px solid #888",textAlign:"right",fontSize:15,fontWeight:700}}>{waarden.length?totaal.toLocaleString("nl-NL"):"—"}</td>;
+                })}
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function UitDeCelPrint({ data, bedrijf, onSluit }) {
   const { wk, blok, type, rijen: rijdenIn, label, kiemkracht, blokKey, afdrukType, orders, klanten, teeltduur } = data;
+  React.useEffect(() => {
+    function onKeyBackspaceSluit(e){
+      if(e.key==="Backspace" && !["INPUT","TEXTAREA"].includes(document.activeElement?.tagName)){
+        e.preventDefault();
+        e.stopImmediatePropagation(); // voorkomt dat de algemene 'terug naar vorige pagina'-backspace ook afgaat
+        onSluit();
+      }
+    }
+    window.addEventListener("keydown", onKeyBackspaceSluit, true); // capture-fase: gaat voor op de globale handler
+    return () => window.removeEventListener("keydown", onKeyBackspaceSluit, true);
+  }, []);
   function getDuurWL(gewas, soort, fust, veld) {
     return (teeltduur||[]).find(t=>
       t.gewas?.toLowerCase()===gewas?.toLowerCase()&&
@@ -35002,7 +35306,7 @@ function UitDeCelPrint({ data, bedrijf, onSluit }) {
       @media print{button{display:none}}
     </style></head><body>${el.innerHTML}</body></html>`);
     w.document.close();
-    w.print();
+    setTimeout(()=>w.print(),400);
     if(blokKey&&afdrukType) window.dispatchEvent(new CustomEvent("ta-lijst-afgedrukt",{detail:{blokKey,type:afdrukType}}));
   }
 
@@ -35212,84 +35516,6 @@ function UitDeCelPrint({ data, bedrijf, onSluit }) {
   );
 }
 
-
-function ActielijstPrint({ rijen, bedrijf, onSluit }) {
-  const vandaag = new Date().toLocaleDateString("nl-NL");
-
-  // Groepeer per leverweek
-  const perWeek = {};
-  rijen.forEach(r=>{
-    if(!perWeek[r.leverWeek]) perWeek[r.leverWeek]=[];
-    perWeek[r.leverWeek].push(r);
-  });
-  const weken = Object.keys(perWeek).sort();
-
-  function printDoc() {
-    const el = document.getElementById("al-print-inhoud");
-    const w = window.open("","_blank");
-    w.document.write(`<html><head><title>Actielijst</title><style>
-      body{font-family:Arial,sans-serif;font-size:11px;color:#1a1a1a;padding:20px;margin:0}
-      table{border-collapse:collapse;width:100%}
-      th{background:#e0e0e0!important;color:#000;padding:6px 8px;text-align:left;font-size:11px;border:2px solid #888;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-      td{padding:7px 8px;border:2px solid #999;font-size:11px;vertical-align:top}
-      @media print{button{display:none}}
-    </style></head><body>${el.innerHTML}</body></html>`);
-    w.document.close();
-    w.print();
-  }
-
-  return (
-    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",zIndex:500,overflowY:"auto",padding:20}}>
-      <div style={{maxWidth:760,margin:"0 auto",background:"#fff",borderRadius:8,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,0.3)"}}>
-
-        <div style={{display:"flex",gap:8,padding:"10px 16px",background:"#cfe6d8",borderBottom:"1px solid #e2e8e4"}}>
-          <button style={{background:"#2d6a4f",color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:14,fontWeight:600}} onClick={printDoc}>🖨️ Afdrukken / PDF</button>
-          <button style={{background:"#fff",color:"#1b1b1b",border:"1px solid #e2e8e4",borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:14}} onClick={onSluit}>✕ Sluiten</button>
-        </div>
-
-        <div id="al-print-inhoud" style={{padding:"24px 32px",fontFamily:"Arial, sans-serif",fontSize:11}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,paddingBottom:8,borderBottom:"2px solid #2d6a4f"}}>
-            <div style={{fontWeight:700,fontSize:18,color:"#2d6a4f"}}>📋 ACTIELIJST — Afwijkingen inboet</div>
-            <div style={{fontSize:11,color:"#555"}}>{vandaag}</div>
-          </div>
-
-          {weken.length===0
-            ? <div style={{fontSize:12,color:"#888"}}>Geen afwijkingen binnen 1 week voor levering. 👍</div>
-            : weken.map(wk=>(
-              <div key={wk} style={{marginBottom:20}}>
-                <div style={{background:"#444",color:"#fff",padding:"7px 12px",borderRadius:"4px 4px 0 0",fontWeight:700,fontSize:13}}>
-                  Leverweek {wk}
-                </div>
-                <table>
-                  <thead>
-                    <tr>
-                      <th style={{minWidth:120}}>Gewas</th>
-                      <th style={{minWidth:160}}>Soort</th>
-                      <th style={{minWidth:100}}>Aflevertray</th>
-                      <th style={{minWidth:70,textAlign:"right"}}>Verschil</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {perWeek[wk].map((r,i)=>(
-                      <tr key={i} style={{background:i%2===0?"#fff":"#f0f7f4"}}>
-                        <td style={{fontWeight:700}}>{r.gewas}</td>
-                        <td>{r.soort}</td>
-                        <td>{r.fust}</td>
-                        <td style={{textAlign:"right",fontWeight:700,color:r.verschil>0?"#16a34a":"#dc2626"}}>
-                          {r.verschil>0?"+"+r.verschil:r.verschil}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ))
-          }
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ════════════════════════════════════════════════════════
 // MODULE — ZAADINKOOP
@@ -42777,6 +43003,8 @@ function App() {
 
   const [realisatie, setRealisatie] = useState(() => laad("ta_realisatie", {}));
   React.useEffect(() => bewaar("ta_realisatie", realisatie), [realisatie]);
+  const [eindcontrole, setEindcontrole] = useState(() => laad("ta_eindcontrole", {}));
+  React.useEffect(() => bewaar("ta_eindcontrole", eindcontrole), [eindcontrole]);
   const [matrixDirect, setMatrixDirect] = useState(null);
   useEffect(() => {
     function handler(e) {
@@ -43312,7 +43540,7 @@ function App() {
       /*#__PURE__*/React.createElement(Teeltplanning, {
         klanten: klanten, gewassen: gewassen, verpDef: verpDef,
         orders: orders, teeltduur: teeltduur, kiemkracht: kiemkracht,
-        bedrijf: bedrijf, realisatie: realisatie, setRealisatie: setRealisatie,
+        bedrijf: bedrijf, realisatie: realisatie, setRealisatie: setRealisatie, eindcontrole: eindcontrole, setEindcontrole: setEindcontrole,
         medewerkerModus: medewerkerModus, medewerkerNaam: medewerkerNaam
       })
     );
@@ -43697,6 +43925,7 @@ function App() {
     teeltduur: teeltduur,
     kiemkracht: kiemkracht,
     realisatie: realisatie,
+    eindcontrole: eindcontrole,
     orderOmTeOpenen: orderOmTeOpenen,
     orderRegelOmTeMarkeren: orderRegelOmTeMarkeren,
     huidigePagina: pagina
@@ -43867,6 +44096,8 @@ function App() {
     bedrijf: bedrijf,
     realisatie: realisatie,
     setRealisatie: setRealisatie,
+    eindcontrole: eindcontrole,
+    setEindcontrole: setEindcontrole,
     werklijstVoorkeuze: werklijstVoorkeuze,
     setWerklijstVoorkeuze: setWerklijstVoorkeuze,
     medewerkerModus: medewerkerModus,

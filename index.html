@@ -31108,9 +31108,12 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                       const getal = naam.replace(/[^0-9]/g,"");
                       const perTray = Number(getal)||0;
                       const berekendePlanten = perTray * regel.aantal;
-                      function vanPlanten(p) {
-                        if(!perTray||!p) return;
-                        setRegelV("aantal", Math.ceil(Number(p)/perTray));
+                      const plantenWeergave = regel._plantenInvoer!==undefined ? regel._plantenInvoer : (berekendePlanten||"");
+                      function plantenBlur() {
+                        const ruw = regel._plantenInvoer;
+                        if(ruw===undefined||ruw===""){ setRegel(prev=>({...prev,_plantenInvoer:undefined})); return; }
+                        const nieuweTrays = perTray ? Math.ceil(Number(ruw)/perTray) : regel.aantal;
+                        setRegel(prev=>({...prev,aantal:nieuweTrays,_plantenInvoer:undefined}));
                       }
                       return (
                         <>
@@ -31124,11 +31127,14 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                               <div style={{fontSize:9,color:subtekst,marginBottom:1}}>Planten</div>
                               <input style={{...gs.input,padding:"3px 6px",fontSize:12,width:"100%"}}
                                 type="text" inputMode="numeric"
-                                value={berekendePlanten||""}
+                                value={plantenWeergave}
                                 placeholder={perTray?"÷"+perTray:""}
+                                title={perTray?"Typ een aantal planten — bij verlaten van dit veld wordt dit afgerond op een veelvoud van "+perTray+" (aantal per tray)":""}
                                 autoFocus
                                 onFocus={e=>e.target.select()}
-                                onChange={e=>vanPlanten(e.target.value.replace(/[^0-9]/g,""))} />
+                                onChange={e=>setRegel(prev=>({...prev,_plantenInvoer:e.target.value.replace(/[^0-9]/g,"")}))}
+                                onBlur={plantenBlur}
+                                onKeyDown={e=>{if(e.key==="Enter")e.target.blur();}} />
                             </div>
                           </div>
                           <input style={{...gs.input,padding:"3px 6px",fontSize:12,borderColor:regel.prijs===""?"#f59e0b":rand}} type="number" step="0.001" min="0" placeholder="€/st" value={regel.prijs} onChange={e=>setRegel({...regel,prijs:e.target.value})} />
@@ -31381,7 +31387,15 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
               <div className={nieuweRegelOpen?"regeltabel-compact":""} style={{flex:1,minWidth:0,background:wit,border:`1px solid ${rand}`,borderRadius:6,overflow:"hidden"}}>
                 {nieuweRegelOpen && <style>{`.regeltabel-compact table th:nth-child(10), .regeltabel-compact table td:nth-child(10), .regeltabel-compact table th:nth-child(11), .regeltabel-compact table td:nth-child(11), .regeltabel-compact table th:nth-child(12), .regeltabel-compact table td:nth-child(12) { display:none; }`}</style>}
                 {data.regels.length===0
-                  ? <div style={{color:subtekst,fontSize:12,padding:16,textAlign:"center"}}>Nog geen regels</div>
+                  ? <div style={{color:subtekst,fontSize:12,padding:16,textAlign:"center"}}>
+                      Nog geen regels<br/>
+                      <button
+                        onClick={()=>setNieuweRegelOpen(v=>!v)}
+                        style={{marginTop:10,background:nieuweRegelOpen?"#16a34a":"#fff",color:nieuweRegelOpen?"#fff":"#16a34a",
+                          border:"1px solid #16a34a",borderRadius:5,padding:"6px 14px",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                        {nieuweRegelOpen?"✕ Sluiten":"+ Regel toevoegen"}
+                      </button>
+                    </div>
                   : (()=>{
                       const sorteerFn = {
                         "Gewas":   (a,b)=>a.gewas.localeCompare(b.gewas),

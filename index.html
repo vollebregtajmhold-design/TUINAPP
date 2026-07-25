@@ -38755,6 +38755,7 @@ function Instellingen({ bedrijf, setBedrijf, ideeen, setIdeeen, verpDef, setVerp
               <button style={{...gs.knopPrimair,fontSize:12}} onClick={()=>{
                 localStorage.setItem("ta_pincode", pinInst);
                 sessionStorage.setItem("ta_sessie","ok");
+                sessionStorage.setItem("ta_sessie_tijd", String(Date.now()));
                 setPinOk("✅ Opgeslagen");
               }}>💾 Opslaan</button>
               {pinInst&&<button style={{...gs.knopSecundair,fontSize:12}} onClick={()=>{
@@ -43147,12 +43148,24 @@ function App() {
   } = React;
 
   // ── PINCODE BEVEILIGING ──
+  // Sessie blijft "onthouden" zolang er binnen de laatste 15 minuten activiteit was.
+  // Na 15 minuten inactiviteit (of een browser/tab die na langere tijd wordt hersteld)
+  // moet er opnieuw ingelogd worden — ook als sessionStorage door de browser bewaard bleef.
+  const SESSIE_TIMEOUT_MS = 15*60*1000;
+  function sessieNogGeldig(vlagKey, tijdKey) {
+    const vlagOk = sessionStorage.getItem(vlagKey) === "ok";
+    if (!vlagOk) return false;
+    const tijd = Number(sessionStorage.getItem(tijdKey) || 0);
+    const nogGeldig = tijd>0 && (Date.now()-tijd) < SESSIE_TIMEOUT_MS;
+    if (!nogGeldig) { sessionStorage.removeItem(vlagKey); sessionStorage.removeItem(tijdKey); }
+    return nogGeldig;
+  }
   const OPGESLAGEN_PIN = localStorage.getItem("ta_pincode") || "";
   const [ingelogd, setIngelogd] = useState(() => {
     // Als geen pincode ingesteld, direct ingelogd
     if (!OPGESLAGEN_PIN) return true;
-    // Check sessie (blijft ingelogd tot tab gesloten wordt)
-    return sessionStorage.getItem("ta_sessie") === "ok";
+    // Check sessie (blijft ingelogd tot 15 min. na de laatste activiteit)
+    return sessieNogGeldig("ta_sessie", "ta_sessie_tijd");
   });
   const [pinInvoer, setPinInvoer] = useState("");
   const [pinFout, setPinFout] = useState(false);
@@ -43160,6 +43173,7 @@ function App() {
     const pin = localStorage.getItem("ta_pincode") || "";
     if (pinInvoer === pin) {
       sessionStorage.setItem("ta_sessie", "ok");
+      sessionStorage.setItem("ta_sessie_tijd", String(Date.now()));
       setIngelogd(true);
       setPinFout(false);
       document.documentElement.requestFullscreen?.().catch(() => {});
@@ -43184,11 +43198,36 @@ function App() {
   // ── MEDEWERKER MODUS (alleen werklijsten) ──
   const MEDEWERKER_PIN = localStorage.getItem("ta_medewerkerpincode") || "";
   const [medewerkerModus, setMedewerkerModus] = useState(() => {
-    return sessionStorage.getItem("ta_medewerker_sessie") === "ok";
+    return sessieNogGeldig("ta_medewerker_sessie", "ta_medewerker_sessie_tijd");
   });
   const [medewerkerNaam, setMedewerkerNaam] = useState(() => sessionStorage.getItem("ta_medewerker_naam") || "");
   const [medewerkerNaamInvoer, setMedewerkerNaamInvoer] = useState("");
   const [medewerkerNaamAnders, setMedewerkerNaamAnders] = useState(false);
+
+  // Sessie ververst bij activiteit (klik/toets), en wordt elke minuut gecontroleerd op verlopen —
+  // zo blijf je "onthouden" tijdens gebruik, maar moet je na 15 min. inactiviteit opnieuw inloggen.
+  ue(() => {
+    if (!ingelogd) return;
+    function ververs() {
+      if(sessionStorage.getItem("ta_sessie")==="ok") sessionStorage.setItem("ta_sessie_tijd", String(Date.now()));
+      if(sessionStorage.getItem("ta_medewerker_sessie")==="ok") sessionStorage.setItem("ta_medewerker_sessie_tijd", String(Date.now()));
+    }
+    window.addEventListener("click", ververs);
+    window.addEventListener("keydown", ververs);
+    const interval = setInterval(() => {
+      if(!sessieNogGeldig("ta_sessie","ta_sessie_tijd")){
+        setIngelogd(false);
+        setMedewerkerModus(false);
+      } else if(medewerkerModus && !sessieNogGeldig("ta_medewerker_sessie","ta_medewerker_sessie_tijd")){
+        setMedewerkerModus(false);
+      }
+    }, 60000);
+    return () => {
+      window.removeEventListener("click", ververs);
+      window.removeEventListener("keydown", ververs);
+      clearInterval(interval);
+    };
+  }, [ingelogd, medewerkerModus]);
 
   const [pagina, setPagina] = useState("orders");
   const [vorigePagina, setVorigePagina] = useState(null);
@@ -43770,10 +43809,12 @@ function App() {
       if (MEDEWERKER_PIN && pinInvoer === MEDEWERKER_PIN) {
         if (!medewerkerNaamInvoer.trim()) { alert("Vul eerst je naam in."); return; }
         sessionStorage.setItem("ta_medewerker_sessie", "ok");
+        sessionStorage.setItem("ta_medewerker_sessie_tijd", String(Date.now()));
         sessionStorage.setItem("ta_medewerker_naam", medewerkerNaamInvoer.trim());
         setMedewerkerNaam(medewerkerNaamInvoer.trim());
         setMedewerkerModus(true);
         sessionStorage.setItem("ta_sessie", "ok");
+        sessionStorage.setItem("ta_sessie_tijd", String(Date.now()));
         setIngelogd(true);
         setPinFout(false);
         document.documentElement.requestFullscreen?.().catch(() => {});
@@ -43829,10 +43870,12 @@ function App() {
       if (pinInvoer === MEDEWERKER_PIN) {
         if (!medewerkerNaamInvoer.trim()) { alert("Vul eerst je naam in."); return; }
         sessionStorage.setItem("ta_medewerker_sessie", "ok");
+        sessionStorage.setItem("ta_medewerker_sessie_tijd", String(Date.now()));
         sessionStorage.setItem("ta_medewerker_naam", medewerkerNaamInvoer.trim());
         setMedewerkerNaam(medewerkerNaamInvoer.trim());
         setMedewerkerModus(true);
         sessionStorage.setItem("ta_sessie", "ok");
+        sessionStorage.setItem("ta_sessie_tijd", String(Date.now()));
         setIngelogd(true);
         setPinFout(false);
         document.documentElement.requestFullscreen?.().catch(() => {});
@@ -43853,7 +43896,7 @@ function App() {
         /*#__PURE__*/React.createElement("div", { style: { color: wit, fontWeight: 700, fontSize: 15 } }, "\uD83C\uDF31 Werklijsten"),
         /*#__PURE__*/React.createElement("button", {
           style: { marginLeft: "auto", background: "rgba(255,255,255,0.15)", color: wit, border: "none", borderRadius: 6, padding: "4px 12px", cursor: "pointer", fontSize: 12 },
-          onClick: () => { sessionStorage.removeItem("ta_medewerker_sessie"); sessionStorage.removeItem("ta_sessie"); setMedewerkerModus(false); setIngelogd(false); }
+          onClick: () => { sessionStorage.removeItem("ta_medewerker_sessie"); sessionStorage.removeItem("ta_medewerker_sessie_tijd"); sessionStorage.removeItem("ta_sessie"); sessionStorage.removeItem("ta_sessie_tijd"); setMedewerkerModus(false); setIngelogd(false); }
         }, "Uitloggen")
       ),
       /*#__PURE__*/React.createElement(Teeltplanning, {
@@ -44214,6 +44257,9 @@ function App() {
     onClick: () => {
       if (window.confirm("Weet u zeker dat u wilt uitloggen?")) {
         sessionStorage.removeItem("ta_sessie");
+        sessionStorage.removeItem("ta_sessie_tijd");
+        sessionStorage.removeItem("ta_medewerker_sessie");
+        sessionStorage.removeItem("ta_medewerker_sessie_tijd");
         setIngelogd(false);
       }
     },

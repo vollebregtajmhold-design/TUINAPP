@@ -11,6 +11,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.75} }
@@ -27807,7 +27808,7 @@ function PrijsVeldRegel({ waarde, onSave, stijl, type="number", min="0", step="0
   );
 }
 
-function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKopie, onUpdate, i, teeltduur, leverdatum, onActief, onVerplaats, geselecteerd, gemarkeerd, orders, klanten, kiemkracht, realisatie, eindcontrole, eigenKlantId }) {
+function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKopie, onUpdate, i, teeltduur, leverdatum, onActief, onVerplaats, geselecteerd, gemarkeerd, orders, klanten, kiemkracht, realisatie, eigenKlantId }) {
   const [waarschuwing, setWaarschuwing] = useState(null);
   const [tijdelijkeSoort, setTijdelijkeSoort] = useState(r.soort);
   const [resetTeller, setResetTeller] = useState(0);
@@ -27856,7 +27857,6 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
     return String(jr).slice(-2)+String(wkNr).padStart(2,"0");
   }
   let werklijstInfo = null;
-  let eindcontroleWaarde = null;
   if(leverdatum && teeltRecordWL && teeltRecordWL.inboet!=null){
     const eigenTrays = (r.vastPlanten!=null && vd?.aantal) ? Math.round(r.vastPlanten/vd.aantal) : r.aantal;
     const inboetWeek = wlWeekVerschuif(leverdatum, Number(teeltRecordWL.inboet));
@@ -27865,10 +27865,6 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
     if(ruw!==undefined && ruw!=='' && ruw!==null){
       const werkelijk = Number(ruw);
       werklijstInfo = {label:"Inboet wk "+inboetWeek, werkelijk, verschil: Math.round((werkelijk-eigenTrays)*10)/10};
-    }
-    const ruwEind = eindcontrole?.[inboetWeek]?.[eigenKlantId+"||"+inboetKey];
-    if(ruwEind!==undefined && ruwEind!=="" && ruwEind!==null){
-      eindcontroleWaarde = Number(ruwEind);
     }
   }
   const werklijstTooltip = werklijstInfo
@@ -27921,7 +27917,6 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
             {soorten.map(s=><option key={s}>{s}</option>)}
           </select>
         : r.soort}
-        {orders && eindcontroleWaarde!==null && <span title={"Definitief in de kas: "+eindcontroleWaarde} style={{marginLeft:5,fontSize:11,fontWeight:700,color:"#2d6a4f"}}>{eindcontroleWaarde}</span>}
         {orders && <span title={werklijstTooltip} style={{marginLeft:5,fontSize:11,cursor:"help",color:werklijstKleur,fontWeight:600}}>📋{werklijstInfo?" "+(werklijstInfo.verschil>0?"+":"")+werklijstInfo.verschil:""}</span>}
         {orders && ookAnderenAantal>0 && <span title={"Ook besteld door andere klanten: "+ookAnderenAantal+" trays (zelfde week)"} style={{marginLeft:4,fontSize:10,color:subtekst}}>({ookAnderenAantal})</span>}
       </td>
@@ -28125,7 +28120,7 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
 }
 
 function OrderDetail({ ges, kl, klanten, verpDef, gewassen, setSt, setTab, setData, setRegel, legeRegel, setForm,
-  setKopO, setKopR, setKopRDoel, setDelId, defWeek, WEKEN, orders, setOrders, plantenTotaal, totaal, checkGewijzigd, drukEnkeleBevestiging, mailBevestiging, opslaanBevestigingInDrive, teeltduur, kiemkracht, realisatie, eindcontrole }) {
+  setKopO, setKopR, setKopRDoel, setDelId, defWeek, WEKEN, orders, setOrders, plantenTotaal, totaal, checkGewijzigd, drukEnkeleBevestiging, mailBevestiging, opslaanBevestigingInDrive, teeltduur, kiemkracht, realisatie }) {
   return (
     <div style={{fontSize:12}}>
       {/* TOPBALK */}
@@ -28186,7 +28181,7 @@ function OrderDetail({ ges, kl, klanten, verpDef, gewassen, setSt, setTab, setDa
             {ges.regels.map((r,i)=>(
               <RegelRij key={r.id} r={r} verpDef={verpDef} bewerkbaar={false} i={i} teeltduur={teeltduur} leverdatum={ges.leverdatum}
                 onKopie={()=>{setKopR({regel:r,vanId:ges.id});setKopRDoel("");}} gewassen={gewassen} bewerkbaar={false}
-                orders={orders} klanten={klanten} kiemkracht={kiemkracht} realisatie={realisatie} eindcontrole={eindcontrole} eigenKlantId={ges.klantId}
+                orders={orders} klanten={klanten} kiemkracht={kiemkracht} realisatie={realisatie} eigenKlantId={ges.klantId}
               />
             ))}
           </tbody>
@@ -28764,7 +28759,7 @@ function DupModal({ data, klanten, orders, WEKEN, gs, groen, subtekst, onSluit, 
   );
 }
 
-function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, verpDef, bedrijf, teeltduur=[], kiemkracht=[], realisatie, eindcontrole, orderOmTeOpenen, orderRegelOmTeMarkeren, huidigePagina }) {
+function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, verpDef, bedrijf, teeltduur=[], kiemkracht=[], realisatie, orderOmTeOpenen, orderRegelOmTeMarkeren, huidigePagina }) {
   const wit = "#f3efe6"; // gebroken wit, alleen in dit scherm
   const WEKEN = weekOpties();
   const verpNamen = verpDef.map(v=>v.naam);
@@ -28841,8 +28836,8 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
     return ()=>window.removeEventListener("seizoensGemaild", handler);
   },[]);
   const [regel,setRegel]=useState({...legeRegel}); const [ges,setGes]=useState(null);
-  const [delId,setDelId]=useState(null); const [filtS,setFiltS]=useState(""); const [filtK,setFiltK]=useState(0);
-  const [klantZoek,setKlantZoek]=useState(""); const [klantZoekOpen,setKlantZoekOpen]=useState(false); const refKlantZoek=React.useRef(); const refKlantLijst=React.useRef();
+  const [delId,setDelId]=useState(null); const [filtS,setFiltS]=useState(""); const [filtK,setFiltK]=useState(()=>klanten.find(k=>k.naam.toLowerCase()==="bergcamp")?.id||0);
+  const [klantZoek,setKlantZoek]=useState(""); const [klantZoekOpen,setKlantZoekOpen]=useState(false); const [toonAlleKlanten,setToonAlleKlanten]=useState(false); const refKlantZoek=React.useRef(); const refKlantLijst=React.useRef();
   const [toonKlantInfo,setToonKlantInfo]=useState(false);
   const letterCycleRef=React.useRef({letter:"",idx:0});
   const [kopO,setKopO]=useState(null); const [kopODat,setKopODat]=useState(defWeek.datum);
@@ -30300,6 +30295,23 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
     return ()=>window.removeEventListener("keydown", onKey);
   }, [gefilterd, ges, form, huidigePagina]);
 
+  // ── Backspace = terug naar de orderlijst wanneer een orderregel/order open staat ──
+  // Capture-fase + stopImmediatePropagation: voorkomt dat de algemene 'vorige pagina'-backspace ook afgaat.
+  useEffect(()=>{
+    function onKeyBackspaceTerug(e){
+      if(e.key!=="Backspace") return;
+      if(huidigePagina!==undefined && huidigePagina!=="orders") return;
+      if(!form) return;
+      const tag = document.activeElement?.tagName;
+      if(tag==="INPUT"||tag==="SELECT"||tag==="TEXTAREA") return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      checkGewijzigd(()=>setForm(false));
+    }
+    window.addEventListener("keydown", onKeyBackspaceTerug, true);
+    return ()=>window.removeEventListener("keydown", onKeyBackspaceTerug, true);
+  }, [huidigePagina, form]);
+
   // ── Focus terug naar klant-zoekveld als je terugkeert naar het Orders-tabblad ──
   useEffect(()=>{
     if(huidigePagina==="orders") setTimeout(()=>refKlantZoek.current?.focus(),50);
@@ -30315,9 +30327,19 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
           {(()=>{
             const geselecteerd = klanten.find(k=>k.id===Number(filtK));
             const actieveKlanten = klanten.filter(k=>k.actief!==false);
+            // Bergcamp altijd als eerste in de standaardlijst (bij focus) — bij "alles tonen" (pijl) gewoon alfabetisch
+            function zetBergcampEerst(lijst){
+              const idx = lijst.findIndex(k=>k.naam.toLowerCase()==="bergcamp");
+              if(idx<=0) return lijst;
+              const kopie=[...lijst];
+              const [bergcamp]=kopie.splice(idx,1);
+              kopie.unshift(bergcamp);
+              return kopie;
+            }
+            const actieveKlantenGesorteerd = actieveKlanten.slice().sort((a,b)=>a.naam.localeCompare(b.naam,"nl",{numeric:true}));
             const zoekResultaten = klantZoek
-              ? actieveKlanten.filter(k=>k.naam.toLowerCase().includes(klantZoek.toLowerCase())).sort((a,b)=>a.naam.localeCompare(b.naam))
-              : actieveKlanten.sort((a,b)=>a.naam.localeCompare(b.naam));
+              ? actieveKlanten.filter(k=>k.naam.toLowerCase().includes(klantZoek.toLowerCase())).sort((a,b)=>a.naam.localeCompare(b.naam,"nl",{numeric:true}))
+              : (toonAlleKlanten ? actieveKlantenGesorteerd : zetBergcampEerst(actieveKlantenGesorteerd));
             return (
               <div style={{position:"relative",marginBottom:6}}>
                 <div style={{display:"flex",gap:0}}>
@@ -30328,7 +30350,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                     borderColor:groen,borderRadius:"6px 0 0 6px",flex:1}}
                   placeholder="🔍 Typ of gebruik ▼"
                   value={klantZoekOpen?klantZoek:(geselecteerd?.naam||"")}
-                  onFocus={()=>{setKlantZoekOpen(true);setKlantZoek("");}}
+                  onFocus={()=>{setKlantZoekOpen(true);setKlantZoek("");setToonAlleKlanten(false);}}
                   onChange={e=>{setKlantZoek(e.target.value);setKlantZoekOpen(true);}}
                   onKeyDown={e=>{
                     if(e.key==="Escape"){setKlantZoekOpen(false);setKlantZoek("");return;}
@@ -30345,11 +30367,11 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                       setData(nieuwData);setRegel(maakLegeRegel(Number(filtK)));
                       setForm(true);setGes(null);setTab("lijst");return;
                     }
-                    // Letter-cycling: één letter → spring door klanten met die letter
-                    if(e.key.length===1&&e.key.match(/[a-zA-Z]/i)){
+                    // Letter/cijfer-cycling: één toets → spring door klanten die daarmee beginnen
+                    if(e.key.length===1&&e.key.match(/[a-zA-Z0-9]/i)){
                       e.preventDefault();
                       const letter=e.key.toLowerCase();
-                      const gesorteerd=klanten.slice().sort((a,b)=>a.naam.localeCompare(b.naam,"nl"));
+                      const gesorteerd=klanten.slice().sort((a,b)=>a.naam.localeCompare(b.naam,"nl",{numeric:true}));
                       const matches=gesorteerd.filter(k=>k.naam.toLowerCase().startsWith(letter));
                       if(matches.length===0) return;
                       const ref=letterCycleRef.current;
@@ -30368,6 +30390,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                   onClick={()=>{
                     setKlantZoek("");
                     setKlantZoekOpen(true);
+                    setToonAlleKlanten(true);
                     setTimeout(()=>refKlantZoek.current?.focus(),50);
                   }}
                   title="Toon alle klanten">▼</button>
@@ -31472,7 +31495,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                       </thead>
                       <tbody>{gesorteerd.map(r=>(
                         <RegelRij key={r.id} r={r} verpDef={verpDef} gewassen={gewassen} bewerkbaar={true} status={data.status||"reservering"} teeltduur={teeltduur} leverdatum={data.leverdatum}
-                          orders={orders} klanten={klanten} kiemkracht={kiemkracht} realisatie={realisatie} eindcontrole={eindcontrole} eigenKlantId={data.klantId}
+                          orders={orders} klanten={klanten} kiemkracht={kiemkracht} realisatie={realisatie} eigenKlantId={data.klantId}
                           gemarkeerd={r.id===gemarkeerdeRegelId}
                           onKopie={()=>{setKopR({regel:r,vanId:data.id});setKopRDoel("");}}
                           onActief={()=>setActieveRegelId(r.id)}
@@ -31525,7 +31548,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
               plantenTotaal={plantenTotaal} totaal={totaal} checkGewijzigd={checkGewijzigd}
               drukEnkeleBevestiging={drukEnkeleBevestiging}
               mailBevestiging={mailBevestiging} opslaanBevestigingInDrive={opslaanBevestigingInDrive}
-              teeltduur={teeltduur} kiemkracht={kiemkracht} realisatie={realisatie} eindcontrole={eindcontrole}
+              teeltduur={teeltduur} kiemkracht={kiemkracht} realisatie={realisatie}
             />
           );
         })() : (
@@ -32090,7 +32113,7 @@ function Teeltduur({ gewassen, verpDef, teeltduur, setTeeltduur }) {
 // ════════════════════════════════════════════════════════
 // MODULE — TEELTPLANNING
 // ════════════════════════════════════════════════════════
-function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkracht, bedrijf, realisatie: realisatieProp, setRealisatie: setRealisatieProp, eindcontrole: eindcontroleProp, setEindcontrole: setEindcontroleProp, werklijstVoorkeuze, setWerklijstVoorkeuze, medewerkerModus, medewerkerNaam }) {
+function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkracht, bedrijf, realisatie: realisatieProp, setRealisatie: setRealisatieProp, werklijstVoorkeuze, setWerklijstVoorkeuze, medewerkerModus, medewerkerNaam }) {
   const wit = "#f3efe6"; // gebroken wit, alleen in dit scherm
   const nu2 = new Date();
   let volWk = getWeekNr(nu2)+1, volJr = getJaar(nu2);
@@ -32179,10 +32202,6 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
   const realisatie = realisatieProp !== undefined ? realisatieProp : _realisatieLocal;
   const setRealisatie = setRealisatieProp !== undefined ? setRealisatieProp : _setRealisatieLocal;
   useEffect(()=>bewaar("ta_realisatie",realisatie),[realisatie]);
-  const [_eindcontroleLocal, _setEindcontroleLocal] = useState(()=>laad("ta_eindcontrole", {}));
-  const eindcontrole = eindcontroleProp !== undefined ? eindcontroleProp : _eindcontroleLocal;
-  const setEindcontrole = setEindcontroleProp !== undefined ? setEindcontroleProp : _setEindcontroleLocal;
-  useEffect(()=>bewaar("ta_eindcontrole",eindcontrole),[eindcontrole]);
 
   function setReal(wk, type, rijKey, waarde) {
     setRealisatie(prev=>({
@@ -32412,20 +32431,85 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
               <button style={{background:"#d1fae5",color:"#065f46",border:"1px solid #065f46",borderRadius:5,padding:"5px 11px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center"}}
                 onClick={()=>setPrintNieuweWegzetlijst({wk,orders,klanten,gewassen,verpDef,teeltduur,kiemkracht,fustFilter:blokSuffix,blokKey,afdrukType:"wegzetlijst"})}>Wegzetlijst<AfdrukStip actief={afgedrukt[blokKey]?.wegzetlijst}/></button>
               <button style={{background:"#ede9fe",color:"#7c3aed",border:"1px solid #7c3aed",borderRadius:5,padding:"5px 11px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center"}}
-                onClick={()=>{alert("Stickers — koppeling printer nog niet beschikbaar");markeerAfgedrukt(blokKey,"stickers");}}>Stickers<AfdrukStip actief={afgedrukt[blokKey]?.stickers}/></button>
+                onClick={()=>{
+                  function fustPastBijFilterSt(verpakking){
+                    if(!blokSuffix) return true;
+                    const v=(verpakking||"").toLowerCase();
+                    if(blokSuffix==="inboet260") return v.includes("260");
+                    if(blokSuffix==="inboet179") return v.includes("179");
+                    if(blokSuffix==="inboet65") return v.includes("65")||v.includes("66");
+                    return true;
+                  }
+                  const stickers=[];
+                  orders.filter(o=>o.status!=="geleverd").forEach(o=>{
+                    const kl=klanten.find(k=>k.id===o.klantId)||{};
+                    const leverWk=getWeekNr(o.leverdatum), leverJaar=getJaar(o.leverdatum);
+                    (o.regels||[]).forEach(r=>{
+                      const inboetWeken=getDuur(r.gewas,r.soort,r.verpakking,"inboet");
+                      if(inboetWeken===null) return;
+                      let inbWk=leverWk-inboetWeken, inbJaar=leverJaar;
+                      if(inbWk<=0){inbWk+=52;inbJaar--;}
+                      const inbLbl=String(inbJaar).slice(-2)+String(inbWk).padStart(2,"0");
+                      if(inbLbl!==wk) return;
+                      if(!fustPastBijFilterSt(r.verpakking)) return;
+                      const totaal=r.aantal||0;
+                      if(totaal<=0) return;
+                      const aantalStickers=Math.ceil(totaal/100);
+                      for(let i=0;i<aantalStickers;i++){
+                        const opSticker=(i<aantalStickers-1)?100:(totaal-100*(aantalStickers-1));
+                        stickers.push([
+                          (kl.klantcode||kl.naam?.substring(0,6)||"?").toUpperCase(),
+                          "wk "+leverWk,
+                          r.verpakking,
+                          opSticker+" st",
+                          o.orderNr||o.id
+                        ]);
+                      }
+                    });
+                  });
+                  if(stickers.length===0){ alert("Geen regels gevonden voor deze lijst."); return; }
+                  const RIJEN_STICKER=5;
+                  const wbEx=new ExcelJS.Workbook();
+                  const wsEx=wbEx.addWorksheet("Stickers");
+                  stickers.forEach((velden,col)=>{
+                    const kolom=wsEx.getColumn(col+1);
+                    kolom.width=8.571; // komt overeen met ±60px
+                    for(let r=0;r<RIJEN_STICKER;r++){
+                      const cel=wsEx.getCell(r+1,col+1);
+                      cel.value=velden[r];
+                      cel.alignment={horizontal:"center",vertical:"middle"};
+                    }
+                  });
+                  wbEx.xlsx.writeBuffer().then(buffer=>{
+                    const blob=new Blob([buffer],{type:"application/octet-stream"});
+                    const url=URL.createObjectURL(blob);
+                    const a=document.createElement("a");
+                    a.href=url;
+                    a.download="Stickers_"+wk+"_"+(blokSuffix||label||"")+"_"+new Date().toISOString().slice(0,10)+".xlsx";
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  });
+                  markeerAfgedrukt(blokKey,"stickers");
+                }}>Stickers<AfdrukStip actief={afgedrukt[blokKey]?.stickers}/></button>
             </>}
             {allesVastgezet
-              ? <span style={{background:"#dcfce7",color:"#16a34a",borderRadius:5,padding:"5px 12px",fontSize:13,fontWeight:700}}>Vastgezet</span>
-              : <button style={{background:"#dcfce7",color:"#16a34a",border:"1px solid #16a34a",borderRadius:5,padding:"5px 11px",cursor:"pointer",fontSize:13,fontWeight:600}}
+              ? <span style={{background:"#dcfce7",color:"#16a34a",border:"2px solid #dc2626",borderRadius:8,
+                    padding:"10px 12px",fontSize:12,fontWeight:700,lineHeight:1.25,
+                    display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+                    marginLeft:10,marginRight:10,boxShadow:"0 1px 5px rgba(220,38,38,0.35)"}}><span>Vast-</span><span>gezet</span></span>
+              : <button style={{background:"#dcfce7",color:"#16a34a",border:"2px solid #16a34a",borderRadius:8,
+                    padding:"10px 12px",cursor:"pointer",fontSize:12,fontWeight:700,lineHeight:1.25,
+                    display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+                    marginLeft:10,marginRight:10,boxShadow:"0 1px 5px rgba(22,163,74,0.4)"}}
                   title="Tip: print eerst de Werklijst en Wegzetlijst. Na vastzetten worden de verschillen t.o.v. de planning zichtbaar."
                   onClick={()=>{
                     if(!window.confirm("Week "+wk+" "+label+" vastzetten?")) return;
                     rijen.forEach(r=>setReal(wk,actieType,r.gewas+"||"+r.soort+"||"+r.fust,String(r[veld]||0)));
-                  }}>Week vastzetten</button>
+                  }}><span>Week</span><span>vastzetten</span></button>
             }
             {!isZaai&&
               <button style={{background:"#e0f2e9",color:"#2d6a4f",border:"1px solid #2d6a4f",borderRadius:5,padding:"5px 11px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center"}}
-                onClick={()=>setPrintWegzetlijst({wk,orders,klanten,gewassen,verpDef,teeltduur,kiemkracht,fustFilter:blokSuffix,realisatie,eindcontrole,setEindcontrole,blokKey,afdrukType:"controlelijst"})}>Controlelijst<AfdrukStip actief={afgedrukt[blokKey]?.controlelijst}/></button>
+                onClick={()=>setPrintWegzetlijst({wk,orders,klanten,gewassen,verpDef,teeltduur,kiemkracht,fustFilter:blokSuffix,realisatie,blokKey,afdrukType:"controlelijst"})}>Controlelijst<AfdrukStip actief={afgedrukt[blokKey]?.controlelijst}/></button>
             }
             <button style={{background:"#fef3c7",color:"#92400e",border:"1px solid #92400e",borderRadius:5,padding:"5px 11px",cursor:"pointer",fontSize:13,fontWeight:600}}
               title="Handmatige regel toevoegen (niet gekoppeld aan een order)"
@@ -32809,6 +32893,8 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
           )}
           {gekozenLijst && (()=>{
             const def = LIJST_DEFS.find(l=>l.id===gekozenLijst);
+            // De geselecteerde week krijgt dezelfde kleur als de gekozen lijst hierboven (turquoise bij inboet, blauw bij zaai)
+            const lijstKleur = def.isZaai ? "#1d4ed8" : "#0891b2";
             const weken = Object.keys(planning).sort()
               .filter(wk=>{
                 if(filtVan && wk<filtVan) return false;
@@ -32837,16 +32923,16 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                   setOpenBlokken(prev=>new Set(prev).add(wk+"_"+gekozenLijst));
                 }}
                 style={{padding:"8px 12px", cursor:"pointer",
-                  background: gekozenWeek===wk ? "#c8e6d5" : "#cfe6d8",
+                  background: gekozenWeek===wk ? lijstKleur : "#cfe6d8",
                   border: isHuidigeWeek ? "2px solid #16a34a" : "2px solid transparent",
                   borderBottom: isHuidigeWeek ? "2px solid #16a34a" : `1px solid ${wit}`,
                   display:"flex", justifyContent:"space-between", alignItems:"center"}}>
-                <span style={{fontWeight:700, fontSize:12, color:"#1e3a2f", display:"flex", alignItems:"center", gap:6}}>
+                <span style={{fontWeight:700, fontSize:12, color: gekozenWeek===wk ? "#fff" : "#1e3a2f", display:"flex", alignItems:"center", gap:6}}>
                   {vastgezet&&<span title="Vastgezet" style={{width:8,height:8,borderRadius:"50%",background:"#16a34a",display:"inline-block"}}/>}
                   {wk}
-                  {isHuidigeWeek && <span title="Huidige week" style={{fontSize:9,fontWeight:700,color:"#16a34a"}}>● nu</span>}
+                  {isHuidigeWeek && <span title="Huidige week" style={{fontSize:9,fontWeight:700,color: gekozenWeek===wk ? "#fff" : "#16a34a"}}>● nu</span>}
                 </span>
-                <span style={{fontSize:11, color:subtekst}}>{totaal.toLocaleString("nl-NL")} {def.isZaai?"zaaitrays":"trays"}</span>
+                <span style={{fontSize:11, color: gekozenWeek===wk ? "#e5f3f7" : subtekst}}>{totaal.toLocaleString("nl-NL")} {def.isZaai?"zaaitrays":"trays"}</span>
               </div>
               );
             });
@@ -43003,8 +43089,6 @@ function App() {
 
   const [realisatie, setRealisatie] = useState(() => laad("ta_realisatie", {}));
   React.useEffect(() => bewaar("ta_realisatie", realisatie), [realisatie]);
-  const [eindcontrole, setEindcontrole] = useState(() => laad("ta_eindcontrole", {}));
-  React.useEffect(() => bewaar("ta_eindcontrole", eindcontrole), [eindcontrole]);
   const [matrixDirect, setMatrixDirect] = useState(null);
   useEffect(() => {
     function handler(e) {
@@ -43540,7 +43624,7 @@ function App() {
       /*#__PURE__*/React.createElement(Teeltplanning, {
         klanten: klanten, gewassen: gewassen, verpDef: verpDef,
         orders: orders, teeltduur: teeltduur, kiemkracht: kiemkracht,
-        bedrijf: bedrijf, realisatie: realisatie, setRealisatie: setRealisatie, eindcontrole: eindcontrole, setEindcontrole: setEindcontrole,
+        bedrijf: bedrijf, realisatie: realisatie, setRealisatie: setRealisatie,
         medewerkerModus: medewerkerModus, medewerkerNaam: medewerkerNaam
       })
     );
@@ -43925,7 +44009,6 @@ function App() {
     teeltduur: teeltduur,
     kiemkracht: kiemkracht,
     realisatie: realisatie,
-    eindcontrole: eindcontrole,
     orderOmTeOpenen: orderOmTeOpenen,
     orderRegelOmTeMarkeren: orderRegelOmTeMarkeren,
     huidigePagina: pagina
@@ -44096,8 +44179,6 @@ function App() {
     bedrijf: bedrijf,
     realisatie: realisatie,
     setRealisatie: setRealisatie,
-    eindcontrole: eindcontrole,
-    setEindcontrole: setEindcontrole,
     werklijstVoorkeuze: werklijstVoorkeuze,
     setWerklijstVoorkeuze: setWerklijstVoorkeuze,
     medewerkerModus: medewerkerModus,

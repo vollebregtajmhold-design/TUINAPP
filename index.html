@@ -32344,7 +32344,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
 
   const alleWeken = [...new Set(orders.map(o=>weekLabel(o.leverdatum)))].sort();
 
-  const sTH = {...TH, padding:"3px 8px", background:"#a9d8bd", borderTop:"2px solid #5c9873", borderBottom:"2px solid #5c9873", fontSize:18};
+  const sTH = {...TH, padding:"3px 5px", background:"#a9d8bd", borderTop:"2px solid #5c9873", borderBottom:"2px solid #5c9873", fontSize:18};
   const sTD = {padding:"3px 6px", fontSize:18, borderBottom:`1px solid ${rand}`, verticalAlign:"middle"};
   const sTDR = {...sTD, textAlign:"right"};
 
@@ -32519,16 +32519,19 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
         {blokOpen&&<table style={{width:"auto",borderCollapse:"collapse"}}>
           <thead>
             <tr>
-              <th style={{...sTH,textAlign:"left",minWidth:100}}>Gewas</th>
+              <th style={{...sTH,textAlign:"left",minWidth:85}}>Gewas</th>
               <th style={{...sTH,textAlign:"center",minWidth:22,width:22}} title="Gedaan (alleen ter info, niet geprint)">✓</th>
-              <th style={{...sTH,textAlign:"left",minWidth:30,width:30}} title="Intern soortnummer">Nr</th>
-              <th style={{...sTH,textAlign:"left",minWidth:140}}>Soort</th>
-              {!isZaai&&<th style={{...sTH,textAlign:"right",minWidth:50}} title="Nodig ÷ kiem% (bij Tray 65/66 ook ÷4)">Gezaaid</th>}
-              <th style={{...sTH,textAlign:"left",minWidth:90}}>Tafel</th>
-              <th style={{...sTH,textAlign:"right",minWidth:50,fontWeight:700}}>{"Nodig "+(label.match(/\d+/)?.[0]||label)}</th>
-              <th style={{...sTH,textAlign:"right",minWidth:65}}>Werkelijk</th>
-              <th style={{...sTH,textAlign:"right",minWidth:55}}>Verschil</th>
-              {!isZaai&&<th style={{...sTH,textAlign:"right",minWidth:65}}>2e sortering</th>}
+              <th style={{...sTH,textAlign:"left",minWidth:26,width:26}} title="Intern soortnummer">Nr</th>
+              <th style={{...sTH,textAlign:"left",minWidth:115}}>Soort</th>
+              {!isZaai&&<th style={{...sTH,textAlign:"right",minWidth:44}} title="Nodig ÷ kiem% (bij Tray 65/66 ook ÷4)">Gezaaid</th>}
+              <th style={{...sTH,textAlign:"left",minWidth:70}}>Tafel</th>
+              <th style={{...sTH,textAlign:"right",minWidth:44,fontWeight:700}}>{"Nodig "+(label.match(/\d+/)?.[0]||label)}</th>
+              <th style={{...sTH,textAlign:"right",minWidth:60}}>Werkelijk</th>
+              <th style={{...sTH,textAlign:"right",minWidth:48}}>Verschil</th>
+              {!isZaai&&<th style={{...sTH,textAlign:"right",minWidth:58}} title="2e sortering">2e sort.</th>}
+              {!isZaai&&<th style={{...sTH,textAlign:"right",minWidth:55}} title="Werkelijk + helft van 2e sortering">Totaal</th>}
+              {!isZaai&&<th style={{...sTH,textAlign:"right",minWidth:48}} title="Ingesteld kiem% (Kiemkracht-instellingen)">Ingesteld %</th>}
+              {!isZaai&&<th style={{...sTH,textAlign:"right",minWidth:48}} title="Verschil t.o.v. ingesteld kiem%">Verschil %</th>}
             </tr>
           </thead>
           <tbody>
@@ -32539,18 +32542,39 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
               const heeftWaarde = opgeslagen!=='' && opgeslagen!==null && opgeslagen!==undefined;
               const werkelijk = heeftWaarde ? Number(opgeslagen) : null;
               const verschil = heeftWaarde ? Math.round((werkelijk - gepland)*10)/10 : null;
+              // ── hoisted voor kiem%-kolommen (alleen inboet) ──
+              let kiemPctFrac=null, orgGezaaid=null, opgeslagenS2='', heeftS2=false, basisS2=0, pctS2=null, pctWerkelijkGezaaid=null, totKiemAantal=null, totKiemPct=null, ingesteldKiemPct=null, verschilKiem=null;
+              if(!isZaai){
+                const kiemRec=(kiemkracht||[]).find(k=>k.gewas?.toLowerCase().trim()===r.gewas?.toLowerCase().trim()&&k.soort?.toLowerCase().trim()===r.soort?.toLowerCase().trim());
+                kiemPctFrac=kiemRec?Number(kiemRec.waarde)/100:null;
+                if(kiemPctFrac){
+                  orgGezaaid=gepland/kiemPctFrac;
+                  const fustL=(r.fust||"").toLowerCase();
+                  if(fustL.includes("65")||fustL.includes("66")) orgGezaaid=orgGezaaid/4;
+                  ingesteldKiemPct=kiemPctFrac*100;
+                }
+                opgeslagenS2=getSort2(wk,actieType,rijKey);
+                heeftS2 = opgeslagenS2!=='' && opgeslagenS2!==null && opgeslagenS2!==undefined;
+                basisS2 = heeftS2?Number(opgeslagenS2):0;
+                pctS2 = (heeftS2 && heeftWaarde && werkelijk>0) ? (basisS2/werkelijk*100) : null;
+                pctWerkelijkGezaaid = (heeftWaarde && orgGezaaid && orgGezaaid>0) ? (werkelijk/orgGezaaid*100) : null;
+                const basisWerkelijk = heeftWaarde?werkelijk:gepland;
+                totKiemAantal = basisWerkelijk + basisS2*0.5;
+                totKiemPct = (orgGezaaid && orgGezaaid>0) ? (totKiemAantal/orgGezaaid*100) : null;
+                verschilKiem = (totKiemPct!=null && ingesteldKiemPct!=null) ? Math.round((totKiemPct-ingesteldKiemPct)*10)/10 : null;
+              }
               return (
                 <tr key={i} style={{background:wit}}
                   onMouseEnter={e=>{e.currentTarget.style.background="#ffe082";}}
                   onMouseLeave={e=>e.currentTarget.style.background=wit}>
-                  <td style={{...sTD,padding:"2px 6px"}}>
+                  <td style={{...sTD,padding:"2px 4px"}}>
                     {r._handmatig&&<button title="Verwijder deze handmatige regel"
                       onClick={()=>setHandmatig(prev=>({...prev,[blokKey]:(prev[blokKey]||[]).filter(h=>h.id!==r.id)}))}
                       style={{border:"none",background:"none",color:"#dc2626",cursor:"pointer",fontWeight:700,marginRight:4}}>✕</button>}
                     <strong>{r.gewas}</strong>
                     {r._handmatig&&<span style={{fontSize:9,color:"#b45309",marginLeft:4}}>(handmatig)</span>}
                   </td>
-                  <td style={{...sTD,padding:"2px 6px",textAlign:"center"}}>
+                  <td style={{...sTD,padding:"2px 4px",textAlign:"center"}}>
                     <input type="checkbox" checked={!!(typeof gedaan[blokKey+"||"+r.gewas+"||"+r.soort]==="object" ? gedaan[blokKey+"||"+r.gewas+"||"+r.soort]?.checked : gedaan[blokKey+"||"+r.gewas+"||"+r.soort])}
                       onChange={e=>{
                         const k=blokKey+"||"+r.gewas+"||"+r.soort;
@@ -32563,8 +32587,8 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                       title={(()=>{const v=gedaan[blokKey+"||"+r.gewas+"||"+r.soort]; return (v&&typeof v==="object"&&v.door) ? ("Afgevinkt door "+v.door+" op "+new Date(v.tijdstip).toLocaleString("nl-NL")) : "";})()}
                       style={{cursor:"pointer"}}/>
                   </td>
-                  <td style={{...sTD,padding:"2px 6px",color:subtekst,fontSize:14}}>{r.internNr||""}</td>
-                  <td style={{...sTD,padding:"2px 6px",position:"relative"}}>
+                  <td style={{...sTD,padding:"2px 4px",color:subtekst,fontSize:14}}>{r.internNr||""}</td>
+                  <td style={{...sTD,padding:"2px 4px",position:"relative"}}>
                     {(()=>{
                       const doelWk = r.leverWeek||wk;
                       const matches=[];
@@ -32611,15 +32635,10 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                       </>;
                     })()}
                   </td>
-                  {!isZaai&&(()=>{
-                    const kiemRec=(kiemkracht||[]).find(k=>k.gewas?.toLowerCase().trim()===r.gewas?.toLowerCase().trim()&&k.soort?.toLowerCase().trim()===r.soort?.toLowerCase().trim());
-                    const kiemPct=kiemRec?Number(kiemRec.waarde)/100:null;
-                    if(!kiemPct) return <td style={{...sTDR,padding:"2px 6px",color:"#ccc"}} title="Geen kiem% ingesteld">—</td>;
-                    let orgGezaaid=gepland/kiemPct;
-                    const fustL=(r.fust||"").toLowerCase();
-                    if(fustL.includes("65")||fustL.includes("66")) orgGezaaid=orgGezaaid/4;
-                    return <td style={{...sTDR,padding:"2px 6px",color:subtekst}}>{Math.round(orgGezaaid).toLocaleString("nl-NL")}</td>;
-                  })()}
+                  {!isZaai&&(kiemPctFrac==null
+                    ? <td style={{...sTDR,padding:"2px 4px",color:"#ccc"}} title="Geen kiem% ingesteld">—</td>
+                    : <td style={{...sTDR,padding:"2px 4px",color:subtekst}}>{Math.round(orgGezaaid).toLocaleString("nl-NL")}</td>
+                  )}
                   <td style={{...sTD,padding:"2px 4px"}}>
                     {(()=>{
                       const soortKey=r.gewas+"||"+r.soort;
@@ -32653,31 +32672,34 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                     })()}
                   </td>
 
-                  <td style={{...sTDR,padding:"2px 6px",fontWeight:700,color:"#1e3a2f"}}>
+                  <td style={{...sTDR,padding:"2px 4px",fontWeight:700,color:"#1e3a2f"}}>
                     {gepland}{(actieType==="inboet"?r.inboetInternTrays:r.zaaiInternTrays)>0&&<span style={{fontSize:10,fontWeight:400,color:"#888"}}> ({actieType==="inboet"?r.inboetInternTrays:r.zaaiInternTrays})</span>}
                   </td>
                   <td style={{...sTDR,padding:"2px 2px"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:1}}>
-                      <button style={{width:20,height:24,border:"none",borderRadius:"3px 0 0 3px",
-                          background:heeftWaarde?"#f59e0b":"#e5e7eb",color:heeftWaarde?"#fff":"#6b7280",
-                          fontSize:13,fontWeight:700,cursor:"pointer",padding:0,lineHeight:1}}
-                        onClick={e=>{e.stopPropagation();const b=heeftWaarde?Number(opgeslagen):gepland;setReal(wk,actieType,rijKey,String(Math.max(0,Math.round((b-0.25)*100)/100)));}}
-                      >−</button>
-                      <input type="number" min="0" step="0.25" className="geen-eigen-pijltjes"
-                        style={{width:52,padding:"1px 2px",textAlign:"center",
-                          border:`1px solid ${heeftWaarde?"#d4a800":rand}`,borderRadius:0,fontSize:15,
-                          background:heeftWaarde?"#fef9c3":"#fff",fontWeight:heeftWaarde?600:400,
-                          color:heeftWaarde?"#854d0e":"#333"}}
-                        value={heeftWaarde?String(opgeslagen):''}
-                        placeholder={String(gepland)}
-                        onFocus={e=>e.target.select()}
-                        onChange={e=>setReal(wk,actieType,rijKey,e.target.value===''?'':e.target.value)}
-                      />
-                      <button style={{width:20,height:24,border:"none",borderRadius:"0 3px 3px 0",
-                          background:heeftWaarde?"#f59e0b":"#e5e7eb",color:heeftWaarde?"#fff":"#6b7280",
-                          fontSize:13,fontWeight:700,cursor:"pointer",padding:0,lineHeight:1}}
-                        onClick={e=>{e.stopPropagation();const b=heeftWaarde?Number(opgeslagen):gepland;setReal(wk,actieType,rijKey,String(Math.round((b+0.25)*100)/100));}}
-                      >+</button>
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <div style={{display:"flex",alignItems:"center",gap:1}}>
+                        <button style={{width:20,height:24,border:"none",borderRadius:"3px 0 0 3px",
+                            background:heeftWaarde?"#f59e0b":"#e5e7eb",color:heeftWaarde?"#fff":"#6b7280",
+                            fontSize:13,fontWeight:700,cursor:"pointer",padding:0,lineHeight:1}}
+                          onClick={e=>{e.stopPropagation();const b=heeftWaarde?Number(opgeslagen):gepland;setReal(wk,actieType,rijKey,String(Math.max(0,Math.round((b-0.25)*100)/100)));}}
+                        >−</button>
+                        <input type="number" min="0" step="0.25" className="geen-eigen-pijltjes"
+                          style={{width:52,padding:"1px 2px",textAlign:"center",
+                            border:`1px solid ${heeftWaarde?"#d4a800":rand}`,borderRadius:0,fontSize:15,
+                            background:heeftWaarde?"#fef9c3":"#fff",fontWeight:heeftWaarde?600:400,
+                            color:heeftWaarde?"#854d0e":"#333"}}
+                          value={heeftWaarde?String(opgeslagen):''}
+                          placeholder={String(gepland)}
+                          onFocus={e=>e.target.select()}
+                          onChange={e=>setReal(wk,actieType,rijKey,e.target.value===''?'':e.target.value)}
+                        />
+                        <button style={{width:20,height:24,border:"none",borderRadius:"0 3px 3px 0",
+                            background:heeftWaarde?"#f59e0b":"#e5e7eb",color:heeftWaarde?"#fff":"#6b7280",
+                            fontSize:13,fontWeight:700,cursor:"pointer",padding:0,lineHeight:1}}
+                          onClick={e=>{e.stopPropagation();const b=heeftWaarde?Number(opgeslagen):gepland;setReal(wk,actieType,rijKey,String(Math.round((b+0.25)*100)/100));}}
+                        >+</button>
+                      </div>
+                      {pctWerkelijkGezaaid!==null && <span style={{fontSize:11,color:"#854d0e",fontWeight:600}}>({pctWerkelijkGezaaid.toFixed(1)}%)</span>}
                     </div>
                   </td>
                   <td style={{...sTDR,padding:"2px 3px"}}>
@@ -32686,36 +32708,45 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                       : verschil>0 ? <span style={{color:"#1d4ed8",fontWeight:700}}>{"+"+verschil.toFixed(1)}</span>
                       : <span style={{color:"#dc2626",fontWeight:700}}>{verschil.toFixed(1)}</span>}
                   </td>
-                  {!isZaai&&(()=>{
-                    const opgeslagenS2=getSort2(wk,actieType,rijKey);
-                    const heeftS2 = opgeslagenS2!=='' && opgeslagenS2!==null && opgeslagenS2!==undefined;
-                    const basisS2 = heeftS2?Number(opgeslagenS2):0;
-                    const pctS2 = (heeftS2 && heeftWaarde && werkelijk>0) ? (basisS2/werkelijk*100).toFixed(1) : null;
-                    return (
-                      <td style={{...sTDR,padding:"2px 2px"}}>
-                        <div style={{display:"flex",alignItems:"center",gap:4}}>
-                          <div style={{display:"flex",alignItems:"center",gap:1}}>
-                            <input type="number" min="0" step="0.25" className="geen-eigen-pijltjes"
-                              style={{width:52,padding:"1px 2px",textAlign:"center",
-                                border:`1px solid ${heeftS2?"#d4a800":rand}`,borderRadius:"3px 0 0 3px",fontSize:15,
-                                background:heeftS2?"#fef9c3":"#fff",fontWeight:heeftS2?600:400,
-                                color:heeftS2?"#854d0e":"#333"}}
-                              value={heeftS2?String(opgeslagenS2):''}
-                              placeholder="0"
-                              onFocus={e=>e.target.select()}
-                              onChange={e=>setSort2(wk,actieType,rijKey,e.target.value===''?'':e.target.value)}
-                            />
-                            <button style={{width:20,height:24,border:"none",borderRadius:"0 3px 3px 0",
-                                background:heeftS2?"#f59e0b":"#e5e7eb",color:heeftS2?"#fff":"#6b7280",
-                                fontSize:13,fontWeight:700,cursor:"pointer",padding:0,lineHeight:1}}
-                              onClick={e=>{e.stopPropagation();setSort2(wk,actieType,rijKey,String(Math.round((basisS2+0.25)*100)/100));}}
-                            >+</button>
-                          </div>
-                          {pctS2!==null && <span style={{fontSize:11,color:"#854d0e",fontWeight:600}}>({pctS2}%)</span>}
-                        </div>
-                      </td>
-                    );
-                  })()}
+                  {!isZaai&&(
+                    <td style={{...sTDR,padding:"2px 2px"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:1}}>
+                        <input type="number" min="0" step="0.25" className="geen-eigen-pijltjes"
+                          style={{width:52,padding:"1px 2px",textAlign:"center",
+                            border:`1px solid ${heeftS2?"#d4a800":rand}`,borderRadius:"3px 0 0 3px",fontSize:15,
+                            background:heeftS2?"#fef9c3":"#fff",fontWeight:heeftS2?600:400,
+                            color:heeftS2?"#854d0e":"#333"}}
+                          value={heeftS2?String(opgeslagenS2):''}
+                          placeholder="0"
+                          onFocus={e=>e.target.select()}
+                          onChange={e=>setSort2(wk,actieType,rijKey,e.target.value===''?'':e.target.value)}
+                        />
+                        <button style={{width:20,height:24,border:"none",borderRadius:"0 3px 3px 0",
+                            background:heeftS2?"#f59e0b":"#e5e7eb",color:heeftS2?"#fff":"#6b7280",
+                            fontSize:13,fontWeight:700,cursor:"pointer",padding:0,lineHeight:1}}
+                          onClick={e=>{e.stopPropagation();setSort2(wk,actieType,rijKey,String(Math.round((basisS2+0.25)*100)/100));}}
+                        >+</button>
+                      </div>
+                    </td>
+                  )}
+                  {!isZaai&&
+                    <td style={{...sTDR,padding:"2px 4px",color:subtekst}}>
+                      {totKiemPct==null?"—":totKiemPct.toFixed(1)+"%"}
+                    </td>
+                  }
+                  {!isZaai&&
+                    <td style={{...sTDR,padding:"2px 4px",color:subtekst}}>
+                      {ingesteldKiemPct==null?"—":ingesteldKiemPct.toFixed(1)+"%"}
+                    </td>
+                  }
+                  {!isZaai&&
+                    <td style={{...sTDR,padding:"2px 4px"}}>
+                      {verschilKiem==null ? <span style={{color:"#ccc"}}>—</span>
+                        : verschilKiem===0 ? <span style={{color:"#16a34a",fontWeight:700}}>✓</span>
+                        : verschilKiem>0 ? <span style={{color:"#1d4ed8",fontWeight:700}}>{"+"+verschilKiem.toFixed(1)+"%"}</span>
+                        : <span style={{color:"#dc2626",fontWeight:700}}>{verschilKiem.toFixed(1)+"%"}</span>}
+                    </td>
+                  }
                 </tr>
               );
             })}
@@ -32731,6 +32762,9 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                 {(()=>{const tot=Math.round((rijen.reduce((s,r)=>{const o=getReal(wk,actieType,r.gewas+"||"+r.soort+"||"+r.fust);return s+(o===''?r[veld]||0:Number(o));},0)-totTrays)*10)/10;return tot===0?"✓":tot>0?"+"+tot.toFixed(1):tot.toFixed(1);})()}
               </td>
               {!isZaai&&<td style={{...sTDR,borderTop:`2px solid ${groen}`,padding:"3px 6px",color:"#854d0e"}}>{rijen.reduce((s,r)=>{const o=getSort2(wk,actieType,r.gewas+"||"+r.soort+"||"+r.fust);return s+(o===''?0:Number(o));},0)}</td>}
+              {!isZaai&&<td style={{...sTDR,borderTop:`2px solid ${groen}`,padding:"3px 6px"}}></td>}
+              {!isZaai&&<td style={{...sTDR,borderTop:`2px solid ${groen}`,padding:"3px 6px"}}></td>}
+              {!isZaai&&<td style={{...sTDR,borderTop:`2px solid ${groen}`,padding:"3px 6px"}}></td>}
             </tr>
           </tfoot>
        </table>}

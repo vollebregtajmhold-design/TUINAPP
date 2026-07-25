@@ -32113,7 +32113,7 @@ function Teeltduur({ gewassen, verpDef, teeltduur, setTeeltduur }) {
 // ════════════════════════════════════════════════════════
 // MODULE — TEELTPLANNING
 // ════════════════════════════════════════════════════════
-function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkracht, bedrijf, realisatie: realisatieProp, setRealisatie: setRealisatieProp, werklijstVoorkeuze, setWerklijstVoorkeuze, medewerkerModus, medewerkerNaam }) {
+function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkracht, setKiemkracht, bedrijf, realisatie: realisatieProp, setRealisatie: setRealisatieProp, werklijstVoorkeuze, setWerklijstVoorkeuze, medewerkerModus, medewerkerNaam }) {
   const wit = "#f3efe6"; // gebroken wit, alleen in dit scherm
   const nu2 = new Date();
   let volWk = getWeekNr(nu2)+1, volJr = getJaar(nu2);
@@ -32232,6 +32232,26 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
         }
       }
     }));
+  }
+
+  // ── Kiem%-snapshot: bij het vastzetten van een zaaiweek wordt het op dat moment ingestelde
+  // kiem% "bevroren" voor dat gewas+soort, zodat latere aanpassingen van kiem% niet met
+  // terugwerkende kracht oude weken veranderen. Nog niet vastgezette (toekomstige) zaaiweken
+  // gebruiken gewoon het actuele/live kiem% ──
+  const [kiemSnapshot, setKiemSnapshot] = useState(()=>laad("ta_kiem_snapshot", {}));
+  useEffect(()=>bewaar("ta_kiem_snapshot", kiemSnapshot),[kiemSnapshot]);
+  function kiemPctVoorInboet(gewas, soort, fust, inboetWkLabel) {
+    const uitzaaiWeken = getDuur(gewas, soort, fust, "uitzaai");
+    if(uitzaaiWeken!=null){
+      let jr=2000+Number(inboetWkLabel.slice(0,2)), wkNr=Number(inboetWkLabel.slice(2))-uitzaaiWeken;
+      while(wkNr<=0){wkNr+=52;jr--;}
+      while(wkNr>52){wkNr-=52;jr++;}
+      const zaaiLbl=String(jr).slice(-2)+String(wkNr).padStart(2,"0");
+      const snap = kiemSnapshot?.[zaaiLbl]?.[gewas+"||"+soort];
+      if(snap!==undefined && snap!==null) return Number(snap);
+    }
+    const kiemRec=(kiemkracht||[]).find(k=>k.gewas?.toLowerCase().trim()===gewas?.toLowerCase().trim()&&k.soort?.toLowerCase().trim()===soort?.toLowerCase().trim());
+    return kiemRec ? Number(kiemRec.waarde) : null;
   }
 
   function getKiem(gewas, soort) {
@@ -32390,6 +32410,13 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
               🔀 2e sortering
             </button>
           }
+          {actieType!=="zaai"&&
+            <button onClick={()=>setPrintOverzicht({modus:"kiemoverzicht", actieType, rijen, weken:wkOffsetLijst(-7,0), label, blokKey, fustFilter:blokSuffix})}
+              title="Verschil t.o.v. ingesteld kiem% — huidige week en 7 weken terug"
+              style={{background:wit,color:"#0d9488",border:"1px solid #0d9488",borderRadius:5,padding:"3px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              📈 Kiemoverzicht
+            </button>
+          }
         </div>
 
         {/* Blok header — lichter groen dan weekbalk */}
@@ -32505,6 +32532,23 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                   onClick={()=>{
                     if(!window.confirm("Week "+wk+" "+label+" vastzetten?")) return;
                     rijen.forEach(r=>setReal(wk,actieType,r.gewas+"||"+r.soort+"||"+r.fust,String(r[veld]||0)));
+                    if(isZaai){
+                      // Kiem% "bevriezen" op het moment van vastzetten, zodat latere aanpassingen
+                      // van kiem% deze al gezaaide week niet met terugwerkende kracht veranderen.
+                      setKiemSnapshot(prev=>{
+                        const kopie={...prev};
+                        const wkData={...(kopie[wk]||{})};
+                        rijen.forEach(r=>{
+                          const key=r.gewas+"||"+r.soort;
+                          if(wkData[key]===undefined){
+                            const kiemRec=(kiemkracht||[]).find(k=>k.gewas?.toLowerCase().trim()===r.gewas?.toLowerCase().trim()&&k.soort?.toLowerCase().trim()===r.soort?.toLowerCase().trim());
+                            if(kiemRec) wkData[key]=Number(kiemRec.waarde);
+                          }
+                        });
+                        kopie[wk]=wkData;
+                        return kopie;
+                      });
+                    }
                   }}><span>Week</span><span>vastzetten</span></button>
             }
             {!isZaai&&
@@ -32545,22 +32589,44 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
               // ── hoisted voor kiem%-kolommen (alleen inboet) ──
               let kiemPctFrac=null, orgGezaaid=null, opgeslagenS2='', heeftS2=false, basisS2=0, pctS2=null, pctWerkelijkGezaaid=null, totKiemAantal=null, totKiemPct=null, ingesteldKiemPct=null, verschilKiem=null;
               if(!isZaai){
-                const kiemRec=(kiemkracht||[]).find(k=>k.gewas?.toLowerCase().trim()===r.gewas?.toLowerCase().trim()&&k.soort?.toLowerCase().trim()===r.soort?.toLowerCase().trim());
-                kiemPctFrac=kiemRec?Number(kiemRec.waarde)/100:null;
+                const kiemWaarde=kiemPctVoorInboet(r.gewas,r.soort,r.fust,wk);
+                kiemPctFrac=kiemWaarde!=null?Number(kiemWaarde)/100:null;
+                const fustL=(r.fust||"").toLowerCase();
+                const factor65=(fustL.includes("65")||fustL.includes("66"))?4:1;
                 if(kiemPctFrac){
                   orgGezaaid=gepland/kiemPctFrac;
-                  const fustL=(r.fust||"").toLowerCase();
-                  if(fustL.includes("65")||fustL.includes("66")) orgGezaaid=orgGezaaid/4;
+                  orgGezaaid=orgGezaaid/factor65;
                   ingesteldKiemPct=kiemPctFrac*100;
                 }
                 opgeslagenS2=getSort2(wk,actieType,rijKey);
                 heeftS2 = opgeslagenS2!=='' && opgeslagenS2!==null && opgeslagenS2!==undefined;
                 basisS2 = heeftS2?Number(opgeslagenS2):0;
                 pctS2 = (heeftS2 && heeftWaarde && werkelijk>0) ? (basisS2/werkelijk*100) : null;
-                pctWerkelijkGezaaid = (heeftWaarde && orgGezaaid && orgGezaaid>0) ? (werkelijk/orgGezaaid*100) : null;
-                const basisWerkelijk = heeftWaarde?werkelijk:gepland;
-                totKiemAantal = basisWerkelijk + basisS2*0.5;
-                totKiemPct = (orgGezaaid && orgGezaaid>0) ? (totKiemAantal/orgGezaaid*100) : null;
+                // ── Totaal/Ingesteld/Verschil % en het kleine %-je achter Werkelijk: omgerekend naar
+                // aantal planten en opgeteld over alle 3 inboetlijsten (fusttypes) voor dit gewas+soort ──
+                if(kiemPctFrac){
+                  let totNodigPlanten=0, totRealPlanten=0, ditRijPlanten=0;
+                  const blokInboet = planning[wk]?.inboet || {};
+                  Object.values(blokInboet).forEach(rec=>{
+                    if(rec.gewas!==r.gewas || rec.soort!==r.soort) return;
+                    const vd=(verpDef||[]).find(v=>v.naam===rec.fust);
+                    const perTray=vd?.aantal||0;
+                    const recRowKey=rec.gewas+"||"+rec.soort+"||"+rec.fust;
+                    totNodigPlanten += (rec.inboetTrays||0)*perTray;
+                    const ruwWerkR=getReal(wk,"inboet",recRowKey);
+                    const heeftWerkR = ruwWerkR!=='' && ruwWerkR!==null && ruwWerkR!==undefined;
+                    const werkTraysR = heeftWerkR?Number(ruwWerkR):(rec.inboetTrays||0);
+                    const ruwS2R=getSort2(wk,"inboet",recRowKey);
+                    const heeftS2Rl = ruwS2R!=='' && ruwS2R!==null && ruwS2R!==undefined;
+                    const s2TraysR = heeftS2Rl?Number(ruwS2R):0;
+                    totRealPlanten += (werkTraysR + s2TraysR*0.5)*perTray;
+                    if(rec.fust===r.fust) ditRijPlanten=(heeftWaarde?werkelijk:gepland)*perTray;
+                  });
+                  const orgGezaaidPlanten = totNodigPlanten/kiemPctFrac;
+                  totKiemAantal = totRealPlanten;
+                  totKiemPct = orgGezaaidPlanten>0 ? (totKiemAantal/orgGezaaidPlanten*100) : null;
+                  pctWerkelijkGezaaid = (heeftWaarde && orgGezaaidPlanten>0) ? (ditRijPlanten/orgGezaaidPlanten*100) : null;
+                }
                 verschilKiem = (totKiemPct!=null && ingesteldKiemPct!=null) ? Math.round((totKiemPct-ingesteldKiemPct)*10)/10 : null;
               }
               return (
@@ -32730,13 +32796,13 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                     </td>
                   )}
                   {!isZaai&&
-                    <td style={{...sTDR,padding:"2px 4px",color:subtekst}}>
-                      {totKiemPct==null?"—":totKiemPct.toFixed(1)+"%"}
+                    <td style={{...sTDR,padding:"2px 4px"}}>
+                      {totKiemPct==null?"—":<span style={{fontSize:11,color:"#854d0e",fontWeight:600}}>({totKiemPct.toFixed(1)}%)</span>}
                     </td>
                   }
                   {!isZaai&&
-                    <td style={{...sTDR,padding:"2px 4px",color:subtekst}}>
-                      {ingesteldKiemPct==null?"—":ingesteldKiemPct.toFixed(1)+"%"}
+                    <td style={{...sTDR,padding:"2px 4px"}}>
+                      {ingesteldKiemPct==null?"—":<span style={{fontSize:11,color:"#854d0e",fontWeight:600}}>({ingesteldKiemPct.toFixed(1)}%)</span>}
                     </td>
                   }
                   {!isZaai&&
@@ -33194,7 +33260,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
       </div>
       </div>)}{/* einde matrix */}
       {printWerklijst&&<WerklijstPrint data={printWerklijst} bedrijf={bedrijf} onSluit={()=>setPrintWerklijst(null)} />}
-      {printOverzicht&&<OverzichtWerklijstPrint data={printOverzicht} bedrijf={bedrijf} verpDef={verpDef} realisatie={realisatie} planning={planning} sortering2={sortering2} onSluit={()=>setPrintOverzicht(null)} />}
+      {printOverzicht&&<OverzichtWerklijstPrint data={printOverzicht} bedrijf={bedrijf} verpDef={verpDef} realisatie={realisatie} planning={planning} sortering2={sortering2} kiemkracht={kiemkracht} setKiemkracht={medewerkerModus?null:setKiemkracht} teeltduur={teeltduur} kiemSnapshot={kiemSnapshot} onSluit={()=>setPrintOverzicht(null)} />}
       {printWegzetlijst&&<ControlelijstPrint data={printWegzetlijst} bedrijf={bedrijf} onSluit={()=>setPrintWegzetlijst(null)} />}
       {printNieuweWegzetlijst&&<WegzetlijstMatrixPrint data={printNieuweWegzetlijst} bedrijf={bedrijf} onSluit={()=>setPrintNieuweWegzetlijst(null)} />}
       {printUitDeCel&&<UitDeCelPrint data={printUitDeCel} bedrijf={bedrijf} onSluit={()=>setPrintUitDeCel(null)} />}
@@ -35159,7 +35225,7 @@ function WerklijstPrint({ data, bedrijf, onSluit }) {
   );
 }
 
-function OverzichtWerklijstPrint({ data, bedrijf, verpDef, realisatie, planning, sortering2, onSluit }) {
+function OverzichtWerklijstPrint({ data, bedrijf, verpDef, realisatie, planning, sortering2, kiemkracht, setKiemkracht, teeltduur, kiemSnapshot, onSluit }) {
   const { modus, actieType, rijen, weken, label, fustFilter } = data;
   const gebrokenWit = "#f3efe6"; // gebroken wit, alleen in dit scherm
   function fustPastBijFilter(verpakking) {
@@ -35179,6 +35245,7 @@ function OverzichtWerklijstPrint({ data, bedrijf, verpDef, realisatie, planning,
     return String(jr).slice(-2)+String(wkNr).padStart(2,"0");
   }
   const [eenheid, setEenheid] = React.useState("trays"); // trays | aantallen
+  const [kiemWeergave, setKiemWeergave] = React.useState("verschil"); // verschil | totaal
   React.useEffect(() => {
     function onKey(e){
       if(e.key==="Backspace"){
@@ -35192,9 +35259,88 @@ function OverzichtWerklijstPrint({ data, bedrijf, verpDef, realisatie, planning,
   }, []);
   const isGedaan = modus === "gedaan";
   const isSortering2 = modus === "sortering2";
-  const titel = (isSortering2 ? "2E SORTERING — HUIDIGE WEEK + "+(weken.length-1)+" WEKEN TERUG" : isGedaan ? "GEDAAN — LAATSTE "+weken.length+" WEKEN" : "NODIG — KOMENDE "+weken.length+" WEKEN") + (label ? " · "+label : "");
+  const isKiem = modus === "kiemoverzicht";
+  const titel = (isKiem ? "KIEMOVERZICHT — "+(kiemWeergave==="totaal"?"TOTAAL %":"VERSCHIL T.O.V. INGESTELD KIEM%")+" — LAATSTE "+weken.length+" WEKEN" : isSortering2 ? "2E SORTERING — HUIDIGE WEEK + "+(weken.length-1)+" WEKEN TERUG" : isGedaan ? "GEDAAN — LAATSTE "+weken.length+" WEKEN" : "NODIG — KOMENDE "+weken.length+" WEKEN") + (label ? " · "+label : "");
+
+  // Ingesteld kiem% (live/actueel) rechtstreeks vanuit dit overzicht aanpassen — werkt door op de
+  // achtergrond in de Kiemkracht-stamdata (alleen beschikbaar buiten medewerkermodus).
+  function liveKiemPct(gewas, soort) {
+    const rec=(kiemkracht||[]).find(k=>k.gewas?.toLowerCase().trim()===gewas?.toLowerCase().trim()&&k.soort?.toLowerCase().trim()===soort?.toLowerCase().trim());
+    return rec?rec.waarde:'';
+  }
+  function setLiveKiemPct(gewas, soort, waarde) {
+    if(!setKiemkracht) return;
+    setKiemkracht(huidig=>{
+      const bestaand=(huidig||[]).find(k=>k.gewas?.toLowerCase().trim()===gewas?.toLowerCase().trim()&&k.soort?.toLowerCase().trim()===soort?.toLowerCase().trim());
+      if(waarde===''||waarde===null||waarde===undefined){
+        return bestaand ? huidig.filter(k=>k!==bestaand) : huidig;
+      }
+      const v=Number(waarde);
+      if(bestaand) return huidig.map(k=>k===bestaand?{...k,waarde:v}:k);
+      const id=('k_'+gewas+'_'+soort).replace(/[\/]/g,'_').replace(/\s+/g,' ').trim();
+      return [...(huidig||[]), {id, gewas, soort, waarde:v}];
+    });
+  }
+  function naarKiemkrachtStamdata() {
+    window.dispatchEvent(new CustomEvent("ta-navigeer-pagina",{detail:{pagina:"kiemkracht"}}));
+    onSluit();
+  }
+  function getDuurLocal(gewas, soort, fust, veld) {
+    const gl=gewas?.toLowerCase().trim(), sl=soort?.toLowerCase().trim(), fl=fust?.toLowerCase().trim();
+    const gevonden=(teeltduur||[]).find(t=>t.gewas?.toLowerCase().trim()===gl&&t.soort?.toLowerCase().trim()===sl&&t.fust?.toLowerCase().trim()===fl);
+    if(!gevonden) return null;
+    const v=gevonden[veld];
+    return (v===null||v===undefined||v==='')?null:Number(v);
+  }
+  // Kiem% dat op het moment van vastzetten van de zaaiweek is "bevroren" (zie Teeltplanning) —
+  // valt terug op het actuele/live kiem% als de betreffende zaaiweek nog niet is vastgezet.
+  function kiemPctVoorInboet(gewas, soort, fust, inboetWkLabel) {
+    const uitzaaiWeken = getDuurLocal(gewas, soort, fust, "uitzaai");
+    if(uitzaaiWeken!=null){
+      let jr=2000+Number(inboetWkLabel.slice(0,2)), wkNr=Number(inboetWkLabel.slice(2))-uitzaaiWeken;
+      while(wkNr<=0){wkNr+=52;jr--;}
+      while(wkNr>52){wkNr-=52;jr++;}
+      const zaaiLbl=String(jr).slice(-2)+String(wkNr).padStart(2,"0");
+      const snap = kiemSnapshot?.[zaaiLbl]?.[gewas+"||"+soort];
+      if(snap!==undefined && snap!==null) return Number(snap);
+    }
+    const kiemRec=(kiemkracht||[]).find(k=>k.gewas?.toLowerCase().trim()===gewas?.toLowerCase().trim()&&k.soort?.toLowerCase().trim()===soort?.toLowerCase().trim());
+    return kiemRec ? Number(kiemRec.waarde) : null;
+  }
+
+  function kiemVoor(r, wk) {
+    const blokInboet = planning[wk]?.inboet || {};
+    const matches = Object.values(blokInboet).filter(rec=>rec.gewas===r.gewas && rec.soort===r.soort);
+    if(!matches.length) return null;
+    const kiemWaarde = kiemPctVoorInboet(r.gewas, r.soort, matches[0].fust, wk);
+    const kiemPctFrac = kiemWaarde!=null ? Number(kiemWaarde)/100 : null;
+    if(!kiemPctFrac) return null;
+    // Omgerekend naar aantal planten en opgeteld over alle 3 inboetlijsten (fusttypes) voor dit gewas+soort
+    let totNodigPlanten=0, totRealPlanten=0;
+    matches.forEach(rec=>{
+      const vd=(verpDef||[]).find(v=>v.naam===rec.fust);
+      const perTray=vd?.aantal||0;
+      const recRowKey=rec.gewas+"||"+rec.soort+"||"+rec.fust;
+      totNodigPlanten += (rec.inboetTrays||0)*perTray;
+      const ruwWerk = realisatie?.[wk]?.inboet?.[recRowKey];
+      const heeftWerk = ruwWerk!==undefined&&ruwWerk!==''&&ruwWerk!==null;
+      const werkTrays = heeftWerk?Number(ruwWerk):(rec.inboetTrays||0);
+      const ruwS2 = sortering2?.[wk]?.inboet?.[recRowKey];
+      const heeftS2 = ruwS2!==undefined&&ruwS2!==''&&ruwS2!==null;
+      const s2Trays = heeftS2?Number(ruwS2):0;
+      totRealPlanten += (werkTrays + s2Trays*0.5)*perTray;
+    });
+    if(!(totNodigPlanten>0)) return null;
+    const orgGezaaidPlanten = totNodigPlanten/kiemPctFrac;
+    if(!(orgGezaaidPlanten>0)) return null;
+    const totKiemPct = totRealPlanten/orgGezaaidPlanten*100;
+    if(kiemWeergave==="totaal") return Math.round(totKiemPct*10)/10;
+    const ingesteldKiemPct = kiemPctFrac*100;
+    return Math.round((totKiemPct-ingesteldKiemPct)*10)/10;
+  }
 
   function waardeVoor(r, wk) {
+    if(isKiem) return kiemVoor(r, wk);
     const rowKey = r.gewas+"||"+r.soort+"||"+r.fust;
     let trays;
     if(isSortering2){
@@ -35224,6 +35370,7 @@ function OverzichtWerklijstPrint({ data, bedrijf, verpDef, realisatie, planning,
       th{background:#e0e0e0!important;color:#000;padding:3px 6px;text-align:center;font-size:11px;border:1.5px solid #888;-webkit-print-color-adjust:exact;print-color-adjust:exact}
       td{padding:3px 6px;border:1px solid #999;font-size:11px;text-align:right}
       td:first-child, td:nth-child(2){text-align:left}
+      input{border:none!important;background:transparent!important;font:inherit;text-align:right;width:100%!important}
       @media print{button{display:none}}
     </style></head><body>${el.innerHTML}</body></html>`);
     w.document.close();
@@ -35231,7 +35378,7 @@ function OverzichtWerklijstPrint({ data, bedrijf, verpDef, realisatie, planning,
   }
 
   // Alleen bij inboet is er een zinnig aantal planten per tray (bij zaai bestaat geen "aantallen"-conversie voor een zaaitray)
-  const heeftAantallenOptie = actieType !== "zaai";
+  const heeftAantallenOptie = actieType !== "zaai" && !isKiem;
   const actieveEenheid = heeftAantallenOptie ? eenheid : "trays";
   // Rijenlijst opbouwen over ALLE gevraagde weken heen (niet alleen het blok van de week waarvandaan geopend is) —
   // anders vallen producten uit voorgaande/volgende weken die niet in de huidige weekblok zitten uit de lijst.
@@ -35239,11 +35386,22 @@ function OverzichtWerklijstPrint({ data, bedrijf, verpDef, realisatie, planning,
   weken.forEach(wk=>{
     const blokData = actieType==="zaai" ? planning?.[wk]?.zaai : planning?.[wk]?.inboet;
     Object.entries(blokData||{}).forEach(([rowKey,rec])=>{
+      // Kiemoverzicht: over alle 3 inboetlijsten (fusttypes) heen, dus geen fustfilter en één rij per gewas+soort
+      if(isKiem){
+        const kiemKey=rec.gewas+"||"+rec.soort;
+        if(!alleRijenMap[kiemKey]) alleRijenMap[kiemKey] = {gewas:rec.gewas, soort:rec.soort, fust:""};
+        return;
+      }
       if(!fustPastBijFilter(rec.fust)) return;
       if(!alleRijenMap[rowKey]) alleRijenMap[rowKey] = {gewas:rec.gewas, soort:rec.soort, fust:rec.fust};
     });
   });
   (rijen||[]).forEach(r=>{
+    if(isKiem){
+      const kiemKey=r.gewas+"||"+r.soort;
+      if(!alleRijenMap[kiemKey]) alleRijenMap[kiemKey] = {gewas:r.gewas, soort:r.soort, fust:""};
+      return;
+    }
     if(!fustPastBijFilter(r.fust)) return;
     const rowKey = r.gewas+"||"+r.soort+"||"+r.fust;
     if(!alleRijenMap[rowKey]) alleRijenMap[rowKey] = {gewas:r.gewas, soort:r.soort, fust:r.fust};
@@ -35264,6 +35422,19 @@ function OverzichtWerklijstPrint({ data, bedrijf, verpDef, realisatie, planning,
               <button style={{background:actieveEenheid==="trays"?"#2d6a4f":gebrokenWit,color:actieveEenheid==="trays"?"#fff":"#2d6a4f",border:"1px solid #2d6a4f",borderRadius:5,padding:"3px 10px",fontSize:12,cursor:"pointer"}} onClick={()=>setEenheid("trays")}>Trays</button>
               <button style={{background:actieveEenheid==="aantallen"?"#2d6a4f":gebrokenWit,color:actieveEenheid==="aantallen"?"#fff":"#2d6a4f",border:"1px solid #2d6a4f",borderRadius:5,padding:"3px 10px",fontSize:12,cursor:"pointer"}} onClick={()=>setEenheid("aantallen")}>Aantallen</button>
             </div>
+          ) : isKiem ? (
+            <div style={{marginLeft:"auto",display:"flex",gap:10,alignItems:"center"}}>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <span style={{fontSize:12,color:"#555"}}>Weergave:</span>
+                <button style={{background:kiemWeergave==="verschil"?"#2d6a4f":gebrokenWit,color:kiemWeergave==="verschil"?"#fff":"#2d6a4f",border:"1px solid #2d6a4f",borderRadius:5,padding:"3px 10px",fontSize:12,cursor:"pointer"}} onClick={()=>setKiemWeergave("verschil")}>Verschil %</button>
+                <button style={{background:kiemWeergave==="totaal"?"#2d6a4f":gebrokenWit,color:kiemWeergave==="totaal"?"#fff":"#2d6a4f",border:"1px solid #2d6a4f",borderRadius:5,padding:"3px 10px",fontSize:12,cursor:"pointer"}} onClick={()=>setKiemWeergave("totaal")}>Totaal %</button>
+              </div>
+              {setKiemkracht&&
+                <button style={{background:gebrokenWit,color:"#0d9488",border:"1px solid #0d9488",borderRadius:5,padding:"3px 10px",fontSize:12,fontWeight:600,cursor:"pointer"}}
+                  title="Ga naar de Kiemkracht-stamdata om kiem%-instellingen te beheren"
+                  onClick={naarKiemkrachtStamdata}>🔗 Kiemkracht-stamdata</button>
+              }
+            </div>
           ) : (
             <span style={{marginLeft:"auto",fontSize:12,color:"#555"}} title="Bij een zaailijst is er geen plantenaantal per zaaitray — alleen trays beschikbaar">🌱 Zaaitrays</span>
           )}
@@ -35275,6 +35446,7 @@ function OverzichtWerklijstPrint({ data, bedrijf, verpDef, realisatie, planning,
               <tr>
                 <th style={{padding:"6px 10px",border:"1.5px solid #888",background:"#e0e0e0",textAlign:"left",fontSize:15}}>Gewas</th>
                 <th style={{padding:"6px 10px",border:"1.5px solid #888",background:"#e0e0e0",textAlign:"left",fontSize:15}}>Soort</th>
+                {isKiem&&<th style={{padding:"6px 10px",border:"1.5px solid #888",background:"#e0e0e0",textAlign:"right",fontSize:15}} title="Actueel ingesteld kiem% (stamdata)">Ingesteld %</th>}
                 {weken.map(wk=>{
                   const lwTellingen={};
                   rijenGesorteerd.forEach(r=>{
@@ -35308,8 +35480,27 @@ function OverzichtWerklijstPrint({ data, bedrijf, verpDef, realisatie, planning,
                 <tr key={i} style={{background:gebrokenWit}}>
                   <td style={{padding:"5px 10px",border:"1px solid #999",fontSize:15}}>{r.gewas}</td>
                   <td style={{padding:"5px 10px",border:"1px solid #999",fontSize:15}}>{r.soort}</td>
+                  {isKiem&&
+                    <td style={{padding:"5px 10px",border:"1px solid #999",textAlign:"right",fontSize:15}}>
+                      {setKiemkracht ? (
+                        <input type="number" min="0" max="100" step="1" placeholder="—"
+                          defaultValue={liveKiemPct(r.gewas,r.soort)}
+                          onBlur={e=>setLiveKiemPct(r.gewas,r.soort,e.target.value)}
+                          onKeyDown={e=>{if(e.key==="Enter")e.target.blur();}}
+                          style={{width:55,padding:"3px 5px",textAlign:"right",border:"1px solid #999",borderRadius:3,fontSize:14}} />
+                      ) : (liveKiemPct(r.gewas,r.soort)===''?"—":liveKiemPct(r.gewas,r.soort)+"%")}
+                    </td>
+                  }
                   {weken.map(wk=>{
                     const v = waardeVoor(r, wk);
+                    if(isKiem && kiemWeergave==="totaal"){
+                      return <td key={wk} style={{padding:"5px 10px",border:"1px solid #999",textAlign:"right",fontSize:15,fontWeight:600,color:v===null?"#bbb":undefined}}>{v===null?"—":v.toFixed(1)+"%"}</td>;
+                    }
+                    if(isKiem){
+                      const kleur = v===null?"#bbb":v===0?"#16a34a":v>0?"#1d4ed8":"#dc2626";
+                      const tekst = v===null?"—":v===0?"✓":v>0?"+"+v.toFixed(1)+"%":v.toFixed(1)+"%";
+                      return <td key={wk} style={{padding:"5px 10px",border:"1px solid #999",textAlign:"right",fontSize:15,fontWeight:700,color:kleur}}>{tekst}</td>;
+                    }
                     return <td key={wk} style={{padding:"5px 10px",border:"1px solid #999",textAlign:"right",fontSize:15,fontWeight:600,color:v===null?"#bbb":undefined}}>{v===null?"—":v.toLocaleString("nl-NL")}</td>;
                   })}
                 </tr>
@@ -35317,9 +35508,19 @@ function OverzichtWerklijstPrint({ data, bedrijf, verpDef, realisatie, planning,
             </tbody>
             <tfoot>
               <tr style={{background:"#e0e0e0"}}>
-                <td style={{padding:"6px 10px",border:"1.5px solid #888",fontSize:15,fontWeight:700}} colSpan={2}>Totaal</td>
+                <td style={{padding:"6px 10px",border:"1.5px solid #888",fontSize:15,fontWeight:700}} colSpan={isKiem?3:2}>{isKiem?"Gem.":"Totaal"}</td>
                 {weken.map(wk=>{
                   const waarden = rijenGesorteerd.map(r=>waardeVoor(r,wk)).filter(v=>v!==null);
+                  if(isKiem && kiemWeergave==="totaal"){
+                    const gem = waarden.length?Math.round((waarden.reduce((s,v)=>s+v,0)/waarden.length)*10)/10:null;
+                    return <td key={wk} style={{padding:"6px 10px",border:"1.5px solid #888",textAlign:"right",fontSize:15,fontWeight:700}}>{gem===null?"—":gem.toFixed(1)+"%"}</td>;
+                  }
+                  if(isKiem){
+                    const gem = waarden.length?Math.round((waarden.reduce((s,v)=>s+v,0)/waarden.length)*10)/10:null;
+                    const kleur = gem===null?"#333":gem===0?"#16a34a":gem>0?"#1d4ed8":"#dc2626";
+                    const tekst = gem===null?"—":gem===0?"✓":gem>0?"+"+gem.toFixed(1)+"%":gem.toFixed(1)+"%";
+                    return <td key={wk} style={{padding:"6px 10px",border:"1.5px solid #888",textAlign:"right",fontSize:15,fontWeight:700,color:kleur}}>{tekst}</td>;
+                  }
                   const totaal = waarden.reduce((s,v)=>s+v,0);
                   return <td key={wk} style={{padding:"6px 10px",border:"1.5px solid #888",textAlign:"right",fontSize:15,fontWeight:700}}>{waarden.length?totaal.toLocaleString("nl-NL"):"—"}</td>;
                 })}
@@ -44210,6 +44411,7 @@ function App() {
     orders: orders,
     teeltduur: teeltduur,
     kiemkracht: kiemkracht,
+    setKiemkracht: setKiemkracht,
     bedrijf: bedrijf,
     realisatie: realisatie,
     setRealisatie: setRealisatie,

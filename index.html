@@ -35485,7 +35485,17 @@ function OverzichtWerklijstPrint({ data, bedrijf, verpDef, realisatie, planning,
                       {setKiemkracht ? (
                         <input type="number" min="0" max="100" step="1" placeholder="—"
                           defaultValue={liveKiemPct(r.gewas,r.soort)}
-                          onBlur={e=>setLiveKiemPct(r.gewas,r.soort,e.target.value)}
+                          onBlur={e=>{
+                            const nieuw = e.target.value;
+                            const huidig = liveKiemPct(r.gewas,r.soort);
+                            if(String(nieuw)===String(huidig)) return;
+                            const label = nieuw===''?"leeg (niet ingesteld)":nieuw+"%";
+                            if(window.confirm("Kiem% van "+r.gewas+" "+r.soort+" wijzigen naar "+label+"?\n\nDit past de Kiemkracht-stamdata aan.")){
+                              setLiveKiemPct(r.gewas,r.soort,nieuw);
+                            } else {
+                              e.target.value = huidig;
+                            }
+                          }}
                           onKeyDown={e=>{if(e.key==="Enter")e.target.blur();}}
                           style={{width:55,padding:"3px 5px",textAlign:"right",border:"1px solid #999",borderRadius:3,fontSize:14}} />
                       ) : (liveKiemPct(r.gewas,r.soort)===''?"—":liveKiemPct(r.gewas,r.soort)+"%")}

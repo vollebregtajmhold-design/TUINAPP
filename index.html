@@ -30423,6 +30423,50 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
             );
           })()}
 
+          {/* CSV-export van alle orders (ongefilterd op klant) */}
+          <button tabIndex={-1} title="Exporteert alle orderregels van alle klanten als CSV-bestand"
+            style={{...gs.knopSecundair,width:"100%",marginBottom:8,padding:"6px",fontSize:12}}
+            onClick={()=>{
+              const rijen=[];
+              (orders||[]).forEach(o=>{
+                const kl=(klanten||[]).find(k=>k.id===o.klantId);
+                const week=weekLabel(o.leverdatum);
+                (o.regels||[]).forEach(r=>{
+                  const vd=(verpDef||[]).find(v=>v.naam===r.verpakking);
+                  const planten = r.vastPlanten ?? ((vd?.aantal||0)*r.aantal);
+                  const geleverd = o.status==="geleverd" ? planten : "";
+                  const bedrag = r.prijs ? (Number(r.prijs)*(planten||0)/1000) : "";
+                  rijen.push([
+                    kl?.naam||"?",
+                    week,
+                    r.gewas||"",
+                    r.soort||"",
+                    r.verpakking||"",
+                    planten??"",
+                    geleverd,
+                    r.prijs??"",
+                    bedrag!==""?bedrag.toFixed(2):"",
+                    o.orderNr||o.eigenOrderNr||"",
+                    o.status||"",
+                    o.leverdatum||""
+                  ]);
+                });
+              });
+              const kop=["Klant","Week","Gewas","Soort","Tray","Aantal vast","Aantal geleverd","Prijs (€/1000)","Bedrag (€)","Ordernr","Status","Leverdatum"];
+              function csvVeld(v){
+                const s=String(v??"");
+                return /[;"\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+              }
+              const csv=[kop,...rijen].map(rij=>rij.map(csvVeld).join(";")).join("\r\n");
+              const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8;"});
+              const url=URL.createObjectURL(blob);
+              const a=document.createElement("a");
+              a.href=url;
+              a.download="Orders_export_"+new Date().toISOString().slice(0,10)+".csv";
+              document.body.appendChild(a); a.click(); document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            }}>📄 Exporteer CSV (alle orders)</button>
+
           {/* Import-knop verwijderd — gebruik i.p.v. hiervan "Order inlezen uit Excel" binnen een geopende order */}
 
 

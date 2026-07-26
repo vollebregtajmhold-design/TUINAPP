@@ -32127,7 +32127,7 @@ function Teeltduur({ gewassen, verpDef, teeltduur, setTeeltduur }) {
 // ════════════════════════════════════════════════════════
 // MODULE — TEELTPLANNING
 // ════════════════════════════════════════════════════════
-function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkracht, setKiemkracht, bedrijf, realisatie: realisatieProp, setRealisatie: setRealisatieProp, werklijstVoorkeuze, setWerklijstVoorkeuze, medewerkerModus, medewerkerNaam }) {
+function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkracht, setKiemkracht, bedrijf, realisatie: realisatieProp, setRealisatie: setRealisatieProp, werklijstVoorkeuze, setWerklijstVoorkeuze, medewerkerModus, medewerkerNaam, werklijstKeuze }) {
   const wit = "#f3efe6"; // gebroken wit, alleen in dit scherm
   const nu2 = new Date();
   let volWk = getWeekNr(nu2)+1, volJr = getJaar(nu2);
@@ -32658,8 +32658,8 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                     <input type="checkbox" checked={!!(typeof gedaan[blokKey+"||"+r.gewas+"||"+r.soort]==="object" ? gedaan[blokKey+"||"+r.gewas+"||"+r.soort]?.checked : gedaan[blokKey+"||"+r.gewas+"||"+r.soort])}
                       onChange={e=>{
                         const k=blokKey+"||"+r.gewas+"||"+r.soort;
-                        if(medewerkerModus && e.target.checked){
-                          setGedaan(prev=>({...prev,[k]:{checked:true, door:medewerkerNaam||"Medewerker", tijdstip:new Date().toISOString()}}));
+                        if(medewerkerNaam && e.target.checked){
+                          setGedaan(prev=>({...prev,[k]:{checked:true, door:medewerkerNaam, tijdstip:new Date().toISOString()}}));
                         } else {
                           setGedaan(prev=>({...prev,[k]:e.target.checked}));
                         }
@@ -32951,7 +32951,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
       {/* Navigatie links: 5 lijsten + weken (net als klanten bij Orders) */}
       <div style={{width:230, borderRight:"2px solid #b9c6bf", background:wit, flexShrink:0, display:"flex", flexDirection:"column", overflow:"hidden"}}>
         <div style={{padding:6, borderBottom:`1px solid ${rand}`, display:"flex", flexDirection:"column", gap:3}}>
-          {LIJST_DEFS.map(ld=>(
+          {LIJST_DEFS.filter(ld=>!werklijstKeuze || werklijstKeuze.includes(ld.id)).map(ld=>(
             <button key={ld.id}
               style={{textAlign:"left", padding:"7px 9px", borderRadius:5, border:"none", cursor:"pointer",
                 fontSize:12, fontWeight:600,
@@ -38402,7 +38402,7 @@ function OpklapbareSectie({ titel, beschrijving, kleur, defaultOpen, children })
   );
 }
 
-function Instellingen({ bedrijf, setBedrijf, ideeen, setIdeeen, verpDef, setVerpDef, traykosten, setTraykosten, fontSize, setFontSize, donkereModus, setDonkereModus, orders, setOrders }) {
+function Instellingen({ bedrijf, setBedrijf, ideeen, setIdeeen, verpDef, setVerpDef, traykosten, setTraykosten, fontSize, setFontSize, donkereModus, setDonkereModus, orders, setOrders, medewerkers, setMedewerkers }) {
   const [b, setB] = useState({...bedrijf});
   const [mailUrl, setMailUrl] = useState(()=>{ try{ return localStorage.getItem('ta_mailUrl')||'https://script.google.com/macros/s/AKfycby5SF6Sx9DPmFNBO_hb1ztwmdHApE19DIinmm7rs_CEJQdpQO8HLPuEI9Y4dvIUAMOi/exec'; }catch(e){ return ''; } });
   const [driveUrl, setDriveUrl] = useState(()=>{ try{ return localStorage.getItem('ta_driveUrl')||''; }catch(e){ return ''; } });
@@ -38762,104 +38762,113 @@ function Instellingen({ bedrijf, setBedrijf, ideeen, setIdeeen, verpDef, setVerp
         })()}
       </OpklapbareSectie>
 
-      {/* PINCODE SECTIE */}
-      <OpklapbareSectie titel="🔐 Pincode beveiliging" beschrijving={localStorage.getItem("ta_pincode")?"Beveiliging staat aan":"Geen pincode ingesteld"}>
+      {/* MEDEWERKERS SECTIE */}
+      <OpklapbareSectie titel="👥 Medewerkers" beschrijving={(medewerkers||[]).length+" medewerker(s) ingesteld"}>
         <div style={{fontSize:11,color:subtekst,marginBottom:12,lineHeight:1.6}}>
-          Stel een pincode in om de app te beveiligen. Laat leeg om beveiliging uit te schakelen.
+          Eén inlogscherm voor iedereen: elke medewerker heeft een eigen wachtwoord en toegangsniveau.
+          "Alles" geeft volledige (beheer)toegang, "Alle werklijsten" geeft alleen toegang tot de werklijsten-tab,
+          "Gekozen werklijsten" beperkt tot de hieronder aangevinkte lijsten. Bij het afvinken van "gedaan" in de
+          werklijsten wordt automatisch de naam van de ingelogde medewerker vastgelegd.
         </div>
         {(()=>{
-          const [pinInst, setPinInst] = React.useState(localStorage.getItem("ta_pincode")||"");
-          const [pinOk, setPinOk] = React.useState("");
-          return (
-            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-              <input style={{...gs.input,width:120,letterSpacing:4,fontSize:16,textAlign:"center"}}
-                type="password" maxLength={8} placeholder="••••" value={pinInst}
-                onChange={e=>{ setPinInst(e.target.value); setPinOk(""); }}
-              />
-              <button style={{...gs.knopPrimair,fontSize:12}} onClick={()=>{
-                localStorage.setItem("ta_pincode", pinInst);
-                sessionStorage.setItem("ta_sessie","ok");
-                sessionStorage.setItem("ta_sessie_tijd", String(Date.now()));
-                setPinOk("✅ Opgeslagen");
-              }}>💾 Opslaan</button>
-              {pinInst&&<button style={{...gs.knopSecundair,fontSize:12}} onClick={()=>{
-                localStorage.removeItem("ta_pincode");
-                setPinInst("");
-                setPinOk("✅ Beveiliging uitgeschakeld");
-              }}>🔓 Uitschakelen</button>}
-              {pinOk&&<span style={{fontSize:12,color:groenTekst}}>{pinOk}</span>}
-            </div>
-          );
-        })()}
-      </OpklapbareSectie>
+          const WERKLIJST_OPTIES = [
+            {id:"zaai264", label:"Zaailijst 264"},
+            {id:"zaai180", label:"Zaailijst 180"},
+            {id:"inboet260", label:"Inboetlijst 260"},
+            {id:"inboet179", label:"Inboetlijst 179"},
+            {id:"inboet65", label:"Inboetlijst 65"},
+          ];
+          const [bewerkId, setBewerkId] = React.useState(null);
+          const [naamVeld, setNaamVeld] = React.useState("");
+          const [wwVeld, setWwVeld] = React.useState("");
+          const [toegangVeld, setToegangVeld] = React.useState("werklijsten");
+          const [keuzeVeld, setKeuzeVeld] = React.useState([]);
 
-      {/* MEDEWERKER PINCODE */}
-      <OpklapbareSectie titel="👷 Medewerker pincode (alleen werklijsten)" beschrijving={localStorage.getItem("ta_medewerkerpincode")?"Ingesteld":"Niet ingesteld"}>
-        <div style={{fontSize:11,color:subtekst,marginBottom:12,lineHeight:1.6}}>
-          Medewerkers loggen in met deze code en zien alleen de werklijsten tab. Laat leeg om uit te schakelen.
-        </div>
-        {(()=>{
-          const [medPin, setMedPin] = React.useState(localStorage.getItem("ta_medewerkerpincode")||"");
-          const [medOk, setMedOk] = React.useState("");
-          return (
-            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-              <input style={{...gs.input,width:120,letterSpacing:4,fontSize:16,textAlign:"center"}}
-                type="password" maxLength={8} placeholder="••••" value={medPin}
-                onChange={e=>{ setMedPin(e.target.value); setMedOk(""); }}
-              />
-              <button style={{...gs.knopPrimair,fontSize:12}} onClick={()=>{
-                localStorage.setItem("ta_medewerkerpincode", medPin);
-                setMedOk("✅ Opgeslagen");
-              }}>💾 Opslaan</button>
-              {medPin&&<button style={{...gs.knopSecundair,fontSize:12}} onClick={()=>{
-                localStorage.removeItem("ta_medewerkerpincode");
-                setMedPin("");
-                setMedOk("✅ Uitgeschakeld");
-              }}>🔓 Uitschakelen</button>}
-              {medOk&&<span style={{fontSize:12,color:groenTekst}}>{medOk}</span>}
-            </div>
-          );
-        })()}
-      </OpklapbareSectie>
-
-      {/* MEDEWERKERSNAMEN SECTIE */}
-      <OpklapbareSectie titel="🧑‍🌾 Medewerkersnamen" beschrijving="Namen om uit te kiezen bij inloggen">
-        <div style={{fontSize:11,color:subtekst,marginBottom:12,lineHeight:1.6}}>
-          Namen die medewerkers bij het inloggen uit een lijst kunnen kiezen, in plaats van zelf te typen.
-        </div>
-        {(()=>{
-          const [namen, setNamen] = React.useState(()=>{
-            try{ return JSON.parse(localStorage.getItem("ta_medewerkernamen")||"[]"); }catch(e){ return []; }
-          });
-          const [nieuweNaam, setNieuweNaam] = React.useState("");
-          function opslaanNamen(lijst){
-            setNamen(lijst);
-            localStorage.setItem("ta_medewerkernamen", JSON.stringify(lijst));
+          function nieuwFormulier(){
+            setBewerkId("__nieuw__"); setNaamVeld(""); setWwVeld(""); setToegangVeld("werklijsten"); setKeuzeVeld([]);
           }
-          function toevoegen(){
-            const naam = nieuweNaam.trim();
-            if(!naam || namen.includes(naam)) return;
-            opslaanNamen([...namen, naam]);
-            setNieuweNaam("");
+          function bewerken(m){
+            setBewerkId(m.id); setNaamVeld(m.naam); setWwVeld(m.wachtwoord); setToegangVeld(m.toegang); setKeuzeVeld(m.keuzeLijsten||[]);
+          }
+          function annuleren(){ setBewerkId(null); }
+          function opslaan(){
+            const naam = naamVeld.trim();
+            const ww = wwVeld.trim();
+            if(!naam){ alert("Vul een naam in."); return; }
+            if(!ww){ alert("Vul een wachtwoord in."); return; }
+            if((medewerkers||[]).some(m=>m.wachtwoord===ww && m.id!==bewerkId)){ alert("Dit wachtwoord is al in gebruik door een andere medewerker."); return; }
+            if(bewerkId==="__nieuw__"){
+              const nieuw = {id:"m_"+Date.now(), naam, wachtwoord:ww, toegang:toegangVeld, keuzeLijsten: toegangVeld==="keuze"?keuzeVeld:[]};
+              setMedewerkers([...(medewerkers||[]), nieuw]);
+            } else {
+              setMedewerkers((medewerkers||[]).map(m=>m.id===bewerkId ? {...m, naam, wachtwoord:ww, toegang:toegangVeld, keuzeLijsten: toegangVeld==="keuze"?keuzeVeld:[]} : m));
+            }
+            setBewerkId(null);
+          }
+          function verwijderen(m){
+            const aantalAlles = (medewerkers||[]).filter(x=>x.toegang==="alles").length;
+            if(m.toegang==="alles" && aantalAlles<=1){
+              alert("Dit is de laatste medewerker met volledige toegang. Verwijder deze niet, anders raakt iedereen buitengesloten.");
+              return;
+            }
+            if(window.confirm("Medewerker \""+m.naam+"\" verwijderen?")){
+              setMedewerkers((medewerkers||[]).filter(x=>x.id!==m.id));
+            }
           }
           return (
             <div>
-              <div style={{display:"flex",gap:8,marginBottom:10}}>
-                <input style={{...gs.input,flex:1}} placeholder="Naam toevoegen..." value={nieuweNaam}
-                  onChange={e=>setNieuweNaam(e.target.value)}
-                  onKeyDown={e=>{if(e.key==="Enter") toevoegen();}}
-                />
-                <button style={{...gs.knopPrimair,fontSize:12}} onClick={toevoegen}>+ Toevoegen</button>
-              </div>
-              {namen.length===0
-                ? <div style={{fontSize:11,color:subtekst}}>Nog geen namen ingesteld — medewerkers typen dan zelf hun naam.</div>
-                : namen.map((naam,i)=>(
-                    <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 8px",background:lichtGroen,borderRadius:4,marginBottom:4}}>
-                      <span style={{fontSize:12,color:groenTekst,fontWeight:600}}>{naam}</span>
-                      <button style={{background:"transparent",border:"none",color:"#dc2626",cursor:"pointer",fontSize:12,fontWeight:700}}
-                        onClick={()=>opslaanNamen(namen.filter((_,j)=>j!==i))}>✕</button>
+              {(medewerkers||[]).length===0
+                ? <div style={{fontSize:11,color:subtekst,marginBottom:10}}>Nog geen medewerkers ingesteld.</div>
+                : (medewerkers||[]).map(m=>(
+                    <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",background:lichtGroen,borderRadius:5,marginBottom:5}}>
+                      <div>
+                        <span style={{fontSize:12,color:groenTekst,fontWeight:700}}>{m.naam}</span>
+                        <span style={{fontSize:10,color:subtekst,marginLeft:8}}>
+                          {m.toegang==="alles"?"Volledige toegang":m.toegang==="werklijsten"?"Alle werklijsten":"Gekozen werklijsten ("+(m.keuzeLijsten||[]).length+")"}
+                        </span>
+                      </div>
+                      <div style={{display:"flex",gap:6}}>
+                        <button style={{...gs.knopSecundair,fontSize:11,padding:"3px 8px"}} onClick={()=>bewerken(m)}>✏️ Bewerken</button>
+                        <button style={{background:"transparent",border:"none",color:"#dc2626",cursor:"pointer",fontSize:12,fontWeight:700}} onClick={()=>verwijderen(m)}>✕</button>
+                      </div>
                     </div>
                   ))
+              }
+              {bewerkId===null
+                ? <button style={{...gs.knopPrimair,fontSize:12,marginTop:6}} onClick={nieuwFormulier}>+ Medewerker toevoegen</button>
+                : (
+                  <div style={{marginTop:10,padding:10,border:`1px solid ${rand}`,borderRadius:6,background:"#fff"}}>
+                    <div style={{display:"flex",gap:8,marginBottom:8,flexWrap:"wrap"}}>
+                      <input style={{...gs.input,flex:1,minWidth:120}} placeholder="Naam" value={naamVeld}
+                        onChange={e=>setNaamVeld(e.target.value)} />
+                      <input style={{...gs.input,width:130,letterSpacing:2}} type="text" placeholder="Wachtwoord" value={wwVeld}
+                        onChange={e=>setWwVeld(e.target.value)} />
+                    </div>
+                    <div style={{display:"flex",gap:14,marginBottom:8,flexWrap:"wrap"}}>
+                      {[["alles","Alles (volledige toegang)"],["werklijsten","Alle werklijsten"],["keuze","Gekozen werklijsten"]].map(([val,label])=>(
+                        <label key={val} style={{fontSize:12,display:"flex",alignItems:"center",gap:4,cursor:"pointer"}}>
+                          <input type="radio" name="toegangVeld" checked={toegangVeld===val} onChange={()=>setToegangVeld(val)} />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                    {toegangVeld==="keuze"&&(
+                      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:8,padding:8,background:lichtGroen,borderRadius:5}}>
+                        {WERKLIJST_OPTIES.map(o=>(
+                          <label key={o.id} style={{fontSize:11,display:"flex",alignItems:"center",gap:4,cursor:"pointer"}}>
+                            <input type="checkbox" checked={keuzeVeld.includes(o.id)}
+                              onChange={e=>setKeuzeVeld(e.target.checked ? [...keuzeVeld,o.id] : keuzeVeld.filter(x=>x!==o.id))} />
+                            {o.label}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{display:"flex",gap:8}}>
+                      <button style={{...gs.knopPrimair,fontSize:12}} onClick={opslaan}>💾 Opslaan</button>
+                      <button style={{...gs.knopSecundair,fontSize:12}} onClick={annuleren}>Annuleren</button>
+                    </div>
+                  </div>
+                )
               }
             </div>
           );
@@ -43184,20 +43193,43 @@ function App() {
     if (!nogGeldig) { sessionStorage.removeItem(vlagKey); sessionStorage.removeItem(tijdKey); }
     return nogGeldig;
   }
-  const OPGESLAGEN_PIN = localStorage.getItem("ta_pincode") || "";
+  // ── MEDEWERKERS (1 gezamenlijk inlogpunt; ieder medewerker heeft een eigen wachtwoord
+  // en toegangsniveau: "alles", "werklijsten" (alle werklijsten) of "keuze" (specifieke lijsten) ──
+  // Eenmalige auto-migratie: een bestaande hoofdpincode/medewerker-pincode wordt omgezet naar
+  // medewerkers, zodat niemand buitengesloten raakt door deze update.
+  const [medewerkers, setMedewerkers] = useState(() => {
+    let m = laad("ta_medewerkers", null);
+    if (m === null) {
+      m = [];
+      const oudPin = localStorage.getItem("ta_pincode") || "";
+      const oudMedewerkerPin = localStorage.getItem("ta_medewerkerpincode") || "";
+      if (oudPin) m.push({ id: "m_beheerder", naam: "Beheerder", wachtwoord: oudPin, toegang: "alles" });
+      if (oudMedewerkerPin) m.push({ id: "m_medewerker", naam: "Medewerker", wachtwoord: oudMedewerkerPin, toegang: "werklijsten" });
+      bewaar("ta_medewerkers", m);
+    }
+    return m;
+  });
+  ue(() => { bewaar("ta_medewerkers", medewerkers); }, [medewerkers]);
   const [ingelogd, setIngelogd] = useState(() => {
-    // Als geen pincode ingesteld, direct ingelogd
-    if (!OPGESLAGEN_PIN) return true;
+    // Als er geen enkele medewerker is ingesteld, direct ingelogd (geen beveiliging actief)
+    if (medewerkers.length === 0) return true;
     // Check sessie (blijft ingelogd tot 15 min. na de laatste activiteit)
     return sessieNogGeldig("ta_sessie", "ta_sessie_tijd");
   });
+  const [ingelogdMedewerkerId, setIngelogdMedewerkerId] = useState(() => sessionStorage.getItem("ta_medewerker_id") || "");
+  const huidigeMedewerker = medewerkers.find(m => m.id === ingelogdMedewerkerId) || null;
+  const medewerkerModus = !!huidigeMedewerker && huidigeMedewerker.toegang !== "alles";
+  const medewerkerNaam = huidigeMedewerker?.naam || "";
+  const werklijstKeuze = huidigeMedewerker?.toegang === "keuze" ? (huidigeMedewerker.keuzeLijsten || []) : null;
   const [pinInvoer, setPinInvoer] = useState("");
   const [pinFout, setPinFout] = useState(false);
   function checkPin() {
-    const pin = localStorage.getItem("ta_pincode") || "";
-    if (pinInvoer === pin) {
+    const gevonden = medewerkers.find(m => m.wachtwoord === pinInvoer);
+    if (gevonden) {
       sessionStorage.setItem("ta_sessie", "ok");
       sessionStorage.setItem("ta_sessie_tijd", String(Date.now()));
+      sessionStorage.setItem("ta_medewerker_id", gevonden.id);
+      setIngelogdMedewerkerId(gevonden.id);
       setIngelogd(true);
       setPinFout(false);
       document.documentElement.requestFullscreen?.().catch(() => {});
@@ -43219,14 +43251,6 @@ function App() {
       return () => window.removeEventListener("click", vraagFullscreen);
     }
   }, []);
-  // ── MEDEWERKER MODUS (alleen werklijsten) ──
-  const MEDEWERKER_PIN = localStorage.getItem("ta_medewerkerpincode") || "";
-  const [medewerkerModus, setMedewerkerModus] = useState(() => {
-    return sessieNogGeldig("ta_medewerker_sessie", "ta_medewerker_sessie_tijd");
-  });
-  const [medewerkerNaam, setMedewerkerNaam] = useState(() => sessionStorage.getItem("ta_medewerker_naam") || "");
-  const [medewerkerNaamInvoer, setMedewerkerNaamInvoer] = useState("");
-  const [medewerkerNaamAnders, setMedewerkerNaamAnders] = useState(false);
 
   // Sessie ververst bij activiteit (klik/toets), en wordt elke minuut gecontroleerd op verlopen —
   // zo blijf je "onthouden" tijdens gebruik, maar moet je na 15 min. inactiviteit opnieuw inloggen.
@@ -43234,16 +43258,14 @@ function App() {
     if (!ingelogd) return;
     function ververs() {
       if(sessionStorage.getItem("ta_sessie")==="ok") sessionStorage.setItem("ta_sessie_tijd", String(Date.now()));
-      if(sessionStorage.getItem("ta_medewerker_sessie")==="ok") sessionStorage.setItem("ta_medewerker_sessie_tijd", String(Date.now()));
     }
     window.addEventListener("click", ververs);
     window.addEventListener("keydown", ververs);
     const interval = setInterval(() => {
       if(!sessieNogGeldig("ta_sessie","ta_sessie_tijd")){
         setIngelogd(false);
-        setMedewerkerModus(false);
-      } else if(medewerkerModus && !sessieNogGeldig("ta_medewerker_sessie","ta_medewerker_sessie_tijd")){
-        setMedewerkerModus(false);
+        setIngelogdMedewerkerId("");
+        sessionStorage.removeItem("ta_medewerker_id");
       }
     }, 60000);
     return () => {
@@ -43251,7 +43273,7 @@ function App() {
       window.removeEventListener("keydown", ververs);
       clearInterval(interval);
     };
-  }, [ingelogd, medewerkerModus]);
+  }, [ingelogd]);
 
   const [pagina, setPagina] = useState("orders");
   const [vorigePagina, setVorigePagina] = useState(null);
@@ -43829,22 +43851,7 @@ function App() {
       setPinFout(false);
     },
     onKeyDown: e => {
-      if (e.key !== "Enter") return;
-      if (MEDEWERKER_PIN && pinInvoer === MEDEWERKER_PIN) {
-        if (!medewerkerNaamInvoer.trim()) { alert("Vul eerst je naam in."); return; }
-        sessionStorage.setItem("ta_medewerker_sessie", "ok");
-        sessionStorage.setItem("ta_medewerker_sessie_tijd", String(Date.now()));
-        sessionStorage.setItem("ta_medewerker_naam", medewerkerNaamInvoer.trim());
-        setMedewerkerNaam(medewerkerNaamInvoer.trim());
-        setMedewerkerModus(true);
-        sessionStorage.setItem("ta_sessie", "ok");
-        sessionStorage.setItem("ta_sessie_tijd", String(Date.now()));
-        setIngelogd(true);
-        setPinFout(false);
-        document.documentElement.requestFullscreen?.().catch(() => {});
-      } else {
-        checkPin();
-      }
+      if (e.key === "Enter") checkPin();
     },
     placeholder: "\u2022\u2022\u2022\u2022"
   }), pinFout && /*#__PURE__*/React.createElement("div", {
@@ -43861,55 +43868,8 @@ function App() {
       fontSize: 14
     }),
     onClick: checkPin
-  }, "Inloggen"), MEDEWERKER_PIN && (()=>{
-    let medewerkerNamenLijst = [];
-    try { medewerkerNamenLijst = JSON.parse(localStorage.getItem("ta_medewerkernamen")||"[]"); } catch(e) {}
-    const veldStijl = {width:"100%",padding:"8px 12px",borderRadius:8,border:`1px solid ${rand}`,fontSize:13,outline:"none",boxSizing:"border-box",marginTop:10};
-    if(medewerkerNamenLijst.length===0 || medewerkerNaamAnders){
-      return (
-        <input style={veldStijl} type="text" value={medewerkerNaamInvoer}
-          onChange={e=>setMedewerkerNaamInvoer(e.target.value)}
-          placeholder="Jouw naam (voor werklijst-registratie)" />
-      );
-    }
-    return (
-      <select style={{...veldStijl,background:"#fff"}} value={medewerkerNaamInvoer}
-        onChange={e=>{
-          if(e.target.value==="__anders__"){ setMedewerkerNaamAnders(true); setMedewerkerNaamInvoer(""); }
-          else setMedewerkerNaamInvoer(e.target.value);
-        }}>
-        <option value="">— kies je naam —</option>
-        {medewerkerNamenLijst.map(n=><option key={n} value={n}>{n}</option>)}
-        <option value="__anders__">Anders (zelf typen)...</option>
-      </select>
-    );
-  })(), MEDEWERKER_PIN && /*#__PURE__*/React.createElement("button", {
-    style: _objectSpread(_objectSpread({}, gs.knopSecundair), {}, {
-      width: "100%",
-      marginTop: 8,
-      padding: "10px",
-      fontSize: 14
-    }),
-    onClick: () => {
-      if (pinInvoer === MEDEWERKER_PIN) {
-        if (!medewerkerNaamInvoer.trim()) { alert("Vul eerst je naam in."); return; }
-        sessionStorage.setItem("ta_medewerker_sessie", "ok");
-        sessionStorage.setItem("ta_medewerker_sessie_tijd", String(Date.now()));
-        sessionStorage.setItem("ta_medewerker_naam", medewerkerNaamInvoer.trim());
-        setMedewerkerNaam(medewerkerNaamInvoer.trim());
-        setMedewerkerModus(true);
-        sessionStorage.setItem("ta_sessie", "ok");
-        sessionStorage.setItem("ta_sessie_tijd", String(Date.now()));
-        setIngelogd(true);
-        setPinFout(false);
-        document.documentElement.requestFullscreen?.().catch(() => {});
-      } else {
-        setPinFout(true);
-        setPinInvoer("");
-      }
-    }
-  }, "Inloggen als medewerker")));
-  // ── MEDEWERKER MODUS: alleen werklijsten ──
+  }, "Inloggen")));
+  // ── MEDEWERKER MODUS: alleen werklijsten (beperkte toegang) ──
   if (medewerkerModus) {
     return /*#__PURE__*/React.createElement("div", {
       style: { minHeight: "100vh", background: achtergrond, fontSize: fontSize+"px" }
@@ -43917,17 +43877,17 @@ function App() {
       /*#__PURE__*/React.createElement("div", {
         style: { background: groen, display: "flex", alignItems: "center", height: 50, padding: "0 14px", gap: 8, position: "sticky", top: 0, zIndex: 500 }
       },
-        /*#__PURE__*/React.createElement("div", { style: { color: wit, fontWeight: 700, fontSize: 15 } }, "\uD83C\uDF31 Werklijsten"),
+        /*#__PURE__*/React.createElement("div", { style: { color: wit, fontWeight: 700, fontSize: 15 } }, "\uD83C\uDF31 Werklijsten" + (medewerkerNaam ? " \u2014 " + medewerkerNaam : "")),
         /*#__PURE__*/React.createElement("button", {
           style: { marginLeft: "auto", background: "rgba(255,255,255,0.15)", color: wit, border: "none", borderRadius: 6, padding: "4px 12px", cursor: "pointer", fontSize: 12 },
-          onClick: () => { sessionStorage.removeItem("ta_medewerker_sessie"); sessionStorage.removeItem("ta_medewerker_sessie_tijd"); sessionStorage.removeItem("ta_sessie"); sessionStorage.removeItem("ta_sessie_tijd"); setMedewerkerModus(false); setIngelogd(false); }
+          onClick: () => { sessionStorage.removeItem("ta_medewerker_id"); sessionStorage.removeItem("ta_sessie"); sessionStorage.removeItem("ta_sessie_tijd"); setIngelogdMedewerkerId(""); setIngelogd(false); }
         }, "Uitloggen")
       ),
       /*#__PURE__*/React.createElement(Teeltplanning, {
         klanten: klanten, gewassen: gewassen, verpDef: verpDef,
         orders: orders, teeltduur: teeltduur, kiemkracht: kiemkracht,
         bedrijf: bedrijf, realisatie: realisatie, setRealisatie: setRealisatie,
-        medewerkerModus: medewerkerModus, medewerkerNaam: medewerkerNaam
+        medewerkerModus: medewerkerModus, medewerkerNaam: medewerkerNaam, werklijstKeuze: werklijstKeuze
       })
     );
   }
@@ -44282,8 +44242,8 @@ function App() {
       if (window.confirm("Weet u zeker dat u wilt uitloggen?")) {
         sessionStorage.removeItem("ta_sessie");
         sessionStorage.removeItem("ta_sessie_tijd");
-        sessionStorage.removeItem("ta_medewerker_sessie");
-        sessionStorage.removeItem("ta_medewerker_sessie_tijd");
+        sessionStorage.removeItem("ta_medewerker_id");
+        setIngelogdMedewerkerId("");
         setIngelogd(false);
       }
     },
@@ -44488,7 +44448,8 @@ function App() {
     werklijstVoorkeuze: werklijstVoorkeuze,
     setWerklijstVoorkeuze: setWerklijstVoorkeuze,
     medewerkerModus: medewerkerModus,
-    medewerkerNaam: medewerkerNaam
+    medewerkerNaam: medewerkerNaam,
+    werklijstKeuze: werklijstKeuze
   })), pagina === "zaadinkoop" && /*#__PURE__*/React.createElement(Zaadinkoop, {
     gewassen: gewassen,
     zaadinkoop: zaadinkoop,
@@ -44537,6 +44498,8 @@ function App() {
     setGewassen: setGewassen,
     orders: orders,
     setOrders: setOrders,
+    medewerkers: medewerkers,
+    setMedewerkers: setMedewerkers,
     prijzen: prijzen,
     setPrijzen: setPrijzen,
     kiemkracht: kiemkracht,

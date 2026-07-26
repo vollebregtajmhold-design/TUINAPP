@@ -27894,7 +27894,7 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
         </div>
       </td></tr>
     )}
-    <tr style={{lineHeight:1.3,whiteSpace:"nowrap",background:gemarkeerd?lichtGroen:(i==null?"transparent":(i%2===0?wit:"#cfe6d8")),transition:"background 0.6s"}} onMouseEnter={e=>{e.currentTarget.style.background="#ffe082";onActief&&onActief();}} onMouseLeave={e=>e.currentTarget.style.background=gemarkeerd?lichtGroen:(i==null?"transparent":(i%2===0?wit:"#cfe6d8"))}>
+    <tr style={{lineHeight:1.3,whiteSpace:"nowrap",background:gemarkeerd?"#bfe3fa":(i==null?"transparent":(i%2===0?wit:"#cfe6d8")),transition:"background 0.6s"}} onMouseEnter={e=>{e.currentTarget.style.background="#ffe082";onActief&&onActief();}} onMouseLeave={e=>e.currentTarget.style.background=gemarkeerd?"#bfe3fa":(i==null?"transparent":(i%2===0?wit:"#cfe6d8"))}>
       {/* Gewas */}
       <td style={cel}>{bewerkbaar
         ? <select style={inp(110)} value={r.gewas} onChange={e=>{
@@ -28812,7 +28812,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
     const match = (o.regels||[]).find(r=>r.gewas===mk.gewas && r.soort===mk.soort && r.verpakking===mk.verpakking);
     if(!match) return;
     setGemarkeerdeRegelId(match.id);
-    const tijd = setTimeout(()=>setGemarkeerdeRegelId(null), 8000);
+    const tijd = setTimeout(()=>setGemarkeerdeRegelId(null), 20000);
     return ()=>clearTimeout(tijd);
   },[orderOmTeOpenen, orderRegelOmTeMarkeren]);
 
@@ -32173,6 +32173,18 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
   }, [toonMatrix]);
   const [printOverzicht, setPrintOverzicht] = useState(null);
   const [orderKeuzeRij, setOrderKeuzeRij] = useState(null); // key van rij waarvoor het order-keuzemenu open staat
+  const [gemarkeerdeWerklijstRij, setGemarkeerdeWerklijstRij] = useState(null); // rij die na doorklikken naar Dashboard 4 sec. oplicht
+  const laatsteWerklijstKlikRef = React.useRef(null); // onthoudt welke rij het laatst is aangeklikt, voor de highlight bij terugkeer via Backspace
+  useEffect(()=>{
+    function onTerugVanDashboard(){
+      const hl = laatsteWerklijstKlikRef.current;
+      if(!hl) return;
+      setGemarkeerdeWerklijstRij(hl);
+      setTimeout(()=>setGemarkeerdeWerklijstRij(prev=>prev===hl?null:prev), 4000);
+    }
+    window.addEventListener("ta-terug-naar-werklijst", onTerugVanDashboard);
+    return ()=>window.removeEventListener("ta-terug-naar-werklijst", onTerugVanDashboard);
+  },[]);
   // Genereer week-labels rond vandaag (offset in weken t.o.v. nu), voor Gedaan/Nodig-overzichten
   function wkOffsetLijst(vanaf, tot) {
     const nu=new Date(); const basisJaar=getJaar(nu), basisWk=getWeekNr(nu);
@@ -32643,10 +32655,12 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                 }
                 verschilKiem = (totKiemPct!=null && ingesteldKiemPct!=null) ? Math.round((totKiemPct-ingesteldKiemPct)*10)/10 : null;
               }
+              const werklijstHlKey = blokKey+"||"+rijKey;
+              const isWerklijstGemarkeerd = gemarkeerdeWerklijstRij===werklijstHlKey;
               return (
-                <tr key={i} style={{background:wit}}
-                  onMouseEnter={e=>{e.currentTarget.style.background="#ffe082";}}
-                  onMouseLeave={e=>e.currentTarget.style.background=wit}>
+                <tr key={i} style={{background:isWerklijstGemarkeerd?"#bfe3fa":wit, transition:"background 0.6s"}}
+                  onMouseEnter={e=>{if(!isWerklijstGemarkeerd) e.currentTarget.style.background="#ffe082";}}
+                  onMouseLeave={e=>e.currentTarget.style.background=isWerklijstGemarkeerd?"#bfe3fa":wit}>
                   <td style={{...sTD,padding:"2px 4px"}}>
                     {r._handmatig&&<button title="Verwijder deze handmatige regel"
                       onClick={()=>setHandmatig(prev=>({...prev,[blokKey]:(prev[blokKey]||[]).filter(h=>h.id!==r.id)}))}
@@ -32686,7 +32700,13 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                       return <>
                         <span style={{cursor:"pointer",textDecoration:"underline",textDecorationStyle:"dotted",textDecorationColor:"#9ca3af"}}
                           title={tooltip}
-                          onClick={()=>window.dispatchEvent(new CustomEvent("ta-naar-dashboard",{detail:{gewas:r.gewas,soort:r.soort}}))}>{r.soort}</span>
+                          onClick={()=>{
+                            const hlKey = blokKey+"||"+r.gewas+"||"+r.soort+"||"+r.fust;
+                            laatsteWerklijstKlikRef.current = hlKey;
+                            setGemarkeerdeWerklijstRij(hlKey);
+                            setTimeout(()=>setGemarkeerdeWerklijstRij(prev=>prev===hlKey?null:prev), 4000);
+                            window.dispatchEvent(new CustomEvent("ta-naar-dashboard",{detail:{gewas:r.gewas,soort:r.soort,fust:r.fust,week:wk,isZaai:isZaai}}));
+                          }}>{r.soort}</span>
                         {matches.length>0 &&
                           <button title="Naar de order"
                             style={{marginLeft:5,border:"none",background:"none",cursor:"pointer",fontSize:11,padding:0,verticalAlign:"middle"}}
@@ -37656,12 +37676,22 @@ function Dashboard({ gewassen, zaadinkoop, uitval, orders, prijzen, verpDef, tee
   const [dashModus, setDashModus] = useState("soort"); // "soort" of "gewas"
   const [openBlok, setOpenBlok] = useState({inkoop:false,zaai:true,inboet:false,lever:true,uitval:false});
   const toggle = k => setOpenBlok(prev=>({...prev,[k]:!prev[k]}));
+  // Precieze 10 sec. highlight van de regel waar je vandaan kwam (werklijsten), na doorklikken naar Dashboard.
+  const [dashHighlight, setDashHighlight] = useState(null); // {gewas,soort,fust,week,isZaai}
 
   useEffect(()=>{
     if(voorgeselecteerd?.gewas){
       setDashModus("soort");
       setSelGewas(voorgeselecteerd.gewas);
       setSelSoort(voorgeselecteerd.soort||"");
+      setOpenBlok(prev=>({...prev, zaai:true, lever:true}));
+      if(voorgeselecteerd.fust && voorgeselecteerd.week){
+        setDashHighlight({gewas:voorgeselecteerd.gewas, soort:voorgeselecteerd.soort, fust:voorgeselecteerd.fust, week:voorgeselecteerd.week, isZaai:!!voorgeselecteerd.isZaai});
+        const tijd = setTimeout(()=>setDashHighlight(null), 20000);
+        return ()=>clearTimeout(tijd);
+      } else {
+        setDashHighlight(null);
+      }
     }
   },[voorgeselecteerd]);
 
@@ -37737,6 +37767,26 @@ function Dashboard({ gewassen, zaadinkoop, uitval, orders, prijzen, verpDef, tee
       }
     });
   });
+
+  // Los de precieze doel-rij op voor de highlight vanuit werklijsten: de leverweek en het
+  // zaaiweek+fust-blok waar de aangeklikte zaai-/inboetweek bij hoort (niet het hele vak markeren).
+  let hlTargetLeverweek = null, hlTargetZaaiRijKey = null, hlTargetFust = null;
+  if(dashHighlight){
+    hlTargetFust = dashHighlight.fust;
+    if(dashHighlight.isZaai){
+      const mom = zaaiMomenten.find(z=>z.week===dashHighlight.week && z.fust===dashHighlight.fust);
+      if(mom){ hlTargetLeverweek = mom.leverweek; hlTargetZaaiRijKey = mom.week+"||"+mom.fust; }
+    } else {
+      const mom = inboetMomenten.find(z=>z.week===dashHighlight.week && z.fust===dashHighlight.fust);
+      if(mom){
+        hlTargetLeverweek = mom.leverweek;
+        const zm = zaaiMomenten.find(z=>z.gewas===mom.gewas&&z.soort===mom.soort&&z.fust===mom.fust&&z.leverweek===mom.leverweek);
+        if(zm) hlTargetZaaiRijKey = zm.week+"||"+zm.fust;
+      }
+    }
+  }
+  const zaaiHlKleur = "#bfe3fa";
+
   const zaaiPerWeek={};
   const _zaaiWerkGeteld=new Set();
   zaaiMomenten.sort((a,b)=>a.datum.localeCompare(b.datum)).forEach(z=>{
@@ -38125,9 +38175,10 @@ function Dashboard({ gewassen, zaadinkoop, uitval, orders, prijzen, verpDef, tee
                     <tbody>
                       {lw.map((r,ri)=>{
                         const isHuidig = ri===targetIdx;
-                        const bg = isHuidig?"#fffbeb":rijBg(ri);
+                        const isTargetRow = hlTargetZaaiRijKey && (r.zaaiweek+"||"+r.fust)===hlTargetZaaiRijKey;
+                        const bg = isTargetRow?zaaiHlKleur:(isHuidig?"#fffbeb":rijBg(ri));
                         return (
-                          <tr key={ri} data-row={ri} style={{background:bg}}>
+                          <tr key={ri} data-row={ri} style={{background:bg,transition:"background 0.6s"}}>
                             <td style={{...TD3,fontSize:13,padding:"4px 6px",fontWeight:700,color:weekKleur,whiteSpace:"nowrap"}}>{r.zaaiweek}</td>
                             <td style={{...TD3,fontSize:13,padding:"4px 6px",fontWeight:600,color:G.midden,whiteSpace:"nowrap",background:bg}}>{(r.fust||"").replace("Tray ","")}</td>
                             <td style={{...waardeStijl,fontWeight:600,color:G.donker,background:bg}}>{r.zaden?r.zaden.toLocaleString("nl-NL"):"—"}</td>
@@ -38139,7 +38190,7 @@ function Dashboard({ gewassen, zaadinkoop, uitval, orders, prijzen, verpDef, tee
                             <td style={{...waardeStijl,fontWeight:700,background:bg}}>{verschilCel(r.heeftWerkelijkInboet?r.werkelijkPlanten-r.planten:null)}</td>
                             <td style={{...waardeStijl,fontWeight:600,color:weekKleur,whiteSpace:"normal",background:bg}}>
                               {Object.values(r.subBlokken).map((b,bi)=>(
-                                <div key={bi} style={{whiteSpace:"nowrap"}}>{b.leverweek}</div>
+                                <div key={bi} style={{whiteSpace:"nowrap",...(isTargetRow&&hlTargetLeverweek&&b.leverweek===hlTargetLeverweek?{background:"#7cc4f0",borderRadius:4,padding:"0 4px",fontWeight:800}:{})}}>{b.leverweek}</div>
                               ))}
                             </td>
                           </tr>
@@ -38187,8 +38238,10 @@ function Dashboard({ gewassen, zaadinkoop, uitval, orders, prijzen, verpDef, tee
                       {k.geleverd>0&&<span style={{fontSize:12,background:G.bg3,color:G.donker,padding:"1px 6px",borderRadius:4}}>✓ {fmt(k.geleverd)} geleverd</span>}
                     </div>
                     <table style={{width:"100%",borderCollapse:"collapse"}}>
-                      <tbody>{k.regels.map((r,i)=>(
-                        <tr key={i} style={{background:i%2===0?G.wit:G.bg1}}>
+                      <tbody>{k.regels.map((r,i)=>{
+                        const isTargetRegel = hlTargetLeverweek && hlTargetFust && r.week===hlTargetLeverweek && r.verpakking===hlTargetFust;
+                        return (
+                        <tr key={i} style={{background:isTargetRegel?zaaiHlKleur:(i%2===0?G.wit:G.bg1),transition:"background 0.6s"}}>
                           <td style={{...TD3,color:G.midden,fontSize:12,paddingLeft:20}}>{r.week}</td>
                           <td style={{...TD3,fontSize:12}}>{r.verpakking}</td>
                           <td style={{...TDr,fontSize:12}}>{r.trays} tr</td>
@@ -38218,7 +38271,8 @@ function Dashboard({ gewassen, zaadinkoop, uitval, orders, prijzen, verpDef, tee
                           })()}</td>
                           <td style={{...TDr,fontWeight:600,color:G.donker,fontSize:12}}>{r.bedrag>0?eur(r.bedrag):"—"}</td>
                         </tr>
-                      ))}</tbody>
+                        );
+                      })}</tbody>
                     </table>
                   </div>
                 ))}
@@ -38312,7 +38366,7 @@ function HerstelBackup() {
   const [bevestigHerstel, setBevestigHerstel] = React.useState(null);
   const ALL_KEYS = ["ta_klanten","ta_gewassen","ta_prijzen","ta_orders","ta_verp",
     "ta_kiemkracht","ta_teeltduur","ta_zaadinkoop","ta_bedrijf","ta_realisatie",
-    "ta_traykosten","ta_leveranciers","ta_uitval","ta_zaaitray_data"];
+    "ta_traykosten","ta_leveranciers","ta_uitval","ta_zaaitray_data","ta_medewerkers"];
 
   function herstel() {
     const d = bevestigHerstel.data;
@@ -43316,6 +43370,9 @@ function App() {
       if ((tag === "INPUT" || tag === "TEXTAREA") && el.value) return; // veld heeft tekst: gewoon laten wissen
       e.preventDefault();
       if (!vorigePagina || vorigePagina === pagina) return;
+      if (pagina === "dashboard" && vorigePagina === "planning") {
+        window.dispatchEvent(new CustomEvent("ta-terug-naar-werklijst"));
+      }
       navigeer(vorigePagina);
     }
     window.addEventListener("keydown", onBackspaceGlobal);
@@ -43657,7 +43714,8 @@ function App() {
       ta_traykosten: laad("ta_traykosten", {}),
       ta_leveranciers: laad("ta_leveranciers", []),
       ta_uitval: laad("ta_uitval", []),
-      ta_zaaitray_data: JSON.parse(localStorage.getItem("ta_zaaitray_data")||"{}")
+      ta_zaaitray_data: JSON.parse(localStorage.getItem("ta_zaaitray_data")||"{}"),
+      ta_medewerkers: laad("ta_medewerkers", [])
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], {
       type: "application/json"

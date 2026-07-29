@@ -25672,6 +25672,7 @@ function App() {
   const [uitval, setUitval] = useState(() => laad("ta_uitval", []));
   const [traykosten, setTraykosten] = useState(() => laad("ta_traykosten", {}));
   const [leveranciers, setLeveranciers] = useState(() => laad("ta_leveranciers", []));
+  const [transporteurs, setTransporteurs] = useState(() => laad("ta_transporteurs", []));
   const [bedrijf, setBedrijf] = useState(() => laad("ta_bedrijf", {
     naam: "Uw Bedrijfsnaam BV",
     adres: "Straatnaam 1",
@@ -25815,7 +25816,8 @@ function App() {
   useEffect(() => {
     if (!geladen) return;
     bewaar("ta_leveranciers", leveranciers);
-  }, [leveranciers]);
+    bewaar("ta_transporteurs", transporteurs);
+  }, [leveranciers, transporteurs]);
   const [geladen, setGeladen] = useState(false);
   const [backupHerinnering, setBackupHerinnering] = useState(false);
   const [scriptHerinnering, setScriptHerinnering] = useState(false);
@@ -27852,6 +27854,7 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
     return String(jr).slice(-2)+String(wkNr).padStart(2,"0");
   }
   let werklijstInfo = null;
+  let naarWerklijstNav = null;
   if(leverdatum && teeltRecordWL && teeltRecordWL.inboet!=null){
     const eigenTrays = (r.vastPlanten!=null && vd?.aantal) ? Math.round(r.vastPlanten/vd.aantal) : r.aantal;
     const inboetWeek = wlWeekVerschuif(leverdatum, Number(teeltRecordWL.inboet));
@@ -27861,6 +27864,14 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
       const werkelijk = Number(ruw);
       werklijstInfo = {label:"Inboet wk "+inboetWeek, werkelijk, verschil: Math.round((werkelijk-eigenTrays)*10)/10};
     }
+    // Navigatiegegevens om vanuit deze regel rechtstreeks naar de bijbehorende werklijst-rij te springen (met highlight)
+    const fustNrWL = (r.verpakking||"").replace(/\D/g,"");
+    const lijstIdWL = "inboet"+fustNrWL;
+    naarWerklijstNav = {
+      lijstId: lijstIdWL,
+      week: inboetWeek,
+      highlightKey: inboetWeek+"_"+lijstIdWL+"||"+r.gewas+"||"+r.soort+"||"+r.verpakking
+    };
   }
   const werklijstTooltip = werklijstInfo
     ? werklijstInfo.label+": werkelijk "+werklijstInfo.werkelijk+" — "+(werklijstInfo.verschil===0?"precies goed":werklijstInfo.verschil>0?"+"+werklijstInfo.verschil+" over":werklijstInfo.verschil+" tekort")
@@ -28067,7 +28078,9 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
       {/* Acties */}
       <td style={{...cel,textAlign:"center",whiteSpace:"nowrap"}}>
         {bewerkbaar
-          ? <><button style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:3,padding:"1px 5px",cursor:"pointer",fontSize:11,marginRight:2}} onClick={()=>setWaarschuwing({veld:"__verwijder__",oud:r.gewas+" "+r.soort,nieuw:null})}>✕</button>
+          ? <>{naarWerklijstNav&&<button title="Naar de werklijst"
+               style={{background:"#e0f2fe",color:"#0891b2",border:"none",borderRadius:3,padding:"1px 5px",cursor:"pointer",fontSize:11,marginRight:2}}
+               onClick={()=>window.dispatchEvent(new CustomEvent("ta-naar-werklijst",{detail:naarWerklijstNav}))}>📦</button>}
              <button style={{background:lichtGroen,color:groenTekst,border:"none",borderRadius:3,padding:"1px 5px",cursor:"pointer",fontSize:11,marginRight:2}} onClick={onKopie}>📋</button>
              {onVerplaats&&<button title="Selecteer om af te splitsen" style={{background:geselecteerd?"#1d4ed8":"#dbeafe",color:geselecteerd?"#fff":"#1d4ed8",border:"none",borderRadius:3,padding:"1px 5px",cursor:"pointer",fontSize:11,marginRight:2}} onClick={()=>onVerplaats(r)}>📅</button>}
              <span style={{position:"relative"}}
@@ -28091,8 +28104,13 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
                      placeholder="Korte notitie..."/>
                  </div>
                }
-             </span></>
+             </span>
+             <button style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:3,padding:"1px 5px",cursor:"pointer",fontSize:11,marginLeft:2}} onClick={()=>setWaarschuwing({veld:"__verwijder__",oud:r.gewas+" "+r.soort,nieuw:null})}>✕</button>
+             </>
           : <>
+              {naarWerklijstNav&&<button title="Naar de werklijst"
+                style={{background:"#e0f2fe",color:"#0891b2",border:"none",borderRadius:3,padding:"1px 6px",cursor:"pointer",fontSize:11,marginRight:2}}
+                onClick={()=>window.dispatchEvent(new CustomEvent("ta-naar-werklijst",{detail:naarWerklijstNav}))}>📦</button>}
               <button style={{background:lichtGroen,color:groenTekst,border:"none",borderRadius:3,padding:"1px 6px",cursor:"pointer",fontSize:11,marginRight:2}} onClick={onKopie}>📋</button>
               {r.notitie &&
                 <span style={{position:"relative"}}
@@ -28766,7 +28784,7 @@ function DupModal({ data, klanten, orders, WEKEN, verpDef, gs, groen, subtekst, 
   );
 }
 
-function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, verpDef, bedrijf, teeltduur=[], kiemkracht=[], realisatie, orderOmTeOpenen, orderRegelOmTeMarkeren, huidigePagina, afleverTerugWeek }) {
+function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, verpDef, bedrijf, teeltduur=[], kiemkracht=[], realisatie, orderOmTeOpenen, orderRegelOmTeMarkeren, orderOpenTrigger, huidigePagina, afleverTerugWeek }) {
   const wit = "#f3efe6"; // gebroken wit, alleen in dit scherm
   const WEKEN = weekOpties();
   const verpNamen = verpDef.map(v=>v.naam);
@@ -28807,7 +28825,10 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
       setTab("lijst");
       setFiltK(o.klantId);
     });
-  },[orderOmTeOpenen]);
+    // orderOpenTrigger staat er expres ook bij: zonder dit telt een 2e klik op dezelfde order/regel
+    // niet als wijziging (zelfde orderId), waardoor de order niet opnieuw opent en Backspace daarna
+    // niet meer terug kan naar de vorige pagina.
+  },[orderOmTeOpenen, orderOpenTrigger]);
 
   // Highlight de regel die vanuit Werklijsten is aangeklikt
   const [gemarkeerdeRegelId, setGemarkeerdeRegelId] = useState(null);
@@ -28821,7 +28842,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
     setGemarkeerdeRegelId(match.id);
     const tijd = setTimeout(()=>setGemarkeerdeRegelId(null), 20000);
     return ()=>clearTimeout(tijd);
-  },[orderOmTeOpenen, orderRegelOmTeMarkeren]);
+  },[orderOmTeOpenen, orderRegelOmTeMarkeren, orderOpenTrigger]);
 
 
   // Bijwerken van data/ges als seizoensGemaild gezet wordt
@@ -30365,6 +30386,21 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
     return ()=>window.removeEventListener("keydown", onKeySeizoen);
   }, [huidigePagina, filtK]);
 
+  // ── Sneltoets A = versneld naar Afleveren (met highlight) vanuit deze order ──
+  useEffect(()=>{
+    function onKeyNaarAfleveren(e){
+      if(e.key!=="a"&&e.key!=="A") return;
+      if(huidigePagina!==undefined && huidigePagina!=="orders") return;
+      const tag = document.activeElement?.tagName;
+      if(tag==="INPUT"||tag==="SELECT"||tag==="TEXTAREA") return;
+      if(!form || !data?.id) return;
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent("ta-naar-afleveren",{detail:{week:weekLabel(data.leverdatum),orderId:data.id}}));
+    }
+    window.addEventListener("keydown", onKeyNaarAfleveren);
+    return ()=>window.removeEventListener("keydown", onKeyNaarAfleveren);
+  }, [huidigePagina, form, data?.id, data?.leverdatum]);
+
   // ── Focus terug naar klant-zoekveld als je terugkeert naar het Orders-tabblad ──
   // Stil (geen dropdown open): direct met de 1e letter verder kunnen, geen halve lijst in beeld.
   useEffect(()=>{
@@ -30857,7 +30893,8 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
               </select>
               <input style={{...gs.input,padding:"4px 6px",fontSize:12,width:60}} placeholder="Nr." value={data.eigenOrderNr||""} onChange={e=>setData({...data,eigenOrderNr:e.target.value})} />
               <textarea
-                style={{...gs.input,padding:"3px 5px",fontSize:12,width:160,resize:"none",overflow:"hidden",minHeight:24,lineHeight:"18px"}}
+                style={{...gs.input,padding:"3px 5px",fontSize:12,width:160,resize:"none",overflow:"hidden",minHeight:24,lineHeight:"18px",
+                  ...(data.notitie ? {background:"#fef3c7",border:"2px solid #dc2626"} : {})}}
                 placeholder="Notitie..."
                 value={data.notitie||""}
                 rows={1}
@@ -30943,7 +30980,8 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
               {/* Groep: navigatie */}
               <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
               {filtK && (
-                <button title="Sneltoets: S" style={chip}
+                <button title="Sneltoets: S"
+                  style={{background:showMatrix?"#93c5fd":"#dbeafe",color:"#111",border:"2px solid #2563eb",borderRadius:6,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}
                   onClick={()=>setShowMatrix(v=>!v)}>
                   {showMatrix ? "▲ Matrix sluiten" : "📊 Seizoensoverzicht"}
                 </button>
@@ -30985,7 +31023,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
 
               {/* Groep: documenten */}
               <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-              <button style={chip}
+              <button style={{background:"#d1fae5",color:"#065f46",border:"1px solid #065f46",borderRadius:6,padding:"6px 12px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}
                 onClick={()=>drukProForma(data)}>
                 📋 Pro forma factuur
               </button>
@@ -31282,7 +31320,8 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                           <div style={{display:"flex",gap:4,alignItems:"center"}}>
                             <div style={{flex:1}}>
                               <div style={{fontSize:9,color:subtekst,marginBottom:1}}>Trays</div>
-                              <input style={{...gs.input,padding:"3px 6px",fontSize:12,width:"100%"}} type="number" min="0" step="1" value={regel.aantal||""} placeholder="0" onFocus={e=>e.target.select()} onChange={e=>setRegelV("aantal",Number(e.target.value)||0)} />
+                              <input style={{...gs.input,padding:"3px 6px",fontSize:12,width:"100%"}} type="number" min="0" step="1" value={regel.aantal||""} placeholder="0" onFocus={e=>e.target.select()} onChange={e=>setRegelV("aantal",Number(e.target.value)||0)}
+                                onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();regelAdd();}}} />
                             </div>
                             <div style={{color:subtekst,fontSize:12,paddingTop:14}}>↔</div>
                             <div style={{flex:1}}>
@@ -31299,7 +31338,8 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                                 onKeyDown={e=>{if(e.key==="Enter")e.target.blur();}} />
                             </div>
                           </div>
-                          <input style={{...gs.input,padding:"3px 6px",fontSize:12,borderColor:regel.prijs===""?"#f59e0b":rand}} type="number" step="0.001" min="0" placeholder="€/st" value={regel.prijs} onChange={e=>setRegel({...regel,prijs:e.target.value})} />
+                          <input style={{...gs.input,padding:"3px 6px",fontSize:12,borderColor:regel.prijs===""?"#f59e0b":rand}} type="number" step="0.001" min="0" placeholder="€/st" value={regel.prijs} onChange={e=>setRegel({...regel,prijs:e.target.value})}
+                            onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();regelAdd();}}} />
                           {regel.prijs!==""
                             ? <div style={{fontSize:10,color:groenTekst}}>✓ {berekendePlanten.toLocaleString()} pl. · {regel.aantal} trays</div>
                             : <div style={{fontSize:10,color:"#f59e0b"}}>⚠️ Geen prijs</div>
@@ -32576,38 +32616,42 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
       <div>
 
         {/* Over/tekort — vaste plek, boven de printknoppen */}
+        {(()=>{
+          const knopOverzicht = {background:"#dbeafe",color:"#111",border:"2px solid #2563eb",borderRadius:5,padding:"3px 10px",fontSize:12,fontWeight:700,cursor:"pointer"};
+          return (
         <div style={{display:"flex",gap:6,marginBottom:4}}>
           <button onClick={()=>setToonMatrix(v=>!v)}
-            style={{background:toonMatrix?"#16a34a":wit,color:toonMatrix?"#fff":"#16a34a",
-              border:"1px solid #16a34a",borderRadius:5,padding:"3px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+            style={{...knopOverzicht,background:toonMatrix?"#93c5fd":knopOverzicht.background}}>
             📊 {toonMatrix?"Over/tekort sluiten":"Over/tekort"}
           </button>
           <button onClick={()=>setPrintOverzicht({modus:"gedaan", actieType, rijen, weken:wkOffsetLijst(-7,0), label, blokKey, fustFilter:blokSuffix})}
             title="Werkelijk ingevulde aantallen van de afgelopen 8 weken, van deze werklijst"
-            style={{background:wit,color:"#0891b2",border:"1px solid #0891b2",borderRadius:5,padding:"3px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+            style={knopOverzicht}>
             ✅ Gedaan
           </button>
           <button onClick={()=>setPrintOverzicht({modus:"nodig", actieType, rijen, weken:wkOffsetLijst(0,4), label, blokKey, fustFilter:blokSuffix})}
             title="Nodige aantallen van vandaag t/m 4 weken vooruit, van deze werklijst"
-            style={{background:wit,color:"#7c3aed",border:"1px solid #7c3aed",borderRadius:5,padding:"3px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+            style={knopOverzicht}>
             📅 Nodig
           </button>
           {/* 2e sortering: Tray 65 heeft geen eigen lijst — dat gaat mee in de 260-lijst (worden fysiek 260-trays) */}
           {actieType!=="zaai"&&blokSuffix!=="inboet65"&&
             <button onClick={()=>setPrintOverzicht({modus:"sortering2", actieType, rijen, weken:wkOffsetLijst(-4,0), label, blokKey, fustFilter: blokSuffix==="inboet260"?"inboet260of65":blokSuffix})}
               title="2e sortering aantallen (trays) — huidige week en 4 weken terug"
-              style={{background:wit,color:"#b45309",border:"1px solid #b45309",borderRadius:5,padding:"3px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              style={knopOverzicht}>
               🔀 2e sortering
             </button>
           }
           {actieType!=="zaai"&&
             <button onClick={()=>setPrintOverzicht({modus:"kiemoverzicht", actieType, rijen, weken:wkOffsetLijst(-7,0), label, blokKey, fustFilter:blokSuffix})}
               title="Verschil t.o.v. ingesteld kiem% — huidige week en 7 weken terug"
-              style={{background:wit,color:"#0d9488",border:"1px solid #0d9488",borderRadius:5,padding:"3px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              style={knopOverzicht}>
               📈 Kiemoverzicht
             </button>
           }
         </div>
+          );
+        })()}
 
         {/* Blok header — lichter groen dan weekbalk */}
         <div style={{display:"flex",alignItems:"center",
@@ -32627,7 +32671,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
           }
           {/* Knoppen: eigen onClick, geen propagation nodig */}
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-            <button style={{background:isZaai?"#dbeafe":"#cffafe",color:isZaai?"#1d4ed8":"#0891b2",border:isZaai?"1px solid #1d4ed8":"1px solid #0891b2",borderRadius:5,padding:"5px 11px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center"}}
+            <button style={{background:"#d1fae5",color:"#065f46",border:"1px solid #065f46",borderRadius:5,padding:"5px 11px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center"}}
               onClick={()=>{
                 const rijenMetWerkelijk = rijen.map(r=>({...r, werkelijk:getReal(wk,actieType,r.gewas+"||"+r.soort+"||"+r.fust)}));
                 setPrintWerklijst({wk,blok,type:actieType,rijen:rijenMetWerkelijk,veld,label,kiemkracht,blokKey,afdrukType:"werklijst",orders,klanten,teeltduur});
@@ -32647,7 +32691,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
             {!isZaai&&<>
               <button style={{background:"#d1fae5",color:"#065f46",border:"1px solid #065f46",borderRadius:5,padding:"5px 11px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center"}}
                 onClick={()=>setPrintNieuweWegzetlijst({wk,orders,klanten,gewassen,verpDef,teeltduur,kiemkracht,fustFilter:blokSuffix,blokKey,afdrukType:"wegzetlijst"})}>Wegzetlijst<AfdrukStip actief={afgedrukt[blokKey]?.wegzetlijst}/></button>
-              <button style={{background:"#ede9fe",color:"#7c3aed",border:"1px solid #7c3aed",borderRadius:5,padding:"5px 11px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center"}}
+              <button style={{background:"#d1fae5",color:"#065f46",border:"1px solid #065f46",borderRadius:5,padding:"5px 11px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center"}}
                 onClick={()=>{
                   function fustPastBijFilterSt(verpakking){
                     if(!blokSuffix) return true;
@@ -32695,14 +32739,14 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                 }}>Stickers<AfdrukStip actief={afgedrukt[blokKey]?.stickers}/></button>
             </>}
             {allesVastgezet
-              ? <span style={{background:"#dcfce7",color:"#16a34a",border:"2px solid #dc2626",borderRadius:8,
+              ? <span style={{background:"#fef3c7",color:"#92400e",border:"2px solid #dc2626",borderRadius:8,
                     padding:"10px 12px",fontSize:12,fontWeight:700,lineHeight:1.25,
                     display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
                     marginLeft:10,marginRight:10,boxShadow:"0 1px 5px rgba(220,38,38,0.35)"}}><span>Vast-</span><span>gezet</span></span>
-              : <button style={{background:"#dcfce7",color:"#16a34a",border:"2px solid #16a34a",borderRadius:8,
+              : <button style={{background:"#fef3c7",color:"#92400e",border:"2px solid #dc2626",borderRadius:8,
                     padding:"10px 12px",cursor:"pointer",fontSize:12,fontWeight:700,lineHeight:1.25,
                     display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
-                    marginLeft:10,marginRight:10,boxShadow:"0 1px 5px rgba(22,163,74,0.4)"}}
+                    marginLeft:10,marginRight:10,boxShadow:"0 1px 5px rgba(220,38,38,0.35)"}}
                   title="Tip: print eerst de Werklijst en Wegzetlijst. Na vastzetten worden de verschillen t.o.v. de planning zichtbaar."
                   onClick={()=>{
                     if(!window.confirm("Week "+wk+" "+label+" vastzetten?")) return;
@@ -32727,7 +32771,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                   }}><span>Week</span><span>vastzetten</span></button>
             }
             {!isZaai&&
-              <button style={{background:"#e0f2e9",color:"#2d6a4f",border:"1px solid #2d6a4f",borderRadius:5,padding:"5px 11px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center"}}
+              <button style={{background:"#d1fae5",color:"#065f46",border:"1px solid #065f46",borderRadius:5,padding:"5px 11px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center"}}
                 onClick={()=>setPrintWegzetlijst({wk,orders,klanten,gewassen,verpDef,teeltduur,kiemkracht,fustFilter:blokSuffix,realisatie,blokKey,afdrukType:"controlelijst"})}>Controlelijst<AfdrukStip actief={afgedrukt[blokKey]?.controlelijst}/></button>
             }
             <button style={{background:"#fef3c7",color:"#92400e",border:"1px solid #92400e",borderRadius:5,padding:"5px 11px",cursor:"pointer",fontSize:13,fontWeight:600}}
@@ -33101,7 +33145,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
 
   useEffect(()=>{
     if(!werklijstVoorkeuze) return;
-    const {lijstId, week} = werklijstVoorkeuze;
+    const {lijstId, week, highlightKey} = werklijstVoorkeuze;
     if(lijstId && week){
       setGekozenLijst(lijstId);
       setGekozenWeek(week);
@@ -33111,6 +33155,11 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
       const patroonVK = {zaai264:"264", zaai180:"180", inboet260:"260", inboet179:"179", inboet65:"65"}[lijstId];
       const gevondenVK = alleFustenVK.find(f=>f&&f.toLowerCase().includes(patroonVK)) || (lijstId==="inboet65" ? alleFustenVK.find(f=>f&&f.toLowerCase().includes("66")) : null);
       setMatrixFust(gevondenVK||"");
+    }
+    // Highlight de rij waarvandaan (vanuit Orders) is doorgeklikt, zelfde patroon als bij Dashboard-terugkeer
+    if(highlightKey){
+      setGemarkeerdeWerklijstRij(highlightKey);
+      setTimeout(()=>setGemarkeerdeWerklijstRij(prev=>prev===highlightKey?null:prev), 4000);
     }
     setWerklijstVoorkeuze(null);
   },[werklijstVoorkeuze]);
@@ -38550,7 +38599,7 @@ function HerstelBackup() {
   const [bevestigHerstel, setBevestigHerstel] = React.useState(null);
   const ALL_KEYS = ["ta_klanten","ta_gewassen","ta_prijzen","ta_orders","ta_verp",
     "ta_kiemkracht","ta_teeltduur","ta_zaadinkoop","ta_bedrijf","ta_realisatie",
-    "ta_traykosten","ta_leveranciers","ta_uitval","ta_zaaitray_data","ta_medewerkers"];
+    "ta_traykosten","ta_leveranciers","ta_uitval","ta_zaaitray_data","ta_medewerkers","ta_transporteurs"];
 
   function herstel() {
     const d = bevestigHerstel.data;
@@ -38640,7 +38689,7 @@ function OpklapbareSectie({ titel, beschrijving, kleur, defaultOpen, children })
   );
 }
 
-function Instellingen({ bedrijf, setBedrijf, ideeen, setIdeeen, verpDef, setVerpDef, traykosten, setTraykosten, fontSize, setFontSize, donkereModus, setDonkereModus, orders, setOrders, medewerkers, setMedewerkers }) {
+function Instellingen({ bedrijf, setBedrijf, ideeen, setIdeeen, verpDef, setVerpDef, traykosten, setTraykosten, fontSize, setFontSize, donkereModus, setDonkereModus, orders, setOrders, medewerkers, setMedewerkers, transporteurs, setTransporteurs }) {
   const [b, setB] = useState({...bedrijf});
   const [mailUrl, setMailUrl] = useState(()=>{ try{ return localStorage.getItem('ta_mailUrl')||'https://script.google.com/macros/s/AKfycby5SF6Sx9DPmFNBO_hb1ztwmdHApE19DIinmm7rs_CEJQdpQO8HLPuEI9Y4dvIUAMOi/exec'; }catch(e){ return ''; } });
   const [driveUrl, setDriveUrl] = useState(()=>{ try{ return localStorage.getItem('ta_driveUrl')||''; }catch(e){ return ''; } });
@@ -39113,6 +39162,102 @@ function Instellingen({ bedrijf, setBedrijf, ideeen, setIdeeen, verpDef, setVerp
         })()}
       </OpklapbareSectie>
 
+      <OpklapbareSectie titel="🚚 Transporteurs" beschrijving={(transporteurs||[]).length+" transporteur(s) ingesteld"}>
+        <div style={{fontSize:11,color:subtekst,marginBottom:12,lineHeight:1.6}}>
+          Transporteurs met een e-mailadres. Bij Afleveren kun je per order een transportaanvraag als conceptmail
+          in Gmail klaarzetten — kies daarbij welke transporteur de mail moet krijgen.
+        </div>
+
+        {(()=>{
+          const [scriptUrlVeld, setScriptUrlVeld] = React.useState(()=>{ try{ return localStorage.getItem("ta_transport_scripturl")||""; }catch(e){ return ""; } });
+          const [opgeslagenOk, setOpgeslagenOk] = React.useState("");
+          return (
+            <div style={{background:"#f9fcfb",border:`1px solid ${rand}`,borderRadius:6,padding:10,marginBottom:14}}>
+              <div style={{fontSize:11,fontWeight:700,color:subtekst,marginBottom:6}}>📧 Apps Script voor transportaanvraag-concepten</div>
+              <div style={{fontSize:11,color:subtekst,marginBottom:8,lineHeight:1.6}}>
+                Los van je andere koppelingen — plak hier de webapp-URL van het (nieuwe) Apps Script dat de
+                conceptmail in Gmail klaarzet.
+              </div>
+              <div style={gs.veldGroep}>
+                <label style={gs.label}>Apps Script URL</label>
+                <input style={gs.input} type="text" placeholder="https://script.google.com/macros/s/.../exec"
+                  value={scriptUrlVeld} onChange={e=>setScriptUrlVeld(e.target.value)} />
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <button style={{...gs.knopSecundair,fontSize:12}} onClick={()=>{
+                  localStorage.setItem("ta_transport_scripturl", scriptUrlVeld);
+                  setOpgeslagenOk("✅ Opgeslagen");
+                  setTimeout(()=>setOpgeslagenOk(""),2000);
+                }}>💾 Opslaan</button>
+                {opgeslagenOk&&<span style={{fontSize:12,color:groenTekst}}>{opgeslagenOk}</span>}
+              </div>
+            </div>
+          );
+        })()}
+
+        {(()=>{
+          const [bewerkId, setBewerkId] = React.useState(null);
+          const [naamVeld, setNaamVeld] = React.useState("");
+          const [emailVeld, setEmailVeld] = React.useState("");
+
+          function nieuwFormulier(){ setBewerkId("__nieuw__"); setNaamVeld(""); setEmailVeld(""); }
+          function bewerken(t){ setBewerkId(t.id); setNaamVeld(t.naam); setEmailVeld(t.email||""); }
+          function annuleren(){ setBewerkId(null); }
+          function opslaan(){
+            const naam = naamVeld.trim();
+            const email = emailVeld.trim();
+            if(!naam){ alert("Vul een naam in."); return; }
+            if(bewerkId==="__nieuw__"){
+              setTransporteurs([...(transporteurs||[]), {id:"t_"+Date.now(), naam, email}]);
+            } else {
+              setTransporteurs((transporteurs||[]).map(t=>t.id===bewerkId?{...t,naam,email}:t));
+            }
+            setBewerkId(null);
+          }
+          function verwijderen(t){
+            if(window.confirm("Transporteur \""+t.naam+"\" verwijderen?")){
+              setTransporteurs((transporteurs||[]).filter(x=>x.id!==t.id));
+            }
+          }
+          return (
+            <div>
+              {(transporteurs||[]).length===0
+                ? <div style={{fontSize:11,color:subtekst,marginBottom:10}}>Nog geen transporteurs ingesteld.</div>
+                : (transporteurs||[]).map(t=>(
+                    <div key={t.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",background:lichtGroen,borderRadius:5,marginBottom:5}}>
+                      <div>
+                        <span style={{fontSize:12,color:groenTekst,fontWeight:700}}>{t.naam}</span>
+                        <span style={{fontSize:10,color:subtekst,marginLeft:8}}>{t.email||"geen e-mailadres"}</span>
+                      </div>
+                      <div style={{display:"flex",gap:6}}>
+                        <button style={{...gs.knopSecundair,fontSize:11,padding:"3px 8px"}} onClick={()=>bewerken(t)}>✏️ Bewerken</button>
+                        <button style={{background:"transparent",border:"none",color:"#dc2626",cursor:"pointer",fontSize:12,fontWeight:700}} onClick={()=>verwijderen(t)}>✕</button>
+                      </div>
+                    </div>
+                  ))
+              }
+              {bewerkId===null
+                ? <button style={{...gs.knopPrimair,fontSize:12,marginTop:6}} onClick={nieuwFormulier}>+ Transporteur toevoegen</button>
+                : (
+                  <div style={{marginTop:10,padding:10,border:`1px solid ${rand}`,borderRadius:6,background:"#fff"}}>
+                    <div style={{display:"flex",gap:8,marginBottom:8,flexWrap:"wrap"}}>
+                      <input style={{...gs.input,flex:1,minWidth:120}} placeholder="Naam transportbedrijf" value={naamVeld}
+                        onChange={e=>setNaamVeld(e.target.value)} />
+                      <input style={{...gs.input,flex:1,minWidth:160}} type="email" placeholder="E-mailadres" value={emailVeld}
+                        onChange={e=>setEmailVeld(e.target.value)} />
+                    </div>
+                    <div style={{display:"flex",gap:8}}>
+                      <button style={{...gs.knopPrimair,fontSize:12}} onClick={opslaan}>💾 Opslaan</button>
+                      <button style={{...gs.knopSecundair,fontSize:12}} onClick={annuleren}>Annuleren</button>
+                    </div>
+                  </div>
+                )
+              }
+            </div>
+          );
+        })()}
+      </OpklapbareSectie>
+
       {/* BACKUP SECTIE */}
       <OpklapbareSectie titel="💾 Automatische backup herinnering" beschrijving="Herinnering om data te downloaden">
         <div style={{fontSize:11,color:subtekst,marginBottom:12,lineHeight:1.6}}>
@@ -39156,7 +39301,7 @@ function Instellingen({ bedrijf, setBedrijf, ideeen, setIdeeen, verpDef, setVerp
                   ta_verp:laad("ta_verp",[]),ta_kiemkracht:laad("ta_kiemkracht",[]),
                   ta_teeltduur:laad("ta_teeltduur",[]),ta_zaadinkoop:laad("ta_zaadinkoop",[]),
                   ta_bedrijf:laad("ta_bedrijf",{}),ta_realisatie:laad("ta_realisatie",{}),
-                  ta_traykosten:laad("ta_traykosten",{}),ta_leveranciers:laad("ta_leveranciers",[]),ta_uitval:laad("ta_uitval",[]),ta_zaaitray_data:JSON.parse(localStorage.getItem("ta_zaaitray_data")||"{}"),
+                  ta_traykosten:laad("ta_traykosten",{}),ta_leveranciers:laad("ta_leveranciers",[]),ta_uitval:laad("ta_uitval",[]),ta_zaaitray_data:JSON.parse(localStorage.getItem("ta_zaaitray_data")||"{}"),ta_transporteurs:laad("ta_transporteurs",[]),
                 };
                 const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
                 const url=URL.createObjectURL(blob);
@@ -43658,10 +43803,148 @@ function maakKarStickersGroot(wk, alleOrders, klanten) {
   } catch(e) {}
 }
 
+// ── Transportaanvraag: concept-mail (met tabel + logo) klaarzetten in Gmail via het bestaande mail-script ──
+function TransportaanvraagModal({ opdracht, transporteurs, bedrijf, onSluit }) {
+  const { o, kl, traysA, verdA } = opdracht;
+
+  function fmtDatumKort(d){
+    if(!d) return "";
+    const dt = new Date(d);
+    return String(dt.getDate()).padStart(2,"0")+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getFullYear()).slice(-2);
+  }
+  function dagNaam(d){
+    if(!d) return "";
+    const namen=["zondag","maandag","dinsdag","woensdag","donderdag","vrijdag","zaterdag"];
+    return namen[new Date(d).getDay()];
+  }
+  function fmtTijd(t){
+    if(!t) return "";
+    return t.replace(":",".")+" uur";
+  }
+
+  const standaard = (()=>{ try{ return JSON.parse(localStorage.getItem("ta_transport_form_defaults")||"{}"); }catch(e){ return {}; } })();
+
+  const [transporteurId, setTransporteurId] = useState(transporteurs[0]?.id || "");
+  const [datum, setDatum] = useState(o.transportDatum ? fmtDatumKort(o.transportDatum) : "");
+  const [weeknr, setWeeknr] = useState(o.leverdatum ? String(getWeekNr(o.leverdatum)) : "");
+  const [dag, setDag] = useState(o.transportDatum ? dagNaam(o.transportDatum) : "");
+  const [tijd, setTijd] = useState(o.klaartijd ? fmtTijd(o.klaartijd) : "");
+  const [aantalCc, setAantalCc] = useState(verdA?String(verdA.k):"");
+  const [klantVeld, setKlantVeld] = useState(kl.naam||"");
+  const [afleverAdres, setAfleverAdres] = useState(standaard.afleverAdres||"");
+  const [transportkosten, setTransportkosten] = useState(standaard.transportkosten||"");
+  const [ophaalAdres, setOphaalAdres] = useState(standaard.ophaalAdres || [bedrijf?.adres,bedrijf?.postcode,bedrijf?.plaats].filter(Boolean).join(" "));
+  const [afzenderNaam, setAfzenderNaam] = useState(standaard.afzenderNaam||"");
+  const [whatsapp, setWhatsapp] = useState(standaard.whatsapp||"");
+  const [status, setStatus] = useState("");
+  const [bezig, setBezig] = useState(false);
+
+  const transporteur = transporteurs.find(t=>t.id===transporteurId);
+  const veld = (lbl, val, setVal, breedte) => (
+    <div style={{...gs.veldGroep, flex:breedte?"0 0 "+breedte+"px":"1 1 160px"}}>
+      <label style={gs.label}>{lbl}</label>
+      <input style={gs.input} value={val} onChange={e=>setVal(e.target.value)} />
+    </div>
+  );
+
+  function maakConcept(){
+    if(!transporteur || !transporteur.email){ alert("Kies een transporteur met een e-mailadres."); return; }
+    const scriptUrl = localStorage.getItem("ta_transport_scripturl")||"";
+    if(!scriptUrl){ alert("Nog geen Apps Script URL ingesteld voor transportaanvragen. Ga naar ⚙️ Instellingen → Transporteurs."); return; }
+
+    localStorage.setItem("ta_transport_form_defaults", JSON.stringify({afleverAdres, transportkosten, ophaalAdres, afzenderNaam, whatsapp}));
+
+    const th = "border:1px solid #999;padding:5px 8px;color:#7c2d12;font-style:italic;text-align:left;background:#faf5f0";
+    const td = "border:1px solid #999;padding:5px 8px";
+    const legeRij = "<tr>"+Array(8).fill("<td style='"+td+"'>&nbsp;</td>").join("")+"</tr>";
+    const html =
+      "<div style='font-family:Arial,sans-serif;font-size:13px;color:#222'>"
+      +"<p>Goedemorgen Mijnheer, Mevrouw.</p>"
+      +"<p>Graag willen wij het volgende transport aanvragen:</p>"
+      +"<table style='border-collapse:collapse;width:100%;font-size:12px;margin-bottom:14px'>"
+        +"<tr>"
+          +"<th style='"+th+"'>Datum:</th><th style='"+th+"'>Weeknr:</th><th style='"+th+"'>Dag:</th><th style='"+th+"'>Tijd:</th>"
+          +"<th style='"+th+"'>Aantal cc:</th><th style='"+th+"'>Klant:</th><th style='"+th+"'>Afleveradres:</th><th style='"+th+"'>Transportkosten:</th>"
+        +"</tr>"
+        +"<tr>"
+          +"<td style='"+td+"'>"+datum+"</td><td style='"+td+"'>"+weeknr+"</td><td style='"+td+"'>"+dag+"</td><td style='"+td+"'>"+tijd+"</td>"
+          +"<td style='"+td+"'>"+aantalCc+"</td><td style='"+td+"'>"+klantVeld+"</td><td style='"+td+"'>"+afleverAdres+"</td><td style='"+td+"'>"+transportkosten+"</td>"
+        +"</tr>"
+        +legeRij+legeRij+legeRij
+      +"</table>"
+      +(ophaalAdres?"<p>Op te halen op "+ophaalAdres+"</p>":"")
+      +"<p>Graag een bevestiging.</p>"
+      +"<p>Met vriendelijke groet,</p>"
+      +(afzenderNaam?"<p>"+afzenderNaam+"</p>":"")
+      +"<p>"+(bedrijf?.email?"<a href='mailto:"+bedrijf.email+"'>"+bedrijf.email+"</a><br/>":"")
+        +(whatsapp?"<strong style='color:#dc2626'>Whatsapp: "+whatsapp+"</strong>":"")+"</p>"
+      +(bedrijf?.logo?"<img src='"+bedrijf.logo+"' style='max-width:220px;margin-top:8px'/>":"")
+      +"</div>";
+
+    const onderwerp = "Transportaanvraag "+(klantVeld||"")+" — week "+weeknr;
+
+    setBezig(true);
+    setStatus("📧 Concept aanmaken...");
+    fetch(scriptUrl, {method:"POST", mode:"no-cors", headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body: JSON.stringify({to_email: transporteur.email, onderwerp, html})
+    }).then(()=>{
+      setStatus("✅ Concept klaargezet in Gmail (map Concepten)");
+      setTimeout(()=>onSluit(),1200);
+    }).catch(err=>{
+      setBezig(false);
+      setStatus("⚠️ Fout: "+err.message);
+    });
+  }
+
+  return (
+    <div style={gs.overlay}>
+      <div style={{...gs.modal, width:540, maxHeight:"88vh", overflowY:"auto"}}>
+        <div style={gs.modalTitel}>📧 Transportaanvraag</div>
+        <div style={{fontSize:11,color:subtekst,marginBottom:10}}>
+          Wordt als concept (draft) klaargezet in Gmail — je controleert en verstuurt 'm zelf.
+        </div>
+
+        <div style={gs.veldGroep}>
+          <label style={gs.label}>Transporteur</label>
+          <select style={gs.input} value={transporteurId} onChange={e=>setTransporteurId(e.target.value)}>
+            {transporteurs.map(t=><option key={t.id} value={t.id}>{t.naam}{t.email?" ("+t.email+")":" — geen e-mailadres!"}</option>)}
+          </select>
+        </div>
+
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          {veld("Datum", datum, setDatum, 90)}
+          {veld("Weeknr", weeknr, setWeeknr, 70)}
+          {veld("Dag", dag, setDag, 100)}
+          {veld("Tijd", tijd, setTijd, 90)}
+          {veld("Aantal cc", aantalCc, setAantalCc, 80)}
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          {veld("Klant", klantVeld, setKlantVeld)}
+          {veld("Afleveradres", afleverAdres, setAfleverAdres)}
+          {veld("Transportkosten", transportkosten, setTransportkosten, 130)}
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          {veld("Op te halen op", ophaalAdres, setOphaalAdres)}
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          {veld("Naam ondertekening", afzenderNaam, setAfzenderNaam)}
+          {veld("WhatsApp", whatsapp, setWhatsapp, 140)}
+        </div>
+
+        <div style={{display:"flex",gap:8,marginTop:14}}>
+          <button style={gs.knopPrimair} disabled={bezig} onClick={maakConcept}>📧 Concept maken in Gmail</button>
+          <button style={gs.knopSecundair} onClick={onSluit}>Annuleren</button>
+        </div>
+        {status && <div style={{fontSize:12,marginTop:8,fontWeight:600,color: status.startsWith("⚠️")?"#dc2626":groenTekst}}>{status}</div>}
+      </div>
+    </div>
+  );
+}
+
 // ════════════════════════════════════════════════════════
 // AFLEVEREN (nieuwe tab — indeling klaar, inhoud volgt later)
 // ════════════════════════════════════════════════════════
-function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecteerdWeek, highlightOrderId }) {
+function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecteerdWeek, highlightOrderId, transporteurs }) {
   const groenA = "#2d6a4f", lichtGroenA = "#e8f5ee", randA = "#b9c6bf", subtekstA = "#6b7d74", witA = "#f3efe6";
   // Van/tot-filter onthouden in localStorage — Afleveren wordt bij het wisselen van tab volledig ontkoppeld (unmount), dus React state alleen is niet genoeg.
   const [filtVanA, setFiltVanA] = useState(()=>{ try{return localStorage.getItem("ta_afleveren_filtVan")||"";}catch(e){return "";} });
@@ -43670,6 +43953,7 @@ function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecte
   useEffect(()=>{ try{localStorage.setItem("ta_afleveren_filtTot", filtTotA||"");}catch(e){} }, [filtTotA]);
   const [gekozenWeekA, setGekozenWeekA] = useState(voorgeselecteerdWeek || null);
   const [gemarkeerdOrderId, setGemarkeerdOrderId] = useState(highlightOrderId || null);
+  const [transportFormOrder, setTransportFormOrder] = useState(null); // {o, kl, traysA, verdA} — order waarvoor het transportaanvraag-formulier open staat
   const nu2A = new Date();
 
   // ── Rode stip: al afgedrukt voor deze week? (zelfde opzet als bij Werklijst) ──
@@ -43888,13 +44172,19 @@ function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecte
                         {(()=>{
                           const traysA = (o.regels||[]).reduce((s,r)=>s+(r.aantal||0),0);
                           const verdA = _berekenKarrenGroot(traysA);
-                          return (
+                          return (<>
+                            <button title="Transportaanvraag als conceptmail in Gmail klaarzetten"
+                              style={{background:"#e0f2fe",color:"#0369a1",border:"1px solid #0369a1",borderRadius:5,padding:"5px 8px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}
+                              onClick={()=>{
+                                if(!(transporteurs||[]).length){ alert("Nog geen transporteurs ingesteld. Ga naar ⚙️ Instellingen."); return; }
+                                setTransportFormOrder({o, kl, traysA, verdA});
+                              }}>📧 Transportaanvraag</button>
                             <div style={{display:"flex",alignItems:"center",gap:10,fontSize:11,color:groenA,whiteSpace:"nowrap",marginLeft:"auto"}}>
                               <span title="Aantal trays"><strong>{traysA}</strong> trays</span>
                               <span title="Aantal karren"><strong>{verdA?verdA.k:"—"}</strong> {verdA&&verdA.k===1?"kar":"karren"}</span>
                               <span title="Karindeling" style={{color:subtekstA}}>{_karOmschrijvingGroot(verdA)}</span>
                             </div>
-                          );
+                          </>);
                         })()}
                       </div>
                     );
@@ -43904,6 +44194,10 @@ function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecte
             })()
         }
       </div>
+      {transportFormOrder &&
+        <TransportaanvraagModal opdracht={transportFormOrder} transporteurs={transporteurs||[]} bedrijf={bedrijf}
+          onSluit={()=>setTransportFormOrder(null)} />
+      }
     </div>
   );
 }
@@ -44015,6 +44309,10 @@ function App() {
   const [werklijstVoorkeuze, setWerklijstVoorkeuze] = useState(null);
   const [orderOmTeOpenen, setOrderOmTeOpenen] = useState(null);
   const [orderRegelOmTeMarkeren, setOrderRegelOmTeMarkeren] = useState(null);
+  // Telt elke keer mee op bij een nieuwe "open order"-actie, ook als het dezelfde order/regel betreft —
+  // zonder dit blijft React soms hangen (geen state-wijziging) en opent/highlight de order niet opnieuw,
+  // waardoor terugkeren met Backspace daarna niet meer lukt.
+  const [orderOpenTrigger, setOrderOpenTrigger] = useState(0);
   const navigeer = (np) => {
     if (pagina === "orders" && window.__taOrdersGewijzigd) {
       if (window.confirm("Er zijn onopgeslagen wijzigingen in de order. Wilt u opslaan?\n\nOK = Opslaan\nAnnuleren = Wijzigingen weggooien")) {
@@ -44130,6 +44428,7 @@ function App() {
       setOrderOmTeOpenen(e.detail?.orderId);
       setOrderRegelOmTeMarkeren(e.detail?.markeer || null);
       setAfleverTerugWeek(e.detail?.terugNaarAfleverWeek || null);
+      setOrderOpenTrigger(t => t + 1);
       navigeer("orders");
     }
     window.addEventListener("ta-open-order", onOpenOrder);
@@ -44193,6 +44492,7 @@ function App() {
   const [uitval, setUitval] = useState(() => laad("ta_uitval", []));
   const [traykosten, setTraykosten] = useState(() => laad("ta_traykosten", {}));
   const [leveranciers, setLeveranciers] = useState(() => laad("ta_leveranciers", []));
+  const [transporteurs, setTransporteurs] = useState(() => laad("ta_transporteurs", []));
   const [bedrijf, setBedrijf] = useState(() => laad("ta_bedrijf", {
     naam: "Uw Bedrijfsnaam BV",
     adres: "Straatnaam 1",
@@ -44273,6 +44573,7 @@ function App() {
             <tr style="background:#f0f7f3;"><td style="padding:5px 8px;font-weight:700;color:#2d6a4f;">Alt+O</td><td style="padding:5px 8px;">Naar Orders → klant kiezen</td></tr>
             <tr><td style="padding:5px 8px;font-weight:700;color:#2d6a4f;">Alt+W</td><td style="padding:5px 8px;">Naar Werklijsten</td></tr>
             <tr style="background:#f0f7f3;"><td style="padding:5px 8px;font-weight:700;color:#2d6a4f;">Alt+Z</td><td style="padding:5px 8px;">Naar Zaadinkoop</td></tr>
+            <tr style="background:#f0f7f3;"><td style="padding:5px 8px;font-weight:700;color:#2d6a4f;">A</td><td style="padding:5px 8px;">In Orders (order open): versneld naar Afleveren (met highlight)</td></tr>
             <tr><td style="padding:5px 8px;font-weight:700;color:#2d6a4f;">C</td><td style="padding:5px 8px;">Getalveld op 0 zetten en selecteren</td></tr>
             <tr style="background:#f0f7f3;"><td style="padding:5px 8px;font-weight:700;color:#2d6a4f;">G</td><td style="padding:5px 8px;">Grote weergave aan/uit (Orders &amp; Werklijsten)</td></tr>
             <tr><td style="padding:5px 8px;font-weight:700;color:#2d6a4f;">↑ / ↓</td><td style="padding:5px 8px;">In Orders: door de orderlijst bladeren</td></tr>
@@ -44385,7 +44686,8 @@ function App() {
   useEffect(() => {
     if (!geladen) return;
     bewaar("ta_leveranciers", leveranciers);
-  }, [leveranciers]);
+    bewaar("ta_transporteurs", transporteurs);
+  }, [leveranciers, transporteurs]);
   const [geladen, setGeladen] = useState(false);
   const [backupHerinnering, setBackupHerinnering] = useState(false);
   const [scriptHerinnering, setScriptHerinnering] = useState(false);
@@ -44409,7 +44711,8 @@ function App() {
       ta_leveranciers: laad("ta_leveranciers", []),
       ta_uitval: laad("ta_uitval", []),
       ta_zaaitray_data: JSON.parse(localStorage.getItem("ta_zaaitray_data")||"{}"),
-      ta_medewerkers: laad("ta_medewerkers", [])
+      ta_medewerkers: laad("ta_medewerkers", []),
+      ta_transporteurs: laad("ta_transporteurs", [])
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], {
       type: "application/json"
@@ -45028,6 +45331,7 @@ function App() {
     realisatie: realisatie,
     orderOmTeOpenen: orderOmTeOpenen,
     orderRegelOmTeMarkeren: orderRegelOmTeMarkeren,
+    orderOpenTrigger: orderOpenTrigger,
     huidigePagina: pagina,
     afleverTerugWeek: afleverTerugWeek
   })), pagina === "klanten" && /*#__PURE__*/React.createElement(Klantenbeheer, {
@@ -45206,7 +45510,8 @@ function App() {
     bedrijf: bedrijf,
     verpDef: verpDef,
     voorgeselecteerdWeek: afleverVoorkeuzeWeek || afleverTerugWeek,
-    highlightOrderId: afleverHighlightOrderId
+    highlightOrderId: afleverHighlightOrderId,
+    transporteurs: transporteurs
   }), pagina === "zaadinkoop" && /*#__PURE__*/React.createElement(Zaadinkoop, {
     gewassen: gewassen,
     zaadinkoop: zaadinkoop,
@@ -45257,6 +45562,8 @@ function App() {
     setOrders: setOrders,
     medewerkers: medewerkers,
     setMedewerkers: setMedewerkers,
+    transporteurs: transporteurs,
+    setTransporteurs: setTransporteurs,
     prijzen: prijzen,
     setPrijzen: setPrijzen,
     kiemkracht: kiemkracht,

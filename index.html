@@ -25695,10 +25695,10 @@ function App() {
   const wijzTellerRef = React.useRef(0);
   function telWijziging() {
     wijzTellerRef.current += 1;
-    if (wijzTellerRef.current >= 10) {
+    if (wijzTellerRef.current >= 20) {
       wijzTellerRef.current = 0;
       setTimeout(() => {
-        if (window.confirm("💾 Tijd voor een backup!\n\nJe hebt 10 wijzigingen gemaakt.\nWil je nu een backup downloaden?")) {
+        if (window.confirm("💾 Tijd voor een backup!\n\nJe hebt 20 wijzigingen gemaakt.\nWil je nu een backup downloaden?")) {
           const data = {
             ta_orders: laad("ta_orders", []),
             ta_klanten: laad("ta_klanten", []),
@@ -32688,7 +32688,8 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                     }
                   });
                   if(stickers.length===0){ alert("Geen regels gevonden voor deze lijst."); return; }
-                  printStickersGroot(stickers);
+                  // Printer Z410 — labelformaat 50×20mm, staand afgedrukt
+                  printStickersGroot(stickers, {size:"20mm 50mm", padding:"1mm", fontSize:7, fontAccent:8});
                   markeerAfgedrukt(blokKey,"stickers");
                 }}>Stickers<AfdrukStip actief={afgedrukt[blokKey]?.stickers}/></button>
             </>}
@@ -43598,18 +43599,19 @@ function printKarindelingGroot(wk, alleOrders, klanten, verpDef, bedrijf) {
   if(w){w.document.open();w.document.write(doc);w.document.close();setTimeout(()=>w.print(),400);}
 }
 
-// ── Stickers rechtstreeks naar de printer (i.p.v. Excel-download) — 1 sticker per pagina/label, zelfde print-venster-aanpak als de andere afdrukknoppen ──
-function printStickersGroot(stickers) {
+// ── Stickers rechtstreeks naar de printer (i.p.v. Excel-download) — 1 sticker per pagina/label, formaat per labelprinter instelbaar ──
+function printStickersGroot(stickers, opts) {
+  const o = Object.assign({size:"50mm 20mm", padding:"1mm", fontSize:7, fontAccent:8}, opts||{});
   const items = stickers.map(s=>
     "<div class='sticker'>"+s.map(r=>"<div class='sr'>"+r+"</div>").join("")+"</div>"
   ).join("");
   const doc = "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
-    +"<style>@page{margin:0} html,body{margin:0;padding:0;font-family:Arial,sans-serif} "
-    +".sticker{width:100%;box-sizing:border-box;padding:6mm;text-align:center;"
+    +"<style>@page{size:"+o.size+";margin:0} html,body{margin:0;padding:0;font-family:Arial,sans-serif;width:100%;height:100%}"
+    +".sticker{width:100%;height:100vh;box-sizing:border-box;padding:"+o.padding+";text-align:center;"
       +"display:flex;flex-direction:column;align-items:center;justify-content:center;"
       +"page-break-after:always;break-after:page;page-break-inside:avoid} "
     +".sticker:last-child{page-break-after:auto;break-after:auto} "
-    +".sr{font-size:15px;line-height:1.35;color:#222} .sr:first-child{font-weight:700;font-size:18px} .sr:last-child{font-weight:700} "
+    +".sr{font-size:"+o.fontSize+"px;line-height:1.2;color:#222} .sr:first-child{font-weight:700;font-size:"+o.fontAccent+"px} .sr:last-child{font-weight:700} "
     +"@media print{button{display:none}}</style></head><body>"
     +items+"</body></html>";
   const w=window.open("","_blank");
@@ -43633,7 +43635,8 @@ function maakKarStickersGroot(wk, alleOrders, klanten) {
     }
   });
   if(stickers.length===0){ alert("Geen karren gevonden voor deze week."); return; }
-  printStickersGroot(stickers);
+  // Printer Z400 — labelformaat 30×40mm
+  printStickersGroot(stickers, {size:"30mm 40mm", padding:"2mm", fontSize:11, fontAccent:13});
 }
 
 // ════════════════════════════════════════════════════════
@@ -44181,10 +44184,10 @@ function App() {
   const wijzTellerRef = React.useRef(0);
   function telWijziging() {
     wijzTellerRef.current += 1;
-    if (wijzTellerRef.current >= 10) {
+    if (wijzTellerRef.current >= 20) {
       wijzTellerRef.current = 0;
       setTimeout(() => {
-        if (window.confirm("💾 Tijd voor een backup!\n\nJe hebt 10 wijzigingen gemaakt.\nWil je nu een backup downloaden?")) {
+        if (window.confirm("💾 Tijd voor een backup!\n\nJe hebt 20 wijzigingen gemaakt.\nWil je nu een backup downloaden?")) {
           const data = {
             ta_orders: laad("ta_orders", []),
             ta_klanten: laad("ta_klanten", []),

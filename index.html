@@ -26589,11 +26589,6 @@ function App() {
   }), pagina === "afleveroverzicht" && /*#__PURE__*/React.createElement(AfleverOverzicht, {
     klanten: klanten,
     orders: orders
-  }), pagina === "transport" && /*#__PURE__*/React.createElement(TransportPagina, {
-    klanten: klanten,
-    orders: orders,
-    bedrijf: bedrijf,
-    verpDef: verpDef
   }), pagina === "weekoverzicht" && /*#__PURE__*/React.createElement(Weekoverzicht, {
     klanten: klanten,
     gewassen: gewassen,
@@ -27797,7 +27792,7 @@ function PrijsVeldRegel({ waarde, onSave, stijl, type="number", min="0", step="0
   const [val, setVal] = useState(waarde??'');
   useEffect(()=>setVal(waarde??''), [waarde, resetKey]);
   return (
-    <input style={{...stijl,background:val!==''&&val!==undefined?"#fafffe":"#fff"}}
+    <input style={{...stijl,background:val!==''&&val!==undefined?"#f3efe6":"#fff"}}
       type={type} step={step} min={min} placeholder="—"
       value={val}
       onFocus={e=>e.target.select()}
@@ -27843,10 +27838,10 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
   function upd(k,v){ if(onUpdate) onUpdate({...r,[k]:v}); }
   // kernvelden krijgen waarschuwing, vrije velden (nummers/datum) altijd direct
   const kernVelden = ["gewas","soort","verpakking","aantal","prijs"];
-  const cel  = {padding:"3px 5px",fontSize:16,borderBottom:`1px solid ${rand}`,verticalAlign:"middle"};
+  const cel  = {padding:"5px 8px",fontSize:15,fontFamily:"Arial, sans-serif",border:"1px solid #ccc",verticalAlign:"middle"};
   const celR = {...cel,textAlign:"right"};
   // Inline input stijl — past in de cel, geen border als niet-bewerkbaar
-  const inp  = (w)=>({padding:"2px 4px",border:`1px solid ${rand}`,borderRadius:3,fontSize:16,width:w,background:"#fafffe"});
+  const inp  = (w)=>({padding:"2px 4px",border:`1px solid ${rand}`,borderRadius:3,fontSize:16,width:w,background:"#f3efe6"});
   const soorten = gewassen?.find(g=>g.naam===r.gewas)?.soorten||[];
   const veldLabel = {"gewas":"Gewas","soort":"Soort","verpakking":"Fust","aantal":"Trays","prijs":"Prijs"};
   // ── Werklijst-koppeling: verschil tussen werkelijk (werklijst) en deze order ──
@@ -27894,7 +27889,7 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
         </div>
       </td></tr>
     )}
-    <tr style={{lineHeight:1.3,whiteSpace:"nowrap",background:gemarkeerd?"#bfe3fa":(i==null?"transparent":(i%2===0?wit:"#cfe6d8")),transition:"background 0.6s"}} onMouseEnter={e=>{e.currentTarget.style.background="#ffe082";onActief&&onActief();}} onMouseLeave={e=>e.currentTarget.style.background=gemarkeerd?"#bfe3fa":(i==null?"transparent":(i%2===0?wit:"#cfe6d8"))}>
+    <tr style={{lineHeight:1.3,whiteSpace:"nowrap",fontFamily:"Arial, sans-serif",background:gemarkeerd?"#bfe3fa":(i==null?"transparent":"#f3efe6"),transition:"background 0.6s"}} onMouseEnter={e=>{e.currentTarget.style.background="#ffe082";onActief&&onActief();}} onMouseLeave={e=>e.currentTarget.style.background=gemarkeerd?"#bfe3fa":(i==null?"transparent":"#f3efe6")}>
       {/* Gewas */}
       <td style={cel}>{bewerkbaar
         ? <select style={inp(110)} value={r.gewas} onChange={e=>{
@@ -27928,7 +27923,7 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
               <input
                 style={{...inp(55), textAlign:"center",
                   borderColor: tijdelijkNr ? (nrLookup[tijdelijkNr]?"#2d6a4f":"#ef4444") : rand,
-                  background: tijdelijkNr && nrLookup[tijdelijkNr] ? "#f0fff4" : (tijdelijkNr?"#fef2f2":"#fafffe"),
+                  background: tijdelijkNr && nrLookup[tijdelijkNr] ? "#f0fff4" : (tijdelijkNr?"#fef2f2":"#f3efe6"),
                   fontWeight:600, color: tijdelijkNr && !nrLookup[tijdelijkNr] ? "#ef4444" : "#2d6a4f"}}
                 value={tijdelijkNr || huidigNr}
                 placeholder="nr"
@@ -27995,7 +27990,7 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
       {/* Vast — bevestigd plantenaantal */}
       <td style={{...celR,fontWeight:600}}>
         {bewerkbaar
-          ? <input style={{...inp(70),textAlign:"right",background:status==="reservering"?"#f3f4f6":"#fff9e6",borderColor:status==="reservering"?rand:"#f59e0b"}}
+          ? <input style={{...inp(70),textAlign:"right",background:status==="reservering"?"#f3f4f6":"#fdedb3",borderColor:status==="reservering"?rand:"#f59e0b"}}
               type="number" min="0"
               value={status==="reservering" ? "" : (r.vastPlanten??"")}
               readOnly={status==="reservering"}
@@ -28233,6 +28228,7 @@ function WeekGroep({ wk, weekOrders, klanten, ges, verpDef, onOpen, onKopie, pla
   );
 
   const alBetaald = weekOrders.length>0 && weekOrders.every(o=>o.betaaldOp);
+  const isGeopend = !!ges && weekOrders.some(o=>o.id===ges.id);
 
   return (
     <div style={{marginBottom:4}}>
@@ -28242,7 +28238,8 @@ function WeekGroep({ wk, weekOrders, klanten, ges, verpDef, onOpen, onKopie, pla
         title={alBetaald?"Betaald":""}
         style={{display:"flex",justifyContent:"space-between",alignItems:"center",
         padding:"5px 8px",background:"#d4e8dc",borderRadius:4,cursor:"pointer",marginBottom:2,outline:"none",
-        border:alBetaald?"2px solid #dc2626":"2px solid transparent"}}
+        border: isGeopend ? "2px solid #1a1a1a" : (alBetaald?"2px solid #dc2626":"2px solid transparent"),
+        borderBottom: isGeopend ? "2px solid #1a1a1a" : (alBetaald?"2px solid #dc2626":"2px solid #f3efe6")}}
         onFocus={e=>e.currentTarget.style.outline="2px solid #2d6a4f"}
         onBlur={e=>e.currentTarget.style.outline="none"}>
         <span style={{fontWeight:700,fontSize:12,color:"#1e3a2f",letterSpacing:0.5,display:"flex",alignItems:"center",gap:6}}>
@@ -28682,7 +28679,7 @@ function MatrixFilterPaneel({ klanten, gewassen, orders, verpDef, weken }) {
 </script>
 <script type="text/babel" data-presets="react">
 
-function DupModal({ data, klanten, orders, WEKEN, gs, groen, subtekst, onSluit, onKopieer }) {
+function DupModal({ data, klanten, orders, WEKEN, verpDef, gs, groen, subtekst, onSluit, onKopieer }) {
   const [dupWk, setDupWk] = useState(data.leverdatum||"");
   const [metPrijs, setMetPrijs] = useState(true);
   const [metNotitie, setMetNotitie] = useState(false);
@@ -28737,7 +28734,16 @@ function DupModal({ data, klanten, orders, WEKEN, gs, groen, subtekst, onSluit, 
         <div style={{display:"flex",gap:6}}>
           <button style={{...gs.knopSecundair,flex:1,fontSize:11}} onClick={onSluit}>Annuleren</button>
           <button style={{...gs.knopPrimair,flex:1,fontSize:11}} onClick={()=>{
-            const regels = data.regels.filter((_,i)=>selRegels.includes(i)).map(r=>({...r, prijs: metPrijs ? r.prijs : ""}));
+            // Order al vastgezet? Dan de vastgezette (bevroren) aantallen meekopiëren i.p.v. de mogelijk nadien gewijzigde leveringen.
+            const isVastgezet = !!data.bevestigingNr;
+            const regels = data.regels.filter((_,i)=>selRegels.includes(i)).map(r=>{
+              let aantal = r.aantal;
+              if(isVastgezet && r.vastPlanten!=null){
+                const vd = verpDef.find(v=>v.naam===r.verpakking);
+                if(vd?.aantal) aantal = Math.round(r.vastPlanten / vd.aantal);
+              }
+              return {...r, aantal, vastPlanten:null, prijs: metPrijs ? r.prijs : ""};
+            });
             onKopieer({...data,
               id:Date.now(),
               leverdatum: dupWk,
@@ -28759,7 +28765,7 @@ function DupModal({ data, klanten, orders, WEKEN, gs, groen, subtekst, onSluit, 
   );
 }
 
-function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, verpDef, bedrijf, teeltduur=[], kiemkracht=[], realisatie, orderOmTeOpenen, orderRegelOmTeMarkeren, huidigePagina }) {
+function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, verpDef, bedrijf, teeltduur=[], kiemkracht=[], realisatie, orderOmTeOpenen, orderRegelOmTeMarkeren, huidigePagina, afleverTerugWeek }) {
   const wit = "#f3efe6"; // gebroken wit, alleen in dit scherm
   const WEKEN = weekOpties();
   const verpNamen = verpDef.map(v=>v.naam);
@@ -28840,6 +28846,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
   const [klantZoek,setKlantZoek]=useState(""); const [klantZoekOpen,setKlantZoekOpen]=useState(false); const [toonAlleKlanten,setToonAlleKlanten]=useState(false); const refKlantZoek=React.useRef(); const refKlantLijst=React.useRef();
   const [toonKlantInfo,setToonKlantInfo]=useState(false);
   const letterCycleRef=React.useRef({letter:"",idx:0});
+  const stilFocusRef=React.useRef(false); // true = volgende focus op klant-zoekveld mag géén dropdown openen (bv. bij starten/terugkeren naar Orders)
   const [kopO,setKopO]=useState(null); const [kopODat,setKopODat]=useState(defWeek.datum);
   const [kopR,setKopR]=useState(null); const [kopRDoel,setKopRDoel]=useState("");
   const [actieveRegelId,setActieveRegelId]=useState(null);
@@ -28854,7 +28861,9 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
   const [calcOpen,setCalcOpen]=useState(false);
   const [calcGewenst,setCalcGewenst]=useState("");
   const [nieuweRegelOpen,setNieuweRegelOpen]=useState(false);
+  const [aflevergegevensOpen,setAflevergegevensOpen]=useState(false);
   const [matrixWeergave,setMatrixWeergave]=useState("vast"); // vast | planten | verschil
+  const [seizoenEenheid,setSeizoenEenheid]=useState("aantal"); // aantal | trays
   const [excelPreview,setExcelPreview]=useState(null); // null of array met rijen
   const excelInputRef = React.useRef(null);
 
@@ -29958,6 +29967,21 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
     if(w){w.document.open();w.document.write(doc);w.document.close();setTimeout(()=>w.print(),400);}
   }
 
+  // ── Afdrukken vanuit de Afleveren-tab (die zelf geen printlogica heeft) ──
+  useEffect(()=>{
+    function onPrintPakbon(e){ if(e.detail) drukPakbon(e.detail); }
+    function onPrintAfleverbon(e){ if(e.detail) drukAfleverbon(e.detail); }
+    function onPrintFactuur(e){ if(e.detail) drukFactuur(e.detail); }
+    window.addEventListener("ta-print-pakbon", onPrintPakbon);
+    window.addEventListener("ta-print-afleverbon", onPrintAfleverbon);
+    window.addEventListener("ta-print-factuur", onPrintFactuur);
+    return ()=>{
+      window.removeEventListener("ta-print-pakbon", onPrintPakbon);
+      window.removeEventListener("ta-print-afleverbon", onPrintAfleverbon);
+      window.removeEventListener("ta-print-factuur", onPrintFactuur);
+    };
+  }, []);
+
   function mailFactuur(order) {
     const kl = klanten.find(k=>k.id===order.klantId)||{};
     const bd = bedrijf||{};
@@ -30301,20 +30325,52 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
     function onKeyBackspaceTerug(e){
       if(e.key!=="Backspace") return;
       if(huidigePagina!==undefined && huidigePagina!=="orders") return;
-      if(!form) return;
       const tag = document.activeElement?.tagName;
       if(tag==="INPUT"||tag==="SELECT"||tag==="TEXTAREA") return;
+      if(showMatrix){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        setShowMatrix(false);
+        return;
+      }
+      if(!form) return;
       e.preventDefault();
       e.stopImmediatePropagation();
+      if(afleverTerugWeek){
+        checkGewijzigd(()=>{
+          setForm(false);
+          window.dispatchEvent(new CustomEvent("ta-navigeer-pagina",{detail:{pagina:"afleveren"}}));
+        });
+        return;
+      }
       checkGewijzigd(()=>setForm(false));
     }
     window.addEventListener("keydown", onKeyBackspaceTerug, true);
     return ()=>window.removeEventListener("keydown", onKeyBackspaceTerug, true);
-  }, [huidigePagina, form]);
+  }, [huidigePagina, form, showMatrix, afleverTerugWeek]);
+
+  // ── Sneltoets S = Seizoensoverzicht openen/sluiten ──
+  useEffect(()=>{
+    function onKeySeizoen(e){
+      if(e.key!=="s"&&e.key!=="S") return;
+      if(huidigePagina!==undefined && huidigePagina!=="orders") return;
+      const tag = document.activeElement?.tagName;
+      if(tag==="INPUT"||tag==="SELECT"||tag==="TEXTAREA") return;
+      if(!filtK) return;
+      e.preventDefault();
+      setShowMatrix(v=>!v);
+    }
+    window.addEventListener("keydown", onKeySeizoen);
+    return ()=>window.removeEventListener("keydown", onKeySeizoen);
+  }, [huidigePagina, filtK]);
 
   // ── Focus terug naar klant-zoekveld als je terugkeert naar het Orders-tabblad ──
+  // Stil (geen dropdown open): direct met de 1e letter verder kunnen, geen halve lijst in beeld.
   useEffect(()=>{
-    if(huidigePagina==="orders") setTimeout(()=>refKlantZoek.current?.focus(),50);
+    if(huidigePagina==="orders"){
+      stilFocusRef.current = true;
+      setTimeout(()=>refKlantZoek.current?.focus(),50);
+    }
   },[huidigePagina]);
 
   return (
@@ -30343,14 +30399,17 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
             return (
               <div style={{position:"relative",marginBottom:6}}>
                 <div style={{display:"flex",gap:0}}>
-                <input ref={refKlantZoek} autoFocus
+                <input ref={refKlantZoek}
                   style={{...gs.input,fontSize:13,fontWeight:700,
                     color:geselecteerd?"#fff":groen,
                     background:geselecteerd?groen:"#e8f5ee",
                     borderColor:groen,borderRadius:"6px 0 0 6px",flex:1}}
                   placeholder="🔍 Typ of gebruik ▼"
                   value={klantZoekOpen?klantZoek:(geselecteerd?.naam||"")}
-                  onFocus={()=>{setKlantZoekOpen(true);setKlantZoek("");setToonAlleKlanten(false);}}
+                  onFocus={()=>{
+                    if(stilFocusRef.current){stilFocusRef.current=false;return;}
+                    setKlantZoekOpen(true);setKlantZoek("");setToonAlleKlanten(false);
+                  }}
                   onChange={e=>{setKlantZoek(e.target.value);setKlantZoekOpen(true);}}
                   onKeyDown={e=>{
                     if(e.key==="Escape"){setKlantZoekOpen(false);setKlantZoek("");return;}
@@ -30539,16 +30598,6 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
               <span style={{fontWeight:700,fontSize:12,color:groenTekst}}>
                 {klanten.find(k=>k.id===Number(filtK))?.naam}
               </span>
-              <button
-                style={{...gs.knopSecundair,fontSize:11,padding:"2px 10px",marginLeft:"auto"}}
-                onClick={()=>setShowMatrix(v=>!v)}>
-                {showMatrix ? "▲ Matrix sluiten" : "📊 Seizoensoverzicht"}
-              </button>
-              <button
-                style={{...gs.knopSecundair,fontSize:11,padding:"2px 10px",marginLeft:6,background:"#ea580c",color:"#fff",border:"none"}}
-                onClick={()=>window.dispatchEvent(new CustomEvent("ta-naar-prijzen",{detail:Number(filtK)}))}>
-                💰 Verkoopprijzen
-              </button>
             </div>
             {showMatrix && (()=>{
           const klantOrders = orders.filter(o=>o.klantId===Number(filtK));
@@ -30562,12 +30611,14 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
               const key = r.gewas+"||"+r.soort+"||"+r.verpakking+"||"+(r.prijs||"");
               if(!rijMap[key]) rijMap[key]={gewas:r.gewas,soort:r.soort,verpakking:r.verpakking,prijs:r.prijs,weken:{},status:{}};
               const vd = vindVd(verpDef,r.verpakking);
+              const vdAantal = vd?.aantal||1;
               const live = (vd?.aantal||0)*r.aantal;
               const vast = r.vastPlanten??null;
               let pl;
               if(matrixWeergave==="planten") pl = live;
               else if(matrixWeergave==="verschil") pl = vast!=null ? (live-vast) : null;
               else pl = vast??live; // vast (standaard)
+              if(pl!=null && seizoenEenheid==="trays") pl = pl/vdAantal;
               if(pl!=null) rijMap[key].weken[wk]=(rijMap[key].weken[wk]||0)+pl;
               rijMap[key].status[wk]=o.status;
               if(r.prijs) rijMap[key].prijs=r.prijs;
@@ -30579,87 +30630,97 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
           const grootTotaal = alleWkn.reduce((s,wk)=>s+totaalPerWeek(wk),0);
 
           const kl = klanten.find(k=>k.id===Number(filtK));
-          const cH={padding:"4px 6px",background:"#e8f0ea",color:"#1e3a2f",fontWeight:700,fontSize:10,border:"1px solid #c8ddd0",textAlign:"right",whiteSpace:"nowrap"};
-          const cL={padding:"4px 6px",background:"#e8f0ea",color:"#1e3a2f",fontWeight:700,fontSize:10,border:"1px solid #c8ddd0",textAlign:"left"};
-          const cD={padding:"3px 6px",fontSize:11,border:`1px solid ${rand}`,textAlign:"right"};
-          const cDL={padding:"3px 6px",fontSize:11,border:`1px solid ${rand}`,textAlign:"left"};
+          const fmtGetal = v => (seizoenEenheid==="trays" ? Math.round(v) : v).toLocaleString("nl-NL");
 
           if(rijen.length===0) return null;
 
           return (
-            <div style={{background:wit,borderBottom:`2px solid ${groen}`,padding:"8px 14px",flexShrink:0,maxHeight:"40vh",overflowY:"auto"}}>
-              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
-                <span style={{fontWeight:700,fontSize:13,color:groenTekst}}>{kl?.naam}</span>
-                <span style={{fontSize:11,color:subtekst}}>{alleWkn.length} weken · {grootTotaal.toLocaleString("nl-NL")} planten</span>
-                <div style={{display:"flex",gap:4,marginLeft:"auto"}}>
-                  {[["vast","Vast"],["planten","Levering"],["verschil","Verschil"]].map(([val,lbl])=>(
-                    <button key={val} onClick={()=>setMatrixWeergave(val)}
-                      style={{fontSize:11,padding:"3px 9px",borderRadius:4,border:"none",cursor:"pointer",
-                        background:matrixWeergave===val?groen:"#cfe6d8",
-                        color:matrixWeergave===val?"#fff":"#1e3a2f",fontWeight:600}}>
-                      {lbl}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div style={{overflowX:"auto"}}>
-                <table style={{borderCollapse:"collapse",fontSize:11,width:"100%"}}>
-                  <thead>
-                    <tr>
-                      <th style={{...cL,minWidth:100}}>Gewas</th>
-                      <th style={{...cL,minWidth:130}}>Soort</th>
-                      <th style={{...cL,minWidth:65}}>Fust</th>
-                      <th style={{...cH,minWidth:45}}>€/st</th>
-                      {alleWkn.map(wk=>(
-                        <th key={wk} style={{...cH,minWidth:60,
-                          background: ges&&weekLabel(ges.leverdatum)===wk?O_GEEL:"#e8f0ea",
-                          color: ges&&weekLabel(ges.leverdatum)===wk?"#333":"#1e3a2f"}}>
-                          {wk}
-                        </th>
-                      ))}
-                      <th style={{...cH,minWidth:65,background:"#c8e6c9"}}>Totaal</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rijen.map((r,i)=>(
-                      <tr key={i} style={{background:i%2===0?wit:"#cfe6d8"}}>
-                        <td style={cDL}><strong>{r.gewas}</strong></td>
-                        <td style={{...cDL,cursor:"pointer",textDecoration:"underline",textDecorationStyle:"dotted",textDecorationColor:"#9ca3af"}}
-                          title="Klik voor Dashboard van dit gewas/soort"
-                          onClick={()=>window.dispatchEvent(new CustomEvent("ta-naar-dashboard",{detail:{gewas:r.gewas,soort:r.soort}}))}>
-                          {r.soort}
-                        </td>
-                        <td style={cDL}><span style={gs.badge}>{r.verpakking}</span></td>
-                        <td style={{...cD,color:groenTekst}}>{r.prijs?"€"+Number(r.prijs).toFixed(3):"—"}</td>
-                        {alleWkn.map(wk=>{
-                          const v=r.weken[wk];
-                          const isVerschil=matrixWeergave==="verschil";
-                          return (
-                          <td key={wk} style={{...cD,
-                            fontWeight:v?600:300,
-                            color:!v?"#ccc":isVerschil?(v>0?"#16a34a":"#dc2626"):tekst,
-                            background: ges&&weekLabel(ges.leverdatum)===wk?O_GEEL_BG:"transparent"}}>
-                            {!v?"—":isVerschil?(v>0?"+"+v.toLocaleString("nl-NL"):v.toLocaleString("nl-NL")):v.toLocaleString("nl-NL")}
-                          </td>
-                          );
-                        })}
-                        <td style={{...cD,fontWeight:700,color:groenTekst,background:"#f0fff4"}}>{rijTotaal(r).toLocaleString("nl-NL")}</td>
-                      </tr>
+            <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",zIndex:500,overflowY:"auto",padding:20}}>
+              <div style={{maxWidth:"95vw",width:1300,margin:"0 auto",background:"#f3efe6",borderRadius:8,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,0.3)"}}>
+                <div style={{display:"flex",gap:10,padding:"10px 16px",background:"#cfe6d8",borderBottom:"1px solid #e2e8e4",alignItems:"center",flexWrap:"wrap"}}>
+                  <span style={{fontWeight:700,fontSize:16,color:groenTekst}}>{kl?.naam} — Seizoensoverzicht</span>
+                  <span style={{fontSize:12,color:subtekst}}>{alleWkn.length} weken · {fmtGetal(grootTotaal)} {seizoenEenheid==="trays"?"trays":"planten"}</span>
+                  <div style={{display:"flex",gap:4,marginLeft:"auto"}}>
+                    {[["aantal","Aantal"],["trays","Trays"]].map(([val,lbl])=>(
+                      <button key={val} onClick={()=>setSeizoenEenheid(val)}
+                        style={{fontSize:12,padding:"4px 10px",borderRadius:4,border:"none",cursor:"pointer",
+                          background:seizoenEenheid===val?groenTekst:"#fff",
+                          color:seizoenEenheid===val?"#fff":"#1e3a2f",fontWeight:600}}>
+                        {lbl}
+                      </button>
                     ))}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{background:"#e8f5ee",fontWeight:700}}>
-                      <td colSpan={4} style={{...cL,borderTop:`2px solid ${groen}`}}>Totaal</td>
-                      {alleWkn.map(wk=>(
-                        <td key={wk} style={{...cH,borderTop:`2px solid ${groen}`,
-                          background: ges&&weekLabel(ges.leverdatum)===wk?"#b7e4c7":"#e8f5ee"}}>
-                          {totaalPerWeek(wk).toLocaleString("nl-NL")}
-                        </td>
+                  </div>
+                  <div style={{display:"flex",gap:4}}>
+                    {[["vast","Vast"],["planten","Levering"],["verschil","Verschil"]].map(([val,lbl])=>(
+                      <button key={val} onClick={()=>setMatrixWeergave(val)}
+                        style={{fontSize:12,padding:"4px 10px",borderRadius:4,border:"none",cursor:"pointer",
+                          background:matrixWeergave===val?groen:"#fff",
+                          color:matrixWeergave===val?"#fff":"#1e3a2f",fontWeight:600}}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                  <button style={{background:"#f3efe6",color:"#1b1b1b",border:"1px solid #e2e8e4",borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:14}} onClick={()=>setShowMatrix(false)}>✕ Sluiten</button>
+                </div>
+                <div style={{padding:"20px 24px",fontFamily:"Arial, sans-serif",fontSize:15,background:"#f3efe6",maxHeight:"70vh",overflow:"auto"}}>
+                  <table style={{borderCollapse:"collapse",width:"100%"}}>
+                    <thead>
+                      <tr>
+                        <th style={{padding:"6px 10px",border:"1.5px solid #888",background:"#e0e0e0",textAlign:"left",fontSize:15,position:"sticky",top:0,left:0,zIndex:4,width:120,minWidth:120,maxWidth:120}}>Gewas</th>
+                        <th style={{padding:"6px 10px",border:"1.5px solid #888",background:"#e0e0e0",textAlign:"left",fontSize:15,whiteSpace:"nowrap",position:"sticky",top:0,left:120,zIndex:4}}>Soort</th>
+                        <th style={{padding:"6px 10px",border:"1.5px solid #888",background:"#e0e0e0",textAlign:"left",fontSize:15,position:"sticky",top:0,zIndex:2}}>Fust</th>
+                        <th style={{padding:"6px 10px",border:"1.5px solid #888",background:"#e0e0e0",textAlign:"right",fontSize:15,position:"sticky",top:0,zIndex:2}}>€/st</th>
+                        {alleWkn.map(wk=>(
+                          <th key={wk} style={{padding:"6px 10px",border:"1.5px solid #888",textAlign:"right",fontSize:15,position:"sticky",top:0,zIndex:2,
+                            background: ges&&weekLabel(ges.leverdatum)===wk?O_GEEL:"#e0e0e0",
+                            color: ges&&weekLabel(ges.leverdatum)===wk?"#333":"#1a1a1a"}}>
+                            {wk}
+                          </th>
+                        ))}
+                        <th style={{padding:"6px 10px",border:"1.5px solid #888",background:"#c8e6c9",textAlign:"right",fontSize:15,position:"sticky",top:0,zIndex:2}}>Totaal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rijen.map((r,i)=>(
+                        <tr key={i} style={{background:"#f3efe6"}}>
+                          <td style={{padding:"5px 10px",border:"1px solid #999",fontSize:15,position:"sticky",left:0,zIndex:1,background:"#f3efe6",width:120,minWidth:120,maxWidth:120}}><strong>{r.gewas}</strong></td>
+                          <td style={{padding:"5px 10px",border:"1px solid #999",fontSize:15,whiteSpace:"nowrap",cursor:"pointer",textDecoration:"underline",textDecorationStyle:"dotted",textDecorationColor:"#9ca3af",position:"sticky",left:120,zIndex:1,background:"#f3efe6"}}
+                            title="Klik voor Dashboard van dit gewas/soort"
+                            onClick={()=>window.dispatchEvent(new CustomEvent("ta-naar-dashboard",{detail:{gewas:r.gewas,soort:r.soort}}))}>
+                            {r.soort}
+                          </td>
+                          <td style={{padding:"5px 10px",border:"1px solid #999",fontSize:15}}><span style={gs.badge}>{r.verpakking}</span></td>
+                          <td style={{padding:"5px 10px",border:"1px solid #999",fontSize:15,textAlign:"right",color:groenTekst}}>{r.prijs?"€"+Number(r.prijs).toFixed(3):"—"}</td>
+                          {alleWkn.map(wk=>{
+                            const v=r.weken[wk];
+                            const isVerschil=matrixWeergave==="verschil";
+                            return (
+                            <td key={wk} style={{padding:"5px 10px",border:"1px solid #999",fontSize:15,textAlign:"right",
+                              fontWeight:v?600:300,
+                              color:!v?"#bbb":isVerschil?(v>0?"#16a34a":"#dc2626"):"#1a1a1a",
+                              background: ges&&weekLabel(ges.leverdatum)===wk?O_GEEL_BG:"transparent"}}>
+                              {!v?"—":isVerschil?(v>0?"+"+fmtGetal(v):fmtGetal(v)):fmtGetal(v)}
+                            </td>
+                            );
+                          })}
+                          <td style={{padding:"5px 10px",border:"1px solid #999",fontSize:15,textAlign:"right",fontWeight:700,color:groenTekst,background:"#f0fff4"}}>{fmtGetal(rijTotaal(r))}</td>
+                        </tr>
                       ))}
-                      <td style={{...cH,borderTop:`2px solid ${groen}`,background:"#c8e6c9"}}>{grootTotaal.toLocaleString("nl-NL")}</td>
-                    </tr>
-                  </tfoot>
-                </table>
+                    </tbody>
+                    <tfoot>
+                      <tr style={{background:"#e0e0e0",fontWeight:700}}>
+                        <td colSpan={4} style={{padding:"6px 10px",border:"1.5px solid #888",fontSize:15}}>Totaal</td>
+                        {alleWkn.map(wk=>(
+                          <td key={wk} style={{padding:"6px 10px",border:"1.5px solid #888",fontSize:15,textAlign:"right",
+                            background: ges&&weekLabel(ges.leverdatum)===wk?"#b7e4c7":"#e0e0e0"}}>
+                            {fmtGetal(totaalPerWeek(wk))}
+                          </td>
+                        ))}
+                        <td style={{padding:"6px 10px",border:"1.5px solid #888",fontSize:15,textAlign:"right",background:"#c8e6c9"}}>{fmtGetal(grootTotaal)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               </div>
             </div>
           );
@@ -30723,6 +30784,175 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                   <button title="Order verwijderen" style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:4,padding:"2px 7px",cursor:"pointer",fontSize:11}} onClick={()=>setDelId(data.id)}>🗑️</button>
                 )}
               </div>
+            </div>}
+
+            {/* Bovenbalk: gegevens & acties — was voorheen kader in linkerkolom */}
+            {(()=>{
+              const chip = {background:"#fff",color:"#374151",border:"1px solid #d1d5db",borderRadius:6,padding:"6px 12px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"};
+              const scheiding = <div style={{width:1,alignSelf:"stretch",background:"#e2e8e4"}} />;
+              return (
+            <div style={{background:wit,border:"1px solid #e2e8e4",borderRadius:6,padding:"8px 12px",marginBottom:8,display:"flex",flexDirection:"column",gap:8}}>
+
+              {/* Rij 1 — gegevens */}
+              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              <div style={{position:"relative"}}
+                onMouseEnter={()=>setToonKlantInfo(true)}
+                onMouseLeave={()=>setToonKlantInfo(false)}>
+                <div style={{...gs.input,padding:"5px 8px",fontSize:14,fontWeight:700,color:groenTekst,borderColor:groen,background:"#f0fff4",cursor:"help"}}>
+                  {klanten.find(k=>k.id===data.klantId)?.naam||"—"}
+                </div>
+                {toonKlantInfo && (()=>{
+                  const kl2=klanten.find(k=>k.id===data.klantId);
+                  if(!kl2) return null;
+                  const rij=(label,waarde)=>waarde?(
+                    <div style={{display:"flex",justifyContent:"space-between",gap:10,padding:"2px 0",borderBottom:"1px solid #eee"}}>
+                      <span style={{color:subtekst,fontSize:11}}>{label}</span>
+                      <span style={{fontWeight:600,fontSize:11,textAlign:"right"}}>{waarde}</span>
+                    </div>
+                  ):null;
+                  return (
+                    <div style={{position:"absolute",top:"100%",left:0,marginTop:4,width:260,
+                      background:wit,border:`1px solid ${groen}`,borderRadius:6,boxShadow:"0 4px 16px rgba(0,0,0,0.18)",
+                      padding:"10px 12px",zIndex:50}}>
+                      <div style={{fontWeight:700,fontSize:13,color:groenTekst,marginBottom:6}}>{kl2.naam}</div>
+                      {rij("Klantcode",kl2.klantcode)}
+                      {rij("Adres",kl2.adres)}
+                      {rij("Postcode/plaats",[kl2.postcode,kl2.plaats].filter(Boolean).join(" "))}
+                      {rij("Telefoon",kl2.telefoon)}
+                      {rij("E-mail",kl2.email)}
+                      {rij("BTW-nummer",kl2.btwnummer)}
+                      {rij("KVK-nummer",kl2.kvk)}
+                      <div style={{fontWeight:700,fontSize:11,color:groenTekst,margin:"8px 0 4px"}}>Voorkeuren</div>
+                      {rij("Voorkeur teelt",kl2.voorkeurTeelt)}
+                      {rij("Voorkeur verpakking",kl2.voorkeurVerpakking)}
+                      {rij("Behandelkosten/regel",kl2.kostenPerRegel?"€ "+Number(kl2.kostenPerRegel).toFixed(2):"")}
+                      {rij("Bevestiging",kl2.bevestigingVoorkeur==="seizoen"?"Per seizoen":"Per order")}
+                      {rij("Transporteur",kl2.transporteur)}
+                      {rij("Order klaar om",kl2.klaartijd)}
+                      {kl2.verbergInboet && rij("Let op","Interne levering")}
+                      {(kl2.contactpersonen||[]).length>0 && (
+                        <>
+                          <div style={{fontWeight:700,fontSize:11,color:groenTekst,margin:"8px 0 4px"}}>Contactpersonen</div>
+                          {kl2.contactpersonen.map((c,i)=>(
+                            <div key={i} style={{fontSize:11,marginBottom:2}}>
+                              <strong>{c.naam}</strong>{c.functie?" — "+c.functie:""}
+                              {(c.telefoon||c.mobiel||c.email)&&<div style={{color:subtekst}}>{[c.telefoon,c.mobiel,c.email].filter(Boolean).join(" · ")}</div>}
+                            </div>
+                          ))}
+                        </>
+                      )}
+                      {kl2.notitie && (
+                        <div style={{marginTop:8,padding:"6px 8px",background:"#fffbe6",borderRadius:4,fontSize:11,color:"#854d0e"}}>
+                          📝 {kl2.notitie}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <select style={{...gs.input,padding:"4px 6px",fontSize:13,fontWeight:700,color:groenTekst,borderColor:groen,width:100}} value={data.leverdatum} onChange={e=>{setData({...data,leverdatum:e.target.value});setGewijzigd(true);}}>
+                {WEKEN.map(w=><option key={w.datum} value={w.datum}>{w.label}</option>)}
+              </select>
+              <input style={{...gs.input,padding:"4px 6px",fontSize:12,width:60}} placeholder="Nr." value={data.eigenOrderNr||""} onChange={e=>setData({...data,eigenOrderNr:e.target.value})} />
+              <textarea
+                style={{...gs.input,padding:"3px 5px",fontSize:12,width:160,resize:"none",overflow:"hidden",minHeight:24,lineHeight:"18px"}}
+                placeholder="Notitie..."
+                value={data.notitie||""}
+                rows={1}
+                onChange={e=>{setData({...data,notitie:e.target.value});e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}}
+                onFocus={e=>{e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}}
+              />
+              </div>
+
+              {/* Rij 2 — acties, gegroepeerd */}
+              <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",paddingTop:8,borderTop:"1px solid #eef1ee"}}>
+
+              {/* Groep: status */}
+              <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+              {(()=>{
+                const kanBevestigen = true;
+                const wk = weekLabel(data.leverdatum);
+                const GEEN_MELDING_GEWASSEN = ["diverse","bloeiproeven","cyclamen overige","overige"];
+                const isUitgesloten = r => GEEN_MELDING_GEWASSEN.some(n=>r.gewas?.toLowerCase().includes(n));
+                const regelZonderPrijs = data.regels.filter(r=>!isUitgesloten(r)&&(!r.prijs||r.prijs===""));
+                const regelZonderTeelt = data.regels.filter(r=>{
+                  if(isUitgesloten(r)) return false;
+                  const td = teeltduur.find(t=>t.gewas?.toLowerCase()===r.gewas?.toLowerCase()&&t.soort?.toLowerCase()===r.soort?.toLowerCase()&&t.fust?.toLowerCase()===r.verpakking?.toLowerCase());
+                  return !td || (td.uitzaai==null && td.inboet==null);
+                });
+                return (<>
+                  {regelZonderPrijs.length>0&&<div style={{fontSize:10,color:"#f59e0b",padding:"2px 4px",background:"#fffbeb",borderRadius:3}}>
+                    ⚠️ {regelZonderPrijs.length} regel{regelZonderPrijs.length!==1?"s":""} zonder prijs: {regelZonderPrijs.map(r=>r.soort).join(", ")}
+                  </div>}
+                  {regelZonderTeelt.length>0&&<div style={{fontSize:10,color:"#dc2626",padding:"2px 4px",background:"#fef2f2",borderRadius:3}}>
+                    🔴 Teeltduur ontbreekt: {regelZonderTeelt.map(r=>r.soort).join(", ")}
+                  </div>}
+                  <button style={{background:kanBevestigen?"#7c3aed":"#9ca3af",color:"#fff",border:"none",borderRadius:6,padding:"6px 12px",fontSize:11,fontWeight:600,cursor:kanBevestigen?"pointer":"not-allowed",whiteSpace:"nowrap"}}
+                    title={!kanBevestigen?"Eerst seizoensmatrix mailen naar klant":"Vastzetten"}
+                    onClick={()=>{
+                      if(!kanBevestigen||!data.klantId||!data.leverdatum||data.regels.length===0) return;
+                      const bestaandeNrs=orders.filter(o=>o.bevestigingNr).map(o=>Number(o.bevestigingNr)||0);
+                      const volgendNr=bestaandeNrs.length>0?Math.max(...bestaandeNrs)+1:1;
+                      const regelsMetVast=data.regels.map(r=>{const vd2=verpDef.find(v=>v.naam===r.verpakking);return {...r,vastPlanten:(vd2?.aantal||0)*r.aantal};});
+                      const bevestigdOp=new Date().toLocaleDateString("nl-NL");
+                      const bevestigd={...data,status:"bevestigd",regels:regelsMetVast,bevestigingNr:String(volgendNr).padStart(4,"0"),bevestigdOp};
+                      if(data.id){setOrders(orders.map(o=>o.id===data.id?bevestigd:o));setGes(bevestigd);}
+                      else{const nr=data.eigenOrderNr?.trim()||maakOrderNr(data.klantId,data.leverdatum,orders,null);const n={...bevestigd,id:Date.now(),orderNr:nr};setOrders([...orders,n]);setGes(n);}
+                      setData(prev=>({...prev,...bevestigd}));
+                    }}>✅ Vastzetten</button>
+                  {data.bevestigingNr
+                    ? <div style={{background:"#7c3aed",color:"#fff",borderRadius:4,padding:"4px 8px",fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>
+                        ✅ {data.bevestigdOp||(data.bevestigingGemaild?new Date(data.bevestigingGemaild).toLocaleDateString("nl-NL"):"—")}
+                      </div>
+                    : null
+                  }
+                </>);
+              })()}
+
+              {data.bevestigingNr&&(
+                <button title="Herbereken vastzetten"
+                  style={chip}
+                  onClick={()=>{
+                    const bijgewerkt={...data,status:"bevestigd",regels:data.regels.map(r=>{const vd=verpDef.find(v=>v.naam===r.verpakking);return {...r,vastPlanten:(vd?.aantal||0)*r.aantal};})};
+                    setData(bijgewerkt);
+                    if(bijgewerkt.id) setOrders(orders.map(o=>o.id===bijgewerkt.id?bijgewerkt:o));
+                  }}>🔄 Herbereken vastzetten</button>
+              )}
+
+              {/* Markeer als verzonden — direct onder bevestigen */}
+              {data.bevestigingNr&&(
+                data.bevestigingGemaild
+                  ? <div style={{background:"#f0fff4",border:"1px solid #c8e6c9",borderRadius:5,padding:"4px 8px",fontSize:10,color:"#16a34a",whiteSpace:"nowrap"}}>
+                      ✅ Verzonden {new Date(data.bevestigingGemaild).toLocaleDateString("nl-NL")}
+                      <button style={{marginLeft:6,background:"transparent",border:"none",color:"#9ca3af",cursor:"pointer",fontSize:9,textDecoration:"underline"}}
+                        onClick={()=>{const b={...data,bevestigingGemaild:null};setData(b);if(b.id)setOrders(orders.map(o=>o.id===b.id?b:o));}}>
+                        ↩
+                      </button>
+                    </div>
+                  : <button style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:6,padding:"6px 12px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}
+                      onClick={()=>{const b={...data,bevestigingGemaild:new Date().toISOString()};setData(b);if(b.id)setOrders(orders.map(o=>o.id===b.id?b:o));}}>
+                      📧 Markeer als verzonden
+                    </button>
+              )}
+              </div>
+
+              {scheiding}
+
+              {/* Groep: navigatie */}
+              <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+              {filtK && (
+                <button title="Sneltoets: S" style={chip}
+                  onClick={()=>setShowMatrix(v=>!v)}>
+                  {showMatrix ? "▲ Matrix sluiten" : "📊 Seizoensoverzicht"}
+                </button>
+              )}
+              {filtK && (
+                <button style={chip}
+                  onClick={()=>window.dispatchEvent(new CustomEvent("ta-naar-prijzen",{detail:Number(filtK)}))}>
+                  💰 Verkoopprijzen
+                </button>
+              )}
               {(()=>{
                 const eersteRegel=(data.regels||[])[0];
                 if(!eersteRegel) return null;
@@ -30737,158 +30967,63 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                 const fustNr=(eersteRegel.verpakking||"").replace(/\D/g,"");
                 const lijstId="inboet"+fustNr;
                 return (
-                  <button style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:5,padding:"5px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}
+                  <button style={chip}
                     onClick={()=>window.dispatchEvent(new CustomEvent("ta-naar-werklijst",{detail:{lijstId,week:inboetWeek}}))}>
                     → Naar werklijst ({inboetWeek})
                   </button>
                 );
               })()}
-            </div>}
+
+              <button style={chip}
+                onClick={()=>window.dispatchEvent(new CustomEvent("ta-naar-afleveren",{detail:{week:weekLabel(data.leverdatum),orderId:data.id}}))}>
+                → Naar afleveren
+              </button>
+              </div>
+
+              {scheiding}
+
+              {/* Groep: documenten */}
+              <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+              <button style={chip}
+                onClick={()=>drukProForma(data)}>
+                📋 Pro forma factuur
+              </button>
+              {gewijzigd
+                ? <button onClick={opslaan}
+                    style={{padding:"6px 14px",background:"#f59e0b",color:"#fff",border:"none",
+                      borderRadius:6,fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",
+                      boxShadow:"0 2px 6px rgba(245,158,11,0.4)",animation:"pulse 1.5s infinite"}}>
+                    💾 Opslaan
+                  </button>
+                : <button onClick={opslaan}
+                    style={{padding:"6px 14px",background:groen,color:"#fff",border:"none",
+                      borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>
+                    💾 Opslaan
+                  </button>
+              }
+              </div>
+
+              <button title="Aflevergegevens tonen/verbergen"
+                onClick={()=>setAflevergegevensOpen(v=>!v)}
+                style={{marginLeft:"auto",background:aflevergegevensOpen?"#16a34a":"#fff",color:aflevergegevensOpen?"#fff":"#16a34a",
+                  border:"1px solid #16a34a",borderRadius:6,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+                {aflevergegevensOpen?"✕ Sluiten":"📦 Aflevergegevens"}
+              </button>
+              </div>
+            </div>
+              );
+            })()}
+
             <div style={{display:"flex",flexDirection:"row",gap:8,alignItems:"flex-start"}}>
 
-              {/* LINKER KOLOM */}
-              {true && (<div style={{display:"flex",gap:8,alignItems:"flex-start",flexShrink:0}}>
+              {/* LINKER KOLOM — aflevergegevens, verbergen/tonen via knop in bovenbalk */}
+              {aflevergegevensOpen && (<div style={{display:"flex",gap:8,alignItems:"flex-start",flexShrink:0}}>
               <div style={{flex:"0 0 230px",display:"flex",flexDirection:"column",gap:6}}>
 
-                {/* Ordergegevens kaartje — linker kolom */}
+                {/* Documentenkaartje — linker kolom (pakbon/aflever/factuur/opslaan) */}
                 <div style={{background:wit,border:"1px solid #bbb",borderRadius:4,padding:"8px 10px",borderTop:`3px solid ${O_ORANJE}`}}>
                   <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                    <div style={{position:"relative"}}
-                      onMouseEnter={()=>setToonKlantInfo(true)}
-                      onMouseLeave={()=>setToonKlantInfo(false)}>
-                      <div style={{...gs.input,padding:"5px 8px",fontSize:15,fontWeight:700,color:groenTekst,borderColor:groen,background:"#f0fff4",cursor:"help"}}>
-                        {klanten.find(k=>k.id===data.klantId)?.naam||"—"}
-                      </div>
-                      {toonKlantInfo && (()=>{
-                        const kl2=klanten.find(k=>k.id===data.klantId);
-                        if(!kl2) return null;
-                        const rij=(label,waarde)=>waarde?(
-                          <div style={{display:"flex",justifyContent:"space-between",gap:10,padding:"2px 0",borderBottom:"1px solid #eee"}}>
-                            <span style={{color:subtekst,fontSize:11}}>{label}</span>
-                            <span style={{fontWeight:600,fontSize:11,textAlign:"right"}}>{waarde}</span>
-                          </div>
-                        ):null;
-                        return (
-                          <div style={{position:"absolute",top:"100%",left:0,marginTop:4,width:260,
-                            background:wit,border:`1px solid ${groen}`,borderRadius:6,boxShadow:"0 4px 16px rgba(0,0,0,0.18)",
-                            padding:"10px 12px",zIndex:50}}>
-                            <div style={{fontWeight:700,fontSize:13,color:groenTekst,marginBottom:6}}>{kl2.naam}</div>
-                            {rij("Klantcode",kl2.klantcode)}
-                            {rij("Adres",kl2.adres)}
-                            {rij("Postcode/plaats",[kl2.postcode,kl2.plaats].filter(Boolean).join(" "))}
-                            {rij("Telefoon",kl2.telefoon)}
-                            {rij("E-mail",kl2.email)}
-                            {rij("BTW-nummer",kl2.btwnummer)}
-                            {rij("KVK-nummer",kl2.kvk)}
-                            <div style={{fontWeight:700,fontSize:11,color:groenTekst,margin:"8px 0 4px"}}>Voorkeuren</div>
-                            {rij("Voorkeur teelt",kl2.voorkeurTeelt)}
-                            {rij("Voorkeur verpakking",kl2.voorkeurVerpakking)}
-                            {rij("Behandelkosten/regel",kl2.kostenPerRegel?"€ "+Number(kl2.kostenPerRegel).toFixed(2):"")}
-                            {rij("Bevestiging",kl2.bevestigingVoorkeur==="seizoen"?"Per seizoen":"Per order")}
-                            {rij("Transporteur",kl2.transporteur)}
-                            {rij("Order klaar om",kl2.klaartijd)}
-                            {kl2.verbergInboet && rij("Let op","Interne levering")}
-                            {(kl2.contactpersonen||[]).length>0 && (
-                              <>
-                                <div style={{fontWeight:700,fontSize:11,color:groenTekst,margin:"8px 0 4px"}}>Contactpersonen</div>
-                                {kl2.contactpersonen.map((c,i)=>(
-                                  <div key={i} style={{fontSize:11,marginBottom:2}}>
-                                    <strong>{c.naam}</strong>{c.functie?" — "+c.functie:""}
-                                    {(c.telefoon||c.mobiel||c.email)&&<div style={{color:subtekst}}>{[c.telefoon,c.mobiel,c.email].filter(Boolean).join(" · ")}</div>}
-                                  </div>
-                                ))}
-                              </>
-                            )}
-                            {kl2.notitie && (
-                              <div style={{marginTop:8,padding:"6px 8px",background:"#fffbe6",borderRadius:4,fontSize:11,color:"#854d0e"}}>
-                                📝 {kl2.notitie}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                    <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                      <select style={{...gs.input,padding:"4px 6px",fontSize:14,fontWeight:700,color:groenTekst,flex:1,borderColor:groen}} value={data.leverdatum} onChange={e=>{setData({...data,leverdatum:e.target.value});setGewijzigd(true);}}>
-                        {WEKEN.map(w=><option key={w.datum} value={w.datum}>{w.label}</option>)}
-                      </select>
-                      <input style={{...gs.input,padding:"4px 6px",fontSize:12,width:60}} placeholder="Nr." value={data.eigenOrderNr||""} onChange={e=>setData({...data,eigenOrderNr:e.target.value})} />
-                    </div>
-                    <textarea
-                      style={{...gs.input,padding:"3px 5px",fontSize:12,width:"100%",resize:"none",overflow:"hidden",minHeight:24,lineHeight:"18px"}}
-                      placeholder="Notitie..."
-                      value={data.notitie||""}
-                      rows={1}
-                      onChange={e=>{setData({...data,notitie:e.target.value});e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}}
-                      onFocus={e=>{e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}}
-                    />
-
                     <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:2}}>
-                      <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
-                        {(()=>{
-                          const kanBevestigen = true;
-                          const wk = weekLabel(data.leverdatum);
-                          const GEEN_MELDING_GEWASSEN = ["diverse","bloeiproeven","cyclamen overige","overige"];
-                          const isUitgesloten = r => GEEN_MELDING_GEWASSEN.some(n=>r.gewas?.toLowerCase().includes(n));
-                          const regelZonderPrijs = data.regels.filter(r=>!isUitgesloten(r)&&(!r.prijs||r.prijs===""));
-                          const regelZonderTeelt = data.regels.filter(r=>{
-                            if(isUitgesloten(r)) return false;
-                            const td = teeltduur.find(t=>t.gewas?.toLowerCase()===r.gewas?.toLowerCase()&&t.soort?.toLowerCase()===r.soort?.toLowerCase()&&t.fust?.toLowerCase()===r.verpakking?.toLowerCase());
-                            return !td || (td.uitzaai==null && td.inboet==null);
-                          });
-                          return (<>
-                            {regelZonderPrijs.length>0&&<div style={{fontSize:10,color:"#f59e0b",padding:"2px 4px",background:"#fffbeb",borderRadius:3,marginBottom:2}}>
-                              ⚠️ {regelZonderPrijs.length} regel{regelZonderPrijs.length!==1?"s":""} zonder prijs: {regelZonderPrijs.map(r=>r.soort).join(", ")}
-                            </div>}
-                            {regelZonderTeelt.length>0&&<div style={{fontSize:10,color:"#dc2626",padding:"2px 4px",background:"#fef2f2",borderRadius:3,marginBottom:2}}>
-                              🔴 Teeltduur ontbreekt: {regelZonderTeelt.map(r=>r.soort).join(", ")}
-                            </div>}
-                            <button style={{background:kanBevestigen?"#7c3aed":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:kanBevestigen?"pointer":"not-allowed",flex:1}}
-                              title={!kanBevestigen?"Eerst seizoensmatrix mailen naar klant":"Vastzetten"}
-                              onClick={()=>{
-                                if(!kanBevestigen||!data.klantId||!data.leverdatum||data.regels.length===0) return;
-                                const bestaandeNrs=orders.filter(o=>o.bevestigingNr).map(o=>Number(o.bevestigingNr)||0);
-                                const volgendNr=bestaandeNrs.length>0?Math.max(...bestaandeNrs)+1:1;
-                                const regelsMetVast=data.regels.map(r=>{const vd2=verpDef.find(v=>v.naam===r.verpakking);return {...r,vastPlanten:(vd2?.aantal||0)*r.aantal};});
-                                const bevestigdOp=new Date().toLocaleDateString("nl-NL");
-                                const bevestigd={...data,status:"bevestigd",regels:regelsMetVast,bevestigingNr:String(volgendNr).padStart(4,"0"),bevestigdOp};
-                                if(data.id){setOrders(orders.map(o=>o.id===data.id?bevestigd:o));setGes(bevestigd);}
-                                else{const nr=data.eigenOrderNr?.trim()||maakOrderNr(data.klantId,data.leverdatum,orders,null);const n={...bevestigd,id:Date.now(),orderNr:nr};setOrders([...orders,n]);setGes(n);}
-                                setData(prev=>({...prev,...bevestigd}));
-                              }}>✅ Vastzetten</button>
-                            {data.bevestigingNr
-                              ? <div style={{background:"#7c3aed",color:"#fff",borderRadius:4,padding:"3px 6px",fontSize:10,fontWeight:700,flex:1,textAlign:"center"}}>
-                                  ✅ {data.bevestigdOp||(data.bevestigingGemaild?new Date(data.bevestigingGemaild).toLocaleDateString("nl-NL"):"—")}
-                                </div>
-                              : null
-                            }
-                          </>);
-                        })()}
-                      </div>
-                      {data.bevestigingNr&&(
-                        <button title="Herbereken vastzetten"
-                          style={{background:"#cfe6d8",color:groenTekst,border:`1px solid ${groen}`,borderRadius:5,padding:"4px",fontSize:11,cursor:"pointer",width:"100%",marginTop:2}}
-                          onClick={()=>{
-                            const bijgewerkt={...data,status:"bevestigd",regels:data.regels.map(r=>{const vd=verpDef.find(v=>v.naam===r.verpakking);return {...r,vastPlanten:(vd?.aantal||0)*r.aantal};})};
-                            setData(bijgewerkt);
-                            if(bijgewerkt.id) setOrders(orders.map(o=>o.id===bijgewerkt.id?bijgewerkt:o));
-                          }}>🔄 Herbereken vastzetten</button>
-                      )}
-                      {/* Markeer als verzonden — direct onder bevestigen */}
-                      {data.bevestigingNr&&(
-                        data.bevestigingGemaild
-                          ? <div style={{background:"#f0fff4",border:"1px solid #c8e6c9",borderRadius:5,padding:"4px 8px",fontSize:10,color:"#16a34a",textAlign:"center",marginTop:2}}>
-                              ✅ Verzonden {new Date(data.bevestigingGemaild).toLocaleDateString("nl-NL")}
-                              <button style={{marginLeft:6,background:"transparent",border:"none",color:"#9ca3af",cursor:"pointer",fontSize:9,textDecoration:"underline"}}
-                                onClick={()=>{const b={...data,bevestigingGemaild:null};setData(b);if(b.id)setOrders(orders.map(o=>o.id===b.id?b:o));}}>
-                                ↩
-                              </button>
-                            </div>
-                          : <button style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:5,padding:"5px 6px",fontSize:11,fontWeight:700,cursor:"pointer",width:"100%",marginTop:2}}
-                              onClick={()=>{const b={...data,bevestigingGemaild:new Date().toISOString()};setData(b);if(b.id)setOrders(orders.map(o=>o.id===b.id?b:o));}}>
-                              📧 Markeer als verzonden
-                            </button>
-                      )}
 
                       {/* Pakbon — datum transport kiezen, dan aanmaken */}
                       <div style={{display:"flex",flexDirection:"column",gap:3}}>
@@ -30897,6 +31032,8 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                           <input style={{...gs.input,padding:"3px 6px",fontSize:11,flex:1,
                             borderColor:data.transportDatum?"#0891b2":rand}}
                             type="date"
+                            name={"transportDatum_"+(data.id||"nieuw")}
+                            autoComplete="off"
                             value={data.transportDatum||""}
                             onChange={e=>{
                               const d=e.target.value;
@@ -31024,27 +31161,6 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                         })()}
                         {data.factuurNr&&<span style={{background:"#fef3c7",color:"#b45309",borderRadius:4,padding:"3px 6px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>#{data.factuurNr}</span>}
                       </div>
-                      {/* Pro forma factuur — altijd zichtbaar */}
-                      <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                        <button style={{background:"#6b7280",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",flex:1}}
-                          onClick={()=>drukProForma(data)}>
-                          📋 Pro forma factuur
-                        </button>
-                      </div>
-                      {/* Opslaan — altijd zichtbaar, ook als "Nieuwe regel"-paneel dicht staat */}
-                      {gewijzigd
-                    ? <button onClick={opslaan}
-                        style={{width:"100%",padding:"8px",background:"#f59e0b",color:"#fff",border:"none",
-                          borderRadius:6,fontSize:12,fontWeight:700,cursor:"pointer",
-                          boxShadow:"0 2px 6px rgba(245,158,11,0.4)",animation:"pulse 1.5s infinite"}}>
-                        💾 Opslaan
-                      </button>
-                    : <button onClick={opslaan}
-                        style={{width:"100%",padding:"8px",background:groen,color:"#fff",border:"none",
-                          borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer"}}>
-                        💾 Opslaan
-                      </button>
-                  }
                       {/* Mail factuur + betaalstatus */}
                       {data.factuurNr&&(
                         <div style={{display:"flex",flexDirection:"column",gap:3,marginTop:2}}>
@@ -31082,9 +31198,10 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                   </div>
                 </div>
 
-              </div>{/* einde linker kolom */}
+              </div>
+              </div>)}{/* einde linker kolom + aflevergegevens-wrapper (apart van nieuwe-regel, zodat die altijd bereikbaar blijft) */}
               {nieuweRegelOpen && (<div style={{flex:"0 0 220px",display:"flex",flexDirection:"column",gap:6}}>
-                {/* Nieuwe regel kader — rechter kolom */}
+                {/* Nieuwe regel kader — rechter kolom, onafhankelijk van aflevergegevens */}
                 <div style={{background:"#fffde7",border:`2px solid ${O_GEEL}`,borderRadius:4,padding:"8px 10px",borderTop:`3px solid ${O_ORANJE}`}}>
                   <div style={{fontSize:11,fontWeight:700,color:O_ORANJE,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>+ Nieuwe regel</div>
 
@@ -31222,7 +31339,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                 <div style={{display:"flex",flexDirection:"column",gap:4}}>
                   <button style={{...gs.knopSecundair,padding:"5px",fontSize:11,width:"100%"}} onClick={()=>checkGewijzigd(()=>setForm(false))}>✕ Sluiten</button>
                   {dupModal&&<DupModal
-                    data={data} klanten={klanten} orders={orders} WEKEN={WEKEN}
+                    data={data} klanten={klanten} orders={orders} WEKEN={WEKEN} verpDef={verpDef}
                     gs={gs} groen={groen} subtekst={subtekst}
                     onSluit={()=>setDupModal(false)}
                     onKopieer={(dup)=>{
@@ -31425,8 +31542,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                     </button>
                   )}
                 </div>
-              </div>)}{/* einde rechter kolom */}
-              </div>)}
+              </div>)}{/* einde rechter kolom (nieuwe regel) */}
 
               <div className={nieuweRegelOpen?"regeltabel-compact":""} style={{flex:1,minWidth:0,background:wit,border:`1px solid ${rand}`,borderRadius:6,overflow:"hidden"}}>
                 {nieuweRegelOpen && <style>{`.regeltabel-compact table th:nth-child(10), .regeltabel-compact table td:nth-child(10), .regeltabel-compact table th:nth-child(11), .regeltabel-compact table td:nth-child(11), .regeltabel-compact table th:nth-child(12), .regeltabel-compact table td:nth-child(12) { display:none; }`}</style>}
@@ -31464,7 +31580,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                           <button style={{...gs.knopSecundair,fontSize:11,padding:"3px 9px"}} onClick={()=>setMeerdereSelectie([])}>Annuleren</button>
                         </div>
                       )}
-                      <table style={{fontSize:16,width:"100%"}}>
+                      <table style={{fontSize:15,width:"100%",borderCollapse:"collapse",fontFamily:"Arial, sans-serif"}}>
                       <thead>
                         <tr>
                           <td style={{padding:"2px 4px",textAlign:"left"}}>
@@ -31529,7 +31645,9 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                           const actief = regelSort?.kolom===h;
                           return <th key={h+i}
                             onClick={sorteerbaar?()=>klikKolom(h):undefined}
-                            style={{...TH,padding:"3px 5px",fontSize:16,
+                            style={{padding:"6px 8px",fontSize:15,fontFamily:"Arial, sans-serif",
+                              background:"#e0e0e0",border:"1.5px solid #888",color:"#1a1a1a",fontWeight:700,
+                              textTransform:"none",letterSpacing:0,whiteSpace:"nowrap",
                               textAlign:i>=4&&i<=8?"right":"left",
                               minWidth:w,width:w,
                               cursor:sorteerbaar?"pointer":"default",
@@ -31571,14 +31689,14 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                           const totVast=data.regels.reduce((s,r)=>{const vd=verpDef.find(v=>v.naam===r.verpakking);return s+(r.vastPlanten??((vd?.aantal||0)*r.aantal));},0);
                           const totPlanten=plantenTotaal(data.regels);
                           const totVerschil=totPlanten-totVast;
-                          const bS={padding:"4px 5px",fontSize:12,fontWeight:700,borderTop:`2px solid ${groen}`};
-                          return <tr style={{background:"#e8f5ee"}}>
-                            <td style={{...bS,color:"#1e3a2f",fontSize:11,borderTop:"2px solid #2d6a4f"}} colSpan={3}>Totaal</td>
+                          const bS={padding:"6px 8px",fontSize:15,fontFamily:"Arial, sans-serif",fontWeight:700,border:"1.5px solid #888"};
+                          return <tr style={{background:"#e0e0e0"}}>
+                            <td style={{...bS,color:"#1a1a1a"}} colSpan={3}>Totaal</td>
                             <td style={bS}></td>
-                            <td style={{...bS,color:"#1e3a2f",textAlign:"right",borderTop:"2px solid #2d6a4f"}}>{data.regels.reduce((s,x)=>s+x.aantal,0)}</td>
-                            <td style={{...bS,color:"#1e3a2f",textAlign:"right",borderTop:"2px solid #2d6a4f"}}>{plantenTotaal(data.regels).toLocaleString()}</td>
+                            <td style={{...bS,color:"#1a1a1a",textAlign:"right"}}>{data.regels.reduce((s,x)=>s+x.aantal,0)}</td>
+                            <td style={{...bS,color:"#1a1a1a",textAlign:"right"}}>{plantenTotaal(data.regels).toLocaleString()}</td>
                             <td style={bS}></td>
-                            <td style={{...bS,color:"#1e3a2f",textAlign:"right",borderTop:"2px solid #2d6a4f"}}>{totVast.toLocaleString()}</td>
+                            <td style={{...bS,color:"#1a1a1a",textAlign:"right"}}>{totVast.toLocaleString()}</td>
                             <td style={{...bS,textAlign:"right",color:totVerschil>0?"#16a34a":totVerschil<0?"#dc2626":groen}}>
                               {totVerschil===0?"✓":totVerschil>0?"+"+totVerschil.toLocaleString():totVerschil.toLocaleString()}
                             </td>
@@ -32171,7 +32289,7 @@ function Teeltduur({ gewassen, verpDef, teeltduur, setTeeltduur }) {
 // ════════════════════════════════════════════════════════
 // MODULE — TEELTPLANNING
 // ════════════════════════════════════════════════════════
-function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkracht, setKiemkracht, bedrijf, realisatie: realisatieProp, setRealisatie: setRealisatieProp, werklijstVoorkeuze, setWerklijstVoorkeuze, medewerkerModus, medewerkerNaam, werklijstKeuze }) {
+function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkracht, setKiemkracht, bedrijf, realisatie: realisatieProp, setRealisatie: setRealisatieProp, werklijstVoorkeuze, setWerklijstVoorkeuze, medewerkerModus, medewerkerNaam, werklijstKeuze, huidigePagina }) {
   const wit = "#f3efe6"; // gebroken wit, alleen in dit scherm
   const nu2 = new Date();
   let volWk = getWeekNr(nu2)+1, volJr = getJaar(nu2);
@@ -32215,6 +32333,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [toonMatrix]);
+
   const [printOverzicht, setPrintOverzicht] = useState(null);
   const [orderKeuzeRij, setOrderKeuzeRij] = useState(null); // key van rij waarvoor het order-keuzemenu open staat
   const [gemarkeerdeWerklijstRij, setGemarkeerdeWerklijstRij] = useState(null); // rij die na doorklikken naar Dashboard 4 sec. oplicht
@@ -32434,8 +32553,8 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
 
   const alleWeken = [...new Set(orders.map(o=>weekLabel(o.leverdatum)))].sort();
 
-  const sTH = {...TH, padding:"3px 5px", background:"#a9d8bd", borderTop:"2px solid #5c9873", borderBottom:"2px solid #5c9873", fontSize:18};
-  const sTD = {padding:"3px 6px", fontSize:18, borderBottom:`1px solid ${rand}`, verticalAlign:"middle"};
+  const sTH = {padding:"6px 8px", fontSize:15, fontFamily:"Arial, sans-serif", background:"#e0e0e0", border:"1.5px solid #888", color:"#1a1a1a", fontWeight:700, textTransform:"none", letterSpacing:0, whiteSpace:"nowrap"};
+  const sTD = {padding:"5px 8px", fontSize:15, fontFamily:"Arial, sans-serif", border:"1px solid #ccc", verticalAlign:"middle"};
   const sTDR = {...sTD, textAlign:"right"};
 
   function renderTabel(wk, rijenIn, isZaai, veld, label, blokSuffix) {
@@ -32537,55 +32656,39 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                     if(blokSuffix==="inboet65") return v.includes("65")||v.includes("66");
                     return true;
                   }
+                  // Per order (niet per regel) het totaal aantal trays voor deze inboetweek/fust bepalen,
+                  // zodat de sticker het totaal van de hele order toont — per 120 trays 1 extra sticker.
                   const stickers=[];
                   orders.filter(o=>o.status!=="geleverd").forEach(o=>{
                     const kl=klanten.find(k=>k.id===o.klantId)||{};
                     const leverWk=getWeekNr(o.leverdatum), leverJaar=getJaar(o.leverdatum);
-                    (o.regels||[]).forEach(r=>{
+                    const matchendeRegels=(o.regels||[]).filter(r=>{
                       const inboetWeken=getDuur(r.gewas,r.soort,r.verpakking,"inboet");
-                      if(inboetWeken===null) return;
+                      if(inboetWeken===null) return false;
                       let inbWk=leverWk-inboetWeken, inbJaar=leverJaar;
                       if(inbWk<=0){inbWk+=52;inbJaar--;}
                       const inbLbl=String(inbJaar).slice(-2)+String(inbWk).padStart(2,"0");
-                      if(inbLbl!==wk) return;
-                      if(!fustPastBijFilterSt(r.verpakking)) return;
-                      const totaal=r.aantal||0;
-                      if(totaal<=0) return;
-                      const aantalStickers=Math.ceil(totaal/100);
-                      for(let i=0;i<aantalStickers;i++){
-                        const opSticker=(i<aantalStickers-1)?100:(totaal-100*(aantalStickers-1));
-                        stickers.push([
-                          (kl.klantcode||kl.naam?.substring(0,6)||"?").toUpperCase(),
-                          "wk "+leverWk,
-                          r.verpakking,
-                          opSticker+" st",
-                          o.orderNr||o.id
-                        ]);
-                      }
+                      if(inbLbl!==wk) return false;
+                      return fustPastBijFilterSt(r.verpakking);
                     });
-                  });
-                  if(stickers.length===0){ alert("Geen regels gevonden voor deze lijst."); return; }
-                  const RIJEN_STICKER=5;
-                  const wbEx=new ExcelJS.Workbook();
-                  const wsEx=wbEx.addWorksheet("Stickers");
-                  stickers.forEach((velden,col)=>{
-                    const kolom=wsEx.getColumn(col+1);
-                    kolom.width=8.571; // komt overeen met ±60px
-                    for(let r=0;r<RIJEN_STICKER;r++){
-                      const cel=wsEx.getCell(r+1,col+1);
-                      cel.value=velden[r];
-                      cel.alignment={horizontal:"center",vertical:"middle"};
+                    if(matchendeRegels.length===0) return;
+                    const totaal=matchendeRegels.reduce((s,r)=>s+(r.aantal||0),0);
+                    if(totaal<=0) return;
+                    const traymaat=[...new Set(matchendeRegels.map(r=>r.verpakking))].join("/");
+                    const wkNr="wk"+leverWk;
+                    // Aantal stickers = 1 per 120 trays (naar boven afgerond), maar op élke sticker staat het totaal van de hele order.
+                    const aantalStickers=Math.ceil(totaal/120);
+                    for(let i=0;i<aantalStickers;i++){
+                      stickers.push([
+                        (kl.klantcode||kl.naam?.substring(0,6)||"?").toUpperCase(),
+                        wkNr,
+                        traymaat,
+                        totaal+" st"
+                      ]);
                     }
                   });
-                  wbEx.xlsx.writeBuffer().then(buffer=>{
-                    const blob=new Blob([buffer],{type:"application/octet-stream"});
-                    const url=URL.createObjectURL(blob);
-                    const a=document.createElement("a");
-                    a.href=url;
-                    a.download="Stickers_"+wk+"_"+(blokSuffix||label||"")+"_"+new Date().toISOString().slice(0,10)+".xlsx";
-                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                  });
+                  if(stickers.length===0){ alert("Geen regels gevonden voor deze lijst."); return; }
+                  printStickersGroot(stickers);
                   markeerAfgedrukt(blokKey,"stickers");
                 }}>Stickers<AfdrukStip actief={afgedrukt[blokKey]?.stickers}/></button>
             </>}
@@ -32702,9 +32805,9 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
               const werklijstHlKey = blokKey+"||"+rijKey;
               const isWerklijstGemarkeerd = gemarkeerdeWerklijstRij===werklijstHlKey;
               return (
-                <tr key={i} style={{background:isWerklijstGemarkeerd?"#bfe3fa":wit, transition:"background 0.6s"}}
+                <tr key={i} style={{background:isWerklijstGemarkeerd?"#bfe3fa":"#f3efe6", transition:"background 0.6s"}}
                   onMouseEnter={e=>{if(!isWerklijstGemarkeerd) e.currentTarget.style.background="#ffe082";}}
-                  onMouseLeave={e=>e.currentTarget.style.background=isWerklijstGemarkeerd?"#bfe3fa":wit}>
+                  onMouseLeave={e=>e.currentTarget.style.background=isWerklijstGemarkeerd?"#bfe3fa":"#f3efe6"}>
                   <td style={{...sTD,padding:"2px 4px"}}>
                     {r._handmatig&&<button title="Verwijder deze handmatige regel"
                       onClick={()=>setHandmatig(prev=>({...prev,[blokKey]:(prev[blokKey]||[]).filter(h=>h.id!==r.id)}))}
@@ -32799,7 +32902,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                                 localStorage.setItem("ta_tafel_soort",JSON.stringify(huidig));
                               }catch(err){}
                             }}
-                            style={{width:80,padding:"2px 5px",fontSize:11,border:`1px solid ${rand}`,borderRadius:4}} />
+                            style={{width:80,padding:"2px 5px",fontSize:11,border:`1px solid ${rand}`,borderRadius:4,background:"#f3efe6"}} />
                         );
                       } else {
                         const uitzaaiWeken=getDuur(r.gewas,r.soort,r.fust,"uitzaai");
@@ -32830,7 +32933,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                         <input type="number" min="0" step="0.25" className="geen-eigen-pijltjes"
                           style={{width:52,padding:"1px 2px",textAlign:"center",
                             border:`1px solid ${heeftWaarde?"#d4a800":rand}`,borderRadius:0,fontSize:15,
-                            background:heeftWaarde?"#fef9c3":"#fff",fontWeight:heeftWaarde?600:400,
+                            background:heeftWaarde?"#fef9c3":"#f3efe6",fontWeight:heeftWaarde?600:400,
                             color:heeftWaarde?"#854d0e":"#333"}}
                           value={heeftWaarde?String(opgeslagen):''}
                           placeholder={String(gepland)}
@@ -32858,7 +32961,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                         <input type="number" min="0" step="0.25" className="geen-eigen-pijltjes"
                           style={{width:52,padding:"1px 2px",textAlign:"center",
                             border:`1px solid ${heeftS2?"#d4a800":rand}`,borderRadius:"3px 0 0 3px",fontSize:15,
-                            background:heeftS2?"#fef9c3":"#fff",fontWeight:heeftS2?600:400,
+                            background:heeftS2?"#fef9c3":"#f3efe6",fontWeight:heeftS2?600:400,
                             color:heeftS2?"#854d0e":"#333"}}
                           value={heeftS2?String(opgeslagenS2):''}
                           placeholder="0"
@@ -32896,19 +32999,19 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
             })}
           </tbody>
           <tfoot>
-            <tr style={{background:"#d4e8dc",fontWeight:700}}>
-              <td style={{...sTD,borderTop:`2px solid ${groen}`,padding:"3px 6px"}} colSpan={4}>Totaal</td>
-              {!isZaai&&<td style={{...sTDR,borderTop:`2px solid ${groen}`,padding:"3px 6px",color:subtekst}}></td>}
-              <td style={{...sTD,borderTop:`2px solid ${groen}`,padding:"3px 6px"}}></td>
-              <td style={{...sTDR,borderTop:`2px solid ${groen}`,padding:"3px 6px",color:"#1e3a2f"}}>{totTrays}</td>
-              <td style={{...sTDR,borderTop:`2px solid ${groen}`,padding:"3px 6px",color:"#854d0e"}}>{rijen.reduce((s,r)=>{const o=getReal(wk,actieType,r.gewas+"||"+r.soort+"||"+r.fust);return s+(o===''?r[veld]||0:Number(o));},0)}</td>
-              <td style={{...sTDR,borderTop:`2px solid ${groen}`,padding:"3px 6px",color:groenTekst}}>
+            <tr style={{background:"#e0e0e0",fontWeight:700}}>
+              <td style={{...sTD,border:"1.5px solid #888",padding:"6px 8px"}} colSpan={4}>Totaal</td>
+              {!isZaai&&<td style={{...sTDR,border:"1.5px solid #888",padding:"6px 8px",color:subtekst}}></td>}
+              <td style={{...sTD,border:"1.5px solid #888",padding:"6px 8px"}}></td>
+              <td style={{...sTDR,border:"1.5px solid #888",padding:"6px 8px",color:"#1e3a2f"}}>{totTrays}</td>
+              <td style={{...sTDR,border:"1.5px solid #888",padding:"6px 8px",color:"#854d0e"}}>{rijen.reduce((s,r)=>{const o=getReal(wk,actieType,r.gewas+"||"+r.soort+"||"+r.fust);return s+(o===''?r[veld]||0:Number(o));},0)}</td>
+              <td style={{...sTDR,border:"1.5px solid #888",padding:"6px 8px",color:groenTekst}}>
                 {(()=>{const tot=Math.round((rijen.reduce((s,r)=>{const o=getReal(wk,actieType,r.gewas+"||"+r.soort+"||"+r.fust);return s+(o===''?r[veld]||0:Number(o));},0)-totTrays)*10)/10;return tot===0?"✓":tot>0?"+"+tot.toFixed(1):tot.toFixed(1);})()}
               </td>
-              {!isZaai&&<td style={{...sTDR,borderTop:`2px solid ${groen}`,padding:"3px 6px",color:"#854d0e"}}>{rijen.reduce((s,r)=>{const o=getSort2(wk,actieType,r.gewas+"||"+r.soort+"||"+r.fust);return s+(o===''?0:Number(o));},0)}</td>}
-              {!isZaai&&<td style={{...sTDR,borderTop:`2px solid ${groen}`,padding:"3px 6px"}}></td>}
-              {!isZaai&&<td style={{...sTDR,borderTop:`2px solid ${groen}`,padding:"3px 6px"}}></td>}
-              {!isZaai&&<td style={{...sTDR,borderTop:`2px solid ${groen}`,padding:"3px 6px"}}></td>}
+              {!isZaai&&<td style={{...sTDR,border:"1.5px solid #888",padding:"6px 8px",color:"#854d0e"}}>{rijen.reduce((s,r)=>{const o=getSort2(wk,actieType,r.gewas+"||"+r.soort+"||"+r.fust);return s+(o===''?0:Number(o));},0)}</td>}
+              {!isZaai&&<td style={{...sTDR,border:"1.5px solid #888",padding:"6px 8px"}}></td>}
+              {!isZaai&&<td style={{...sTDR,border:"1.5px solid #888",padding:"6px 8px"}}></td>}
+              {!isZaai&&<td style={{...sTDR,border:"1.5px solid #888",padding:"6px 8px"}}></td>}
             </tr>
           </tfoot>
        </table>}
@@ -33010,6 +33113,30 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
     setWerklijstVoorkeuze(null);
   },[werklijstVoorkeuze]);
 
+  // ── Pijltjes omhoog/omlaag = vorige/volgende week in de lijst hierboven ──
+  useEffect(()=>{
+    function onKeyWeekPijl(e){
+      if(e.key!=="ArrowUp"&&e.key!=="ArrowDown") return;
+      if(huidigePagina!==undefined && huidigePagina!=="planning") return;
+      const tag = document.activeElement?.tagName;
+      if(tag==="INPUT"||tag==="SELECT"||tag==="TEXTAREA") return;
+      if(!gekozenLijst) return;
+      const wekenLijst = Object.keys(planning).sort().filter(wk=>{
+        if(filtVan && wk<filtVan) return false;
+        if(filtTot && wk>filtTot) return false;
+        return true;
+      }).filter(wk=>(berekenLijsten(planning[wk])[gekozenLijst]||[]).length>0);
+      if(wekenLijst.length===0) return;
+      e.preventDefault();
+      const idx = wekenLijst.indexOf(gekozenWeek);
+      const nieuw = e.key==="ArrowDown" ? (wekenLijst[idx+1]||wekenLijst[0]) : (wekenLijst[idx-1]||wekenLijst[wekenLijst.length-1]);
+      setGekozenWeek(nieuw);
+      setOpenBlokken(prev=>new Set(prev).add(nieuw+"_"+gekozenLijst));
+    }
+    window.addEventListener("keydown", onKeyWeekPijl);
+    return ()=>window.removeEventListener("keydown", onKeyWeekPijl);
+  }, [huidigePagina, gekozenLijst, gekozenWeek, planning, filtVan, filtTot]);
+
   return (
     <div style={{display:"flex", height:"calc(100vh - 50px)", background:wit}}>
       {/* Navigatie links: 5 lijsten + weken (net als klanten bij Orders) */}
@@ -33022,7 +33149,12 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                 background: gekozenLijst===ld.id ? (ld.isZaai?"#1d4ed8":"#0891b2") : "#f0f7f4",
                 color: gekozenLijst===ld.id ? "#fff" : "#1e3a2f"}}
               onClick={()=>{
-                setGekozenLijst(ld.id); setGekozenWeek(null);
+                setGekozenLijst(ld.id); // week blijft gekozen staan — meteen dezelfde week tonen bij de nieuwe lijst
+                if(gekozenWeek){
+                  // Zorg dat het werklijst-blok voor deze week+lijst meteen opengeklapt is
+                  // (anders blijft alleen het klantenoverzicht/tafelnummers-blok zichtbaar)
+                  setOpenBlokken(prev=>new Set(prev).add(gekozenWeek+"_"+ld.id));
+                }
                 const alleFusten=[...new Set(Object.values(planning).flatMap(b=>[...Object.values(b.zaai||{}),...Object.values(b.inboet||{})].map(r=>r.fust)))];
                 const patroon = {zaai264:"264", zaai180:"180", inboet260:"260", inboet179:"179", inboet65:"65"}[ld.id];
                 const gevonden = alleFusten.find(f=>f&&f.toLowerCase().includes(patroon)) || (ld.id==="inboet65" ? alleFusten.find(f=>f&&f.toLowerCase().includes("66")) : null);
@@ -33100,10 +33232,10 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                   setGekozenWeek(wk);
                   setOpenBlokken(prev=>new Set(prev).add(wk+"_"+gekozenLijst));
                 }}
-                style={{padding:"8px 12px", cursor:"pointer",
+                style={{padding:"8px 12px", cursor:"pointer", marginBottom:4,
                   background: gekozenWeek===wk ? lijstKleur : "#cfe6d8",
                   border: isHuidigeWeek ? "2px solid #16a34a" : "2px solid transparent",
-                  borderBottom: isHuidigeWeek ? "2px solid #16a34a" : `1px solid ${wit}`,
+                  borderBottom: isHuidigeWeek ? "2px solid #16a34a" : `3px solid ${wit}`,
                   display:"flex", justifyContent:"space-between", alignItems:"center"}}>
                 <span style={{fontWeight:700, fontSize:12, color: gekozenWeek===wk ? "#fff" : "#1e3a2f", display:"flex", alignItems:"center", gap:6}}>
                   {vastgezet&&<span title="Vastgezet" style={{width:8,height:8,borderRadius:"50%",background:"#16a34a",display:"inline-block"}}/>}
@@ -43273,6 +43405,476 @@ function Soortenbeheer({ gewassen, setGewassen, kiemkracht, setKiemkracht, teelt
   );
 }
 
+// ── Grote transportlijst-print (zelfde lay-out als de oude Transport-pagina) ──
+function _berekenKarrenGroot(trays) {
+  const afgerond=Math.ceil(trays/4)*4;
+  const lagen=afgerond/4;
+  let beste=null;
+  for(let k=1;k<=Math.ceil(lagen/12);k++){
+    for(let a=0;a<=k;a++){
+      for(let b=0;b<=k-a;b++){
+        const c=Math.min(k-a-b,4);
+        if(k-a-b!==c) continue;
+        const totLagen=a*12+b*14+c*15;
+        if(totLagen===lagen){
+          const score=c*1000+b*10;
+          if(!beste||k<beste.k||(k===beste.k&&score<beste.score)) beste={k,a,b,c,rest:0,score};
+        }
+      }
+    }
+    if(k>=2){
+      for(let a=0;a<=k-1;a++){
+        for(let b=0;b<=k-1-a;b++){
+          const maxC=Math.min(k-1-a-b,4);
+          for(let c=0;c<=maxC;c++){
+            const volLagen=a*12+b*14+c*15;
+            const restLagen=lagen-volLagen;
+            if(restLagen>=1&&restLagen<=11&&a+b+c===k-1){
+              const score=c*1000+b*10+1;
+              if(!beste||k<beste.k||(k===beste.k&&score<beste.score)) beste={k,a,b,c,rest:restLagen,score};
+            }
+          }
+        }
+      }
+    }
+    if(beste&&beste.k===k) break;
+  }
+  if(!beste&&lagen<=11) beste={k:1,a:0,b:0,c:0,rest:lagen,score:0};
+  return beste;
+}
+
+function _karOmschrijvingGroot(v) {
+  if(!v) return "—";
+  const d=[];
+  if(v.a>0) d.push(v.a+"× 11pl");
+  if(v.b>0) d.push(v.b+"× 13pl");
+  if(v.c>0) d.push(v.c+"× 14pl");
+  if(v.rest>0) d.push("1× "+(v.rest-1)+"pl");
+  return d.join(" + ");
+}
+
+function printTransportlijstGroot(wk, alleOrders, klanten, verpDef, bedrijf) {
+  const wit = "#f3efe6";
+  const tOrders=(alleOrders||[]).filter(o=>weekLabel(o.leverdatum)===wk&&!/^\d/.test(klanten.find(k=>k.id===o.klantId)?.naam||""))
+    .sort((a,b)=>(klanten.find(k=>k.id===a.klantId)?.naam||"").localeCompare(klanten.find(k=>k.id===b.klantId)?.naam||""));
+  const bd=bedrijf||{};
+  const logo=bd.logo?"<img src='"+bd.logo+"' style='height:45px;max-width:120px;object-fit:contain'/>":"";
+  const datum=new Date().toLocaleDateString("nl-NL");
+  const totaalTrays=tOrders.reduce((s,o)=>s+o.regels.reduce((r,x)=>r+x.aantal,0),0);
+  const ptot11=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=_berekenKarrenGroot(t);return s+(v?v.a:0);},0);
+  const ptot13=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=_berekenKarrenGroot(t);return s+(v?v.b:0);},0);
+  const ptot14=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=_berekenKarrenGroot(t);return s+(v?v.c:0);},0);
+  const prestKarren=tOrders.filter(o=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=_berekenKarrenGroot(t);return v&&v.rest>0;});
+  const prestDetails=prestKarren.map(o=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=_berekenKarrenGroot(t);return "("+( v.rest-1)+")";}).join(" ");
+  const ptotKarrenZonderRest=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=_berekenKarrenGroot(t);return s+(v?v.k-(v.rest>0?1:0):0);},0);
+  const tOrdersVoorPrint=[...tOrders].sort((a,b)=>{
+    const da=a.transportDatum?new Date(a.transportDatum).getTime():null;
+    const db=b.transportDatum?new Date(b.transportDatum).getTime():null;
+    const naamA=klanten.find(k=>k.id===a.klantId)?.naam||"";
+    const naamB=klanten.find(k=>k.id===b.klantId)?.naam||"";
+    if(da===null&&db===null) return naamA.localeCompare(naamB);
+    if(da===null) return 1;
+    if(db===null) return -1;
+    if(da!==db) return da-db;
+    return naamA.localeCompare(naamB);
+  });
+  const rijen=tOrdersVoorPrint.map((o,i)=>{
+    const kl=klanten.find(k=>k.id===o.klantId)||{};
+    const trays=o.regels.reduce((s,r)=>s+r.aantal,0);
+    const verd=_berekenKarrenGroot(trays);
+    const bg=i%2===0?wit:"#cfe6d8";
+    const TD="padding:7px 8px;border:2px solid #b0cfc0;font-size:14px";
+    const dagen=["ZO","MA","DI","WO","DO","VR","ZA"];
+    const td=o.transportDatum?new Date(o.transportDatum):null;
+    const dagWk=td?"wk"+String(getWeekNr(o.transportDatum)).padStart(2,"0")+" "+dagen[td.getDay()]:"";
+    const gedruktOp = o.pakbonGedrukt||"";
+    const klaartijdTonen = gedruktOp ? (o.klaartijd||kl.klaartijd||"") : "";
+    const fusten=[...new Set(o.regels.map(r=>r.verpakking))].join(", ");
+    const vorigeO = i>0 ? tOrdersVoorPrint[i-1] : null;
+    const vorigeTd = vorigeO?.transportDatum ? new Date(vorigeO.transportDatum) : null;
+    const vorigeDagWk = vorigeTd ? "wk"+String(getWeekNr(vorigeO.transportDatum)).padStart(2,"0")+" "+dagen[vorigeTd.getDay()] : "";
+    const dagWisselt = i>0 && dagWk!==vorigeDagWk;
+    const spacer = dagWisselt ? "<tr><td colspan='6' style='padding:0;height:7px;border:none;background:transparent'></td></tr>" : "";
+    return spacer+"<tr style='background:"+bg+"'>"
+      +"<td style='"+TD+";font-weight:700'>"+kl.naam+"</td>"
+      +"<td style='"+TD+";font-size:14px'>"+fusten+"</td>"
+      +"<td style='"+TD+";text-align:right;font-weight:700'>"+trays+"</td>"
+      +"<td style='"+TD+";text-align:right;font-weight:700;color:#2d6a4f'>"+(verd?verd.k:"—")+"</td>"
+      +"<td style='"+TD+";font-size:13px;white-space:nowrap'>"+_karOmschrijvingGroot(verd)+"</td>"
+      +"<td style='"+TD+";text-align:center;font-weight:700;color:#0891b2;font-size:16px;min-width:120px;white-space:nowrap'>"+dagWk+(dagWk&&klaartijdTonen?" ":"")+(klaartijdTonen?"<span style='font-weight:400;color:#333'>"+klaartijdTonen+"</span>":"")+"</td>"
+      +"</tr>";
+  }).join("");
+  const doc="<!DOCTYPE html><html><head><meta charset='UTF-8'>"
+    +"<style>@page{size:A4 portrait;margin:12mm} body{font-family:Arial,sans-serif;font-size:14px;color:#222;margin:0} table{border-collapse:collapse;width:100%} @media print{button{display:none}}</style></head><body>"
+    +"<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #2d6a4f'>"
+      +"<div>"+logo+"</div>"
+      +"<div style='text-align:center'><div style='font-size:21px;font-weight:700'>TRANSPORTLIJST</div><div style='font-size:28px;font-weight:800;color:#2d6a4f;margin-top:2px'>Week "+wk+"</div><div style='font-size:13px;color:#777'>"+datum+"</div></div>"
+      +"<div style='text-align:right;font-size:14px'><strong>"+tOrders.length+"</strong> orders &nbsp;·&nbsp; <strong>"+totaalTrays+"</strong> trays</div>"
+    +"</div>"
+    +"<table><thead><tr>"
+      +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left;font-size:14px'>Klant</th>"
+      +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;font-size:14px;white-space:nowrap;text-align:left'>Fust</th>"
+      +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;font-size:14px;white-space:nowrap;text-align:right'>Trays</th>"
+      +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;font-size:14px;white-space:nowrap;text-align:right'>Karren</th>"
+      +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;font-size:14px;white-space:nowrap'>Verdeling</th>"
+      +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;font-size:14px;white-space:nowrap;text-align:center;min-width:90px'>Dag & Tijd</th>"
+    +"</tr></thead><tbody>"+rijen+"</tbody>"
+    +"<tfoot>"
+    +"<tr style='background:#a8d5b5;font-weight:700;border-top:3px solid #0f3320'>"
+      +"<td style='padding:7px 8px;border:2px solid #8cbfac;color:#0f3320;font-size:14px;white-space:nowrap'>Totaal</td>"
+      +"<td style='padding:7px 8px;border:2px solid #8cbfac'></td>"
+      +"<td style='padding:7px 8px;border:2px solid #8cbfac;text-align:right;color:#0f3320;font-weight:700;font-size:14px;white-space:nowrap'>"+totaalTrays+"</td>"
+      +"<td style='padding:7px 8px;border:2px solid #8cbfac;text-align:right;color:#0f3320;font-weight:700;font-size:14px;white-space:nowrap'>"+ptotKarrenZonderRest+"</td>"
+      +"<td style='padding:7px 8px;border:2px solid #8cbfac;color:#0f3320;font-size:14px'>"
+        +[ptot11>0?ptot11+"× 11pl":null,ptot13>0?ptot13+"× 13pl":null,ptot14>0?ptot14+"× 14pl":null].filter(Boolean).join(" · ")
+        +(prestKarren.length>0?"<br/>rest: "+prestKarren.length+"× "+prestDetails:"")
+      +"</td>"
+      +"<td style='padding:7px 8px;border:2px solid #8cbfac'></td>"
+    +"</tr>"
+    +"</tfoot></table></body></html>";
+  const w=window.open("","_blank");
+  if(w){w.document.open();w.document.write(doc);w.document.close();setTimeout(()=>w.print(),400);}
+  try {
+    const afg = JSON.parse(localStorage.getItem("ta_afgedrukt_werklijst")||"{}");
+    const key = wk+"_transport";
+    afg[key] = {...(afg[key]||{}), transportlijst: true};
+    localStorage.setItem("ta_afgedrukt_werklijst", JSON.stringify(afg));
+  } catch(e) {}
+}
+
+// ── Zelfde uiterlijk als de transportlijst, maar alleen klant/trays/karren/verdeling — voor het inladen van de karren ──
+function printKarindelingGroot(wk, alleOrders, klanten, verpDef, bedrijf) {
+  const wit = "#f3efe6";
+  const tOrders=(alleOrders||[]).filter(o=>weekLabel(o.leverdatum)===wk&&!/^\d/.test(klanten.find(k=>k.id===o.klantId)?.naam||""))
+    .sort((a,b)=>(klanten.find(k=>k.id===a.klantId)?.naam||"").localeCompare(klanten.find(k=>k.id===b.klantId)?.naam||""));
+  const bd=bedrijf||{};
+  const logo=bd.logo?"<img src='"+bd.logo+"' style='height:45px;max-width:120px;object-fit:contain'/>":"";
+  const datum=new Date().toLocaleDateString("nl-NL");
+  const totaalTrays=tOrders.reduce((s,o)=>s+o.regels.reduce((r,x)=>r+x.aantal,0),0);
+  const ptot11=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=_berekenKarrenGroot(t);return s+(v?v.a:0);},0);
+  const ptot13=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=_berekenKarrenGroot(t);return s+(v?v.b:0);},0);
+  const ptot14=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=_berekenKarrenGroot(t);return s+(v?v.c:0);},0);
+  const prestKarren=tOrders.filter(o=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=_berekenKarrenGroot(t);return v&&v.rest>0;});
+  const prestDetails=prestKarren.map(o=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=_berekenKarrenGroot(t);return "("+( v.rest-1)+")";}).join(" ");
+  const ptotKarrenZonderRest=tOrders.reduce((s,o)=>{const t=o.regels.reduce((r,x)=>r+x.aantal,0);const v=_berekenKarrenGroot(t);return s+(v?v.k-(v.rest>0?1:0):0);},0);
+  const rijen=tOrders.map((o,i)=>{
+    const kl=klanten.find(k=>k.id===o.klantId)||{};
+    const trays=o.regels.reduce((s,r)=>s+r.aantal,0);
+    const verd=_berekenKarrenGroot(trays);
+    const bg=i%2===0?wit:"#cfe6d8";
+    const TD="padding:7px 8px;border:2px solid #b0cfc0;font-size:14px";
+    return "<tr style='background:"+bg+"'>"
+      +"<td style='"+TD+";font-weight:700'>"+kl.naam+"</td>"
+      +"<td style='"+TD+";text-align:right;font-weight:700'>"+trays+"</td>"
+      +"<td style='"+TD+";text-align:right;font-weight:700;color:#2d6a4f'>"+(verd?verd.k:"—")+"</td>"
+      +"<td style='"+TD+";font-size:13px;white-space:nowrap'>"+_karOmschrijvingGroot(verd)+"</td>"
+      +"</tr>";
+  }).join("");
+  const doc="<!DOCTYPE html><html><head><meta charset='UTF-8'>"
+    +"<style>@page{size:A4 portrait;margin:12mm} body{font-family:Arial,sans-serif;font-size:14px;color:#222;margin:0} table{border-collapse:collapse;width:100%} @media print{button{display:none}}</style></head><body>"
+    +"<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #2d6a4f'>"
+      +"<div>"+logo+"</div>"
+      +"<div style='text-align:center'><div style='font-size:21px;font-weight:700'>KARINDELING</div><div style='font-size:28px;font-weight:800;color:#2d6a4f;margin-top:2px'>Week "+wk+"</div><div style='font-size:13px;color:#777'>"+datum+"</div></div>"
+      +"<div style='text-align:right;font-size:14px'><strong>"+tOrders.length+"</strong> orders &nbsp;·&nbsp; <strong>"+totaalTrays+"</strong> trays</div>"
+    +"</div>"
+    +"<table><thead><tr>"
+      +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left;font-size:14px'>Klant</th>"
+      +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;font-size:14px;white-space:nowrap;text-align:right'>Trays</th>"
+      +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;font-size:14px;white-space:nowrap;text-align:right'>Karren</th>"
+      +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;font-size:14px;white-space:nowrap'>Verdeling</th>"
+    +"</tr></thead><tbody>"+rijen+"</tbody>"
+    +"<tfoot>"
+    +"<tr style='background:#a8d5b5;font-weight:700;border-top:3px solid #0f3320'>"
+      +"<td style='padding:7px 8px;border:2px solid #8cbfac;color:#0f3320;font-size:14px;white-space:nowrap'>Totaal</td>"
+      +"<td style='padding:7px 8px;border:2px solid #8cbfac;text-align:right;color:#0f3320;font-weight:700;font-size:14px;white-space:nowrap'>"+totaalTrays+"</td>"
+      +"<td style='padding:7px 8px;border:2px solid #8cbfac;text-align:right;color:#0f3320;font-weight:700;font-size:14px;white-space:nowrap'>"+ptotKarrenZonderRest+"</td>"
+      +"<td style='padding:7px 8px;border:2px solid #8cbfac;color:#0f3320;font-size:14px'>"
+        +[ptot11>0?ptot11+"× 11pl":null,ptot13>0?ptot13+"× 13pl":null,ptot14>0?ptot14+"× 14pl":null].filter(Boolean).join(" · ")
+        +(prestKarren.length>0?"<br/>rest: "+prestKarren.length+"× "+prestDetails:"")
+      +"</td>"
+    +"</tr>"
+    +"</tfoot></table></body></html>";
+  const w=window.open("","_blank");
+  if(w){w.document.open();w.document.write(doc);w.document.close();setTimeout(()=>w.print(),400);}
+}
+
+// ── Stickers rechtstreeks naar de printer (i.p.v. Excel-download) — 1 sticker per pagina/label, zelfde print-venster-aanpak als de andere afdrukknoppen ──
+function printStickersGroot(stickers) {
+  const items = stickers.map(s=>
+    "<div class='sticker'>"+s.map(r=>"<div class='sr'>"+r+"</div>").join("")+"</div>"
+  ).join("");
+  const doc = "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
+    +"<style>@page{margin:0} html,body{margin:0;padding:0;font-family:Arial,sans-serif} "
+    +".sticker{width:100%;box-sizing:border-box;padding:6mm;text-align:center;"
+      +"display:flex;flex-direction:column;align-items:center;justify-content:center;"
+      +"page-break-after:always;break-after:page;page-break-inside:avoid} "
+    +".sticker:last-child{page-break-after:auto;break-after:auto} "
+    +".sr{font-size:15px;line-height:1.35;color:#222} .sr:first-child{font-weight:700;font-size:18px} .sr:last-child{font-weight:700} "
+    +"@media print{button{display:none}}</style></head><body>"
+    +items+"</body></html>";
+  const w=window.open("","_blank");
+  if(w){w.document.open();w.document.write(doc);w.document.close();setTimeout(()=>w.print(),400);}
+}
+
+// ── Kar-stickers: 1 sticker per kar (klant + "kar X van Y"), zelfde opzet als de Excel-stickers bij Werklijsten ──
+function maakKarStickersGroot(wk, alleOrders, klanten) {
+  const tOrders=(alleOrders||[]).filter(o=>weekLabel(o.leverdatum)===wk&&!/^\d/.test(klanten.find(k=>k.id===o.klantId)?.naam||""))
+    .sort((a,b)=>(klanten.find(k=>k.id===a.klantId)?.naam||"").localeCompare(klanten.find(k=>k.id===b.klantId)?.naam||""));
+  const stickers=[];
+  tOrders.forEach(o=>{
+    const kl=klanten.find(k=>k.id===o.klantId)||{};
+    const trays=(o.regels||[]).reduce((s,r)=>s+(r.aantal||0),0);
+    const verd=_berekenKarrenGroot(trays);
+    const totaalKarren=verd?verd.k:0;
+    if(totaalKarren<=0) return;
+    const naamKort=(kl.klantcode||kl.naam?.substring(0,6)||"?").toUpperCase();
+    for(let i=1;i<=totaalKarren;i++){
+      stickers.push([naamKort, "kar "+i+" ("+totaalKarren+")"]);
+    }
+  });
+  if(stickers.length===0){ alert("Geen karren gevonden voor deze week."); return; }
+  printStickersGroot(stickers);
+}
+
+// ════════════════════════════════════════════════════════
+// AFLEVEREN (nieuwe tab — indeling klaar, inhoud volgt later)
+// ════════════════════════════════════════════════════════
+function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecteerdWeek, highlightOrderId }) {
+  const groenA = "#2d6a4f", lichtGroenA = "#e8f5ee", randA = "#b9c6bf", subtekstA = "#6b7d74", witA = "#f3efe6";
+  // Van/tot-filter onthouden in localStorage — Afleveren wordt bij het wisselen van tab volledig ontkoppeld (unmount), dus React state alleen is niet genoeg.
+  const [filtVanA, setFiltVanA] = useState(()=>{ try{return localStorage.getItem("ta_afleveren_filtVan")||"";}catch(e){return "";} });
+  const [filtTotA, setFiltTotA] = useState(()=>{ try{return localStorage.getItem("ta_afleveren_filtTot")||"";}catch(e){return "";} });
+  useEffect(()=>{ try{localStorage.setItem("ta_afleveren_filtVan", filtVanA||"");}catch(e){} }, [filtVanA]);
+  useEffect(()=>{ try{localStorage.setItem("ta_afleveren_filtTot", filtTotA||"");}catch(e){} }, [filtTotA]);
+  const [gekozenWeekA, setGekozenWeekA] = useState(voorgeselecteerdWeek || null);
+  const [gemarkeerdOrderId, setGemarkeerdOrderId] = useState(highlightOrderId || null);
+  const nu2A = new Date();
+
+  // ── Lichtblauwe highlight van de order die vanuit Orders is doorgestuurd, na ~20s weer wegfaden ──
+  useEffect(()=>{
+    if(!highlightOrderId) return;
+    setGemarkeerdOrderId(highlightOrderId);
+    const t = setTimeout(()=>setGemarkeerdOrderId(null), 20000);
+    return ()=>clearTimeout(t);
+  }, [highlightOrderId]);
+
+  const alleWekenA = [...new Set((orders||[]).map(o=>weekLabel(o.leverdatum)))].sort();
+  const wekenA = alleWekenA.filter(wk=>{
+    if(filtVanA && wk<filtVanA) return false;
+    if(filtTotA && wk>filtTotA) return false;
+    return true;
+  });
+
+  function weekOptiesA(){
+    const opties=[];
+    for(let wk=1;wk<=52;wk++){
+      const lbl=String(getJaar(nu2A)).slice(-2)+String(wk).padStart(2,"0");
+      opties.push(<option key={lbl} value={lbl}>wk {String(wk).padStart(2,"0")}</option>);
+    }
+    return opties;
+  }
+
+  // ── Pijltjes omhoog/omlaag = vorige/volgende week ──
+  useEffect(()=>{
+    function onKeyWeekPijlA(e){
+      if(e.key!=="ArrowUp"&&e.key!=="ArrowDown") return;
+      const tag = document.activeElement?.tagName;
+      if(tag==="INPUT"||tag==="SELECT"||tag==="TEXTAREA") return;
+      if(wekenA.length===0) return;
+      e.preventDefault();
+      const idx = wekenA.indexOf(gekozenWeekA);
+      const nieuw = e.key==="ArrowDown" ? (wekenA[idx+1]||wekenA[0]) : (wekenA[idx-1]||wekenA[wekenA.length-1]);
+      setGekozenWeekA(nieuw);
+    }
+    window.addEventListener("keydown", onKeyWeekPijlA);
+    return ()=>window.removeEventListener("keydown", onKeyWeekPijlA);
+  }, [wekenA, gekozenWeekA]);
+
+  return (
+    <div style={{display:"flex", height:"calc(100vh - 50px)", background:witA}}>
+      {/* Navigatie links: van/tot + weken (zelfde opzet als Orders/Werklijsten) */}
+      <div style={{width:230, borderRight:"2px solid #b9c6bf", background:witA, flexShrink:0, display:"flex", flexDirection:"column", overflow:"hidden"}}>
+        <div style={{padding:8, borderBottom:`1px solid ${randA}`, display:"flex", gap:6}}>
+          <div style={{flex:1}}>
+            <div style={{fontSize:10, color:subtekstA, marginBottom:2}}>Van</div>
+            <select style={{width:"100%",fontSize:11,padding:"4px 5px",border:`1px solid ${randA}`,borderRadius:5,background:witA}}
+              value={filtVanA} onChange={e=>setFiltVanA(e.target.value)}>
+              <option value="">Alle</option>
+              {weekOptiesA()}
+            </select>
+          </div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:10, color:subtekstA, marginBottom:2}}>Tot</div>
+            <select style={{width:"100%",fontSize:11,padding:"4px 5px",border:`1px solid ${randA}`,borderRadius:5,background:witA}}
+              value={filtTotA} onChange={e=>setFiltTotA(e.target.value)}>
+              <option value="">Alle</option>
+              {weekOptiesA()}
+            </select>
+          </div>
+        </div>
+        <div style={{flex:1, overflowY:"auto"}}>
+          {wekenA.length===0 && (
+            <div style={{padding:14, fontSize:11, color:subtekstA}}>Geen weken gevonden.</div>
+          )}
+          {wekenA.map(wk=>{
+            const isHuidigeWeekA = wk===weekLabel(new Date());
+            // Interne "klanten" (naam begint met cijfer) hebben geen factuur nodig — niet meetellen bij "alles gefactureerd".
+            const weekOrdersVoorWk = (orders||[]).filter(o=>weekLabel(o.leverdatum)===wk && !/^\d/.test(klanten.find(k=>k.id===o.klantId)?.naam||""));
+            const alleGefactureerdA = weekOrdersVoorWk.length>0 && weekOrdersVoorWk.every(o=>o.factuurNr);
+            const randKleurA = gekozenWeekA===wk ? "#1a1a1a" : (alleGefactureerdA ? "#dc2626" : (isHuidigeWeekA ? "#16a34a" : null));
+            return (
+              <div key={wk}
+                onClick={()=>setGekozenWeekA(wk)}
+                style={{padding:"8px 12px", cursor:"pointer", marginBottom:2,
+                  background: gekozenWeekA===wk ? groenA : "#cfe6d8",
+                  border: randKleurA ? `2px solid ${randKleurA}` : "2px solid transparent",
+                  borderBottom: randKleurA ? `2px solid ${randKleurA}` : `1px solid ${witA}`,
+                  display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+                <span style={{fontWeight:700, fontSize:12, color: gekozenWeekA===wk ? "#fff" : "#1e3a2f", display:"flex", alignItems:"center", gap:6}}>
+                  {wk}
+                  {isHuidigeWeekA && <span title="Huidige week" style={{fontSize:9,fontWeight:700,color: gekozenWeekA===wk ? "#fff" : "#16a34a"}}>● nu</span>}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Inhoud rechts — transportlijst van de gekozen week */}
+      <div style={{flex:1, padding:20, overflowY:"auto"}}>
+        {!gekozenWeekA
+          ? <div style={{color:subtekstA,fontSize:13}}>Kies links een week.</div>
+          : (()=>{
+              // Interne "klanten" (naam begint met cijfer, bv. "6 cm pot Vollebregt") horen niet op de transportlijst — zelfde afspraak als bij de afdruk.
+              const weekOrdersA = (orders||[]).filter(o=>weekLabel(o.leverdatum)===gekozenWeekA && !/^\d/.test(klanten.find(k=>k.id===o.klantId)?.naam||""));
+              if(weekOrdersA.length===0) return <div style={{color:subtekstA,fontSize:13}}>Geen orders voor week {gekozenWeekA}.</div>;
+              function updA(orderId, veld, waarde){
+                setOrders(prev=>prev.map(o=>o.id===orderId?{...o,[veld]:waarde}:o));
+              }
+              return (
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+                    <div style={{fontWeight:700,fontSize:15,color:groenA}}>Transportlijst — week {gekozenWeekA}</div>
+                    <button style={{background:groenA,color:"#fff",border:"none",borderRadius:5,padding:"5px 10px",fontSize:11,fontWeight:600,cursor:"pointer"}}
+                      onClick={()=>printTransportlijstGroot(gekozenWeekA, orders, klanten, verpDef, bedrijf)}>
+                      🖨️ Transportlijst afdrukken
+                    </button>
+                    <button style={{background:"#fff",color:"#374151",border:"1px solid #d1d5db",borderRadius:5,padding:"5px 10px",fontSize:11,fontWeight:600,cursor:"pointer"}}
+                      onClick={()=>printKarindelingGroot(gekozenWeekA, orders, klanten, verpDef, bedrijf)}>
+                      🖨️ Karindeling afdrukken
+                    </button>
+                    <button style={{background:"#fff",color:"#374151",border:"1px solid #d1d5db",borderRadius:5,padding:"5px 10px",fontSize:11,fontWeight:600,cursor:"pointer"}}
+                      onClick={()=>maakKarStickersGroot(gekozenWeekA, orders, klanten)}>
+                      🏷️ Karstickers
+                    </button>
+                  </div>
+                  {weekOrdersA.map(o=>{
+                    const kl = klanten.find(k=>k.id===o.klantId)||{};
+                    const kanPakbon = o.bevestigingNr && o.transportDatum;
+                    const heeftPakbon = !!o.pakbonNr;
+                    const kanAflever = !!o.pakbonNr;
+                    const heeftAflever = !!o.afleverNr;
+                    const kanFactuur = !!o.afleverNr;
+                    const heeftFactuur = !!o.factuurNr;
+                    const isGemarkeerdA = gemarkeerdOrderId===o.id;
+                    return (
+                      <div key={o.id} style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",
+                        background:isGemarkeerdA?"#bfe3fa":witA,
+                        border:isGemarkeerdA?"1px solid #7cc4f0":`1px solid ${randA}`,borderRadius:6,padding:"8px 12px"}}>
+                        <span style={{fontWeight:700,fontSize:13,color:groenA,cursor:"pointer",
+                            textDecoration:"underline",textDecorationStyle:"dotted",textDecorationColor:"#9ca3af",minWidth:130}}
+                          title="Klik om order te openen"
+                          onClick={()=>window.dispatchEvent(new CustomEvent("ta-open-order",{detail:{orderId:o.id,terugNaarAfleverWeek:gekozenWeekA}}))}>
+                          {kl.naam||"—"}
+                        </span>
+
+                        <input type="date" style={{fontSize:11,padding:"3px 6px",border:`1px solid ${o.transportDatum?"#0891b2":randA}`,borderRadius:4}}
+                          name={"transportDatumA_"+o.id}
+                          autoComplete="off"
+                          value={o.transportDatum||""}
+                          onChange={e=>updA(o.id,"transportDatum",e.target.value)} />
+                        <input placeholder={kl.transporteur||"Transporteur..."} style={{fontSize:11,padding:"3px 6px",border:`1px solid ${randA}`,borderRadius:4,width:120}}
+                          name={"transporteurA_"+o.id} autoComplete="off"
+                          value={o.transporteur||""}
+                          onChange={e=>updA(o.id,"transporteur",e.target.value)} />
+                        <input placeholder={kl.klaartijd||"Tijd..."} style={{fontSize:11,padding:"3px 6px",border:`1px solid ${randA}`,borderRadius:4,width:70}}
+                          name={"klaartijdA_"+o.id} autoComplete="off"
+                          value={o.klaartijd||""}
+                          onChange={e=>updA(o.id,"klaartijd",e.target.value)} />
+
+                        {!heeftPakbon
+                          ? <button title={!o.bevestigingNr?"Eerst bevestigen":!o.transportDatum?"Eerst transportdatum invoeren":"Pakbon aanmaken"}
+                              disabled={!kanPakbon}
+                              style={{background:kanPakbon?"#0891b2":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"5px 8px",fontSize:11,fontWeight:600,cursor:kanPakbon?"pointer":"not-allowed",whiteSpace:"nowrap"}}
+                              onClick={()=>{
+                                if(!kanPakbon) return;
+                                const bestaandeNrs=(orders||[]).filter(x=>x.pakbonNr).map(x=>Number(x.pakbonNr)||0);
+                                const volgendNr=bestaandeNrs.length>0?Math.max(...bestaandeNrs)+1:1;
+                                const bijgewerkt={...o,pakbonNr:String(volgendNr).padStart(4,"0")};
+                                setOrders(prev=>prev.map(x=>x.id===o.id?bijgewerkt:x));
+                                setTimeout(()=>window.dispatchEvent(new CustomEvent("ta-print-pakbon",{detail:bijgewerkt})),200);
+                              }}>📦 Pakbon aanmaken</button>
+                          : <button style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:5,padding:"5px 8px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}
+                              onClick={()=>window.dispatchEvent(new CustomEvent("ta-print-pakbon",{detail:o}))}>🖨️ Pakbon #{o.pakbonNr}</button>
+                        }
+
+                        {!heeftAflever
+                          ? <button title={!kanAflever?"Eerst pakbon aanmaken":"Afleverbon aanmaken en afdrukken"}
+                              disabled={!kanAflever}
+                              style={{background:kanAflever?"#1d4ed8":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"5px 8px",fontSize:11,fontWeight:600,cursor:kanAflever?"pointer":"not-allowed",whiteSpace:"nowrap"}}
+                              onClick={()=>{
+                                if(!kanAflever) return;
+                                if(!window.confirm("Afleverbon aanmaken voor "+(kl.naam||"")+"?")) return;
+                                const bestaandeNrs=(orders||[]).filter(x=>x.afleverNr).map(x=>Number(x.afleverNr)||0);
+                                const volgendNr=bestaandeNrs.length>0?Math.max(...bestaandeNrs)+1:1;
+                                const bijgewerkt={...o,afleverNr:String(volgendNr).padStart(4,"0"),status:"geleverd"};
+                                setOrders(prev=>prev.map(x=>x.id===o.id?bijgewerkt:x));
+                                setTimeout(()=>window.dispatchEvent(new CustomEvent("ta-print-afleverbon",{detail:bijgewerkt})),200);
+                              }}>🚚 Afleverbon aanmaken</button>
+                          : <button style={{background:"#1d4ed8",color:"#fff",border:"none",borderRadius:5,padding:"5px 8px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}
+                              onClick={()=>window.dispatchEvent(new CustomEvent("ta-print-afleverbon",{detail:o}))}>🖨️ Afleverbon #{o.afleverNr}</button>
+                        }
+
+                        {!heeftFactuur
+                          ? <button title={!kanFactuur?"Eerst afleverbon aanmaken":"Factuur aanmaken"}
+                              disabled={!kanFactuur}
+                              style={{background:kanFactuur?"#b45309":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"5px 8px",fontSize:11,fontWeight:600,cursor:kanFactuur?"pointer":"not-allowed",whiteSpace:"nowrap"}}
+                              onClick={()=>{
+                                if(!kanFactuur) return;
+                                if(!window.confirm("Factuur aanmaken voor "+(kl.naam||"")+"?")) return;
+                                const bestaandeNrs=(orders||[]).filter(x=>x.factuurNr).map(x=>Number(x.factuurNr)||0);
+                                const volgendNr=bestaandeNrs.length>0?Math.max(...bestaandeNrs)+1:1;
+                                const bijgewerkt={...o,factuurNr:String(volgendNr).padStart(4,"0")};
+                                setOrders(prev=>prev.map(x=>x.id===o.id?bijgewerkt:x));
+                                setTimeout(()=>window.dispatchEvent(new CustomEvent("ta-print-factuur",{detail:bijgewerkt})),200);
+                              }}>🧾 Factuur aanmaken</button>
+                          : <button style={{background:"#b45309",color:"#fff",border:"none",borderRadius:5,padding:"5px 8px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}
+                              onClick={()=>window.dispatchEvent(new CustomEvent("ta-print-factuur",{detail:o}))}>🖨️ Factuur #{o.factuurNr}</button>
+                        }
+
+                        {(()=>{
+                          const traysA = (o.regels||[]).reduce((s,r)=>s+(r.aantal||0),0);
+                          const verdA = _berekenKarrenGroot(traysA);
+                          return (
+                            <div style={{display:"flex",alignItems:"center",gap:10,fontSize:11,color:groenA,whiteSpace:"nowrap",marginLeft:"auto"}}>
+                              <span title="Aantal trays"><strong>{traysA}</strong> trays</span>
+                              <span title="Aantal karren"><strong>{verdA?verdA.k:"—"}</strong> {verdA&&verdA.k===1?"kar":"karren"}</span>
+                              <span title="Karindeling" style={{color:subtekstA}}>{_karOmschrijvingGroot(verdA)}</span>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()
+        }
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const {
     useEffect: ue
@@ -43489,14 +44091,29 @@ function App() {
   }, [pagina]);
 
   // ── Navigeer naar Orders en open direct een specifieke order ──
+  const [afleverTerugWeek, setAfleverTerugWeek] = useState(null);
   useEffect(() => {
     function onOpenOrder(e) {
       setOrderOmTeOpenen(e.detail?.orderId);
       setOrderRegelOmTeMarkeren(e.detail?.markeer || null);
+      setAfleverTerugWeek(e.detail?.terugNaarAfleverWeek || null);
       navigeer("orders");
     }
     window.addEventListener("ta-open-order", onOpenOrder);
     return () => window.removeEventListener("ta-open-order", onOpenOrder);
+  }, [pagina]);
+
+  // ── Navigeer naar Afleveren met week/order voorgeselecteerd (doorspringen vanuit Orders) ──
+  const [afleverVoorkeuzeWeek, setAfleverVoorkeuzeWeek] = useState(null);
+  const [afleverHighlightOrderId, setAfleverHighlightOrderId] = useState(null);
+  useEffect(() => {
+    function onNaarAfleveren(e) {
+      setAfleverVoorkeuzeWeek(e.detail?.week || null);
+      setAfleverHighlightOrderId(e.detail?.orderId || null);
+      navigeer("afleveren");
+    }
+    window.addEventListener("ta-naar-afleveren", onNaarAfleveren);
+    return () => window.removeEventListener("ta-naar-afleveren", onNaarAfleveren);
   }, [pagina]);
 
   // ── Generieke navigatie (vanuit Samenvatting) ──
@@ -43820,8 +44437,8 @@ function App() {
     id: "planning",
     label: "Werklijsten"
   }, {
-    id: "transport",
-    label: "Transport"
+    id: "afleveren",
+    label: "Afleveren"
   }, {
     id: "samenvatting",
     label: "Samenvatting"
@@ -44378,7 +44995,8 @@ function App() {
     realisatie: realisatie,
     orderOmTeOpenen: orderOmTeOpenen,
     orderRegelOmTeMarkeren: orderRegelOmTeMarkeren,
-    huidigePagina: pagina
+    huidigePagina: pagina,
+    afleverTerugWeek: afleverTerugWeek
   })), pagina === "klanten" && /*#__PURE__*/React.createElement(Klantenbeheer, {
     klanten: klanten,
     setKlanten: setKlanten,
@@ -44507,11 +45125,6 @@ function App() {
   }), pagina === "afleveroverzicht" && /*#__PURE__*/React.createElement(AfleverOverzicht, {
     klanten: klanten,
     orders: orders
-  }), pagina === "transport" && /*#__PURE__*/React.createElement(TransportPagina, {
-    klanten: klanten,
-    orders: orders,
-    bedrijf: bedrijf,
-    verpDef: verpDef
   }), pagina === "weekoverzicht" && /*#__PURE__*/React.createElement(Weekoverzicht, {
     klanten: klanten,
     gewassen: gewassen,
@@ -44551,8 +45164,17 @@ function App() {
     setWerklijstVoorkeuze: setWerklijstVoorkeuze,
     medewerkerModus: medewerkerModus,
     medewerkerNaam: medewerkerNaam,
-    werklijstKeuze: werklijstKeuze
-  })), pagina === "zaadinkoop" && /*#__PURE__*/React.createElement(Zaadinkoop, {
+    werklijstKeuze: werklijstKeuze,
+    huidigePagina: pagina
+  })), pagina === "afleveren" && /*#__PURE__*/React.createElement(Afleveren, {
+    orders: orders,
+    setOrders: setOrders,
+    klanten: klanten,
+    bedrijf: bedrijf,
+    verpDef: verpDef,
+    voorgeselecteerdWeek: afleverVoorkeuzeWeek || afleverTerugWeek,
+    highlightOrderId: afleverHighlightOrderId
+  }), pagina === "zaadinkoop" && /*#__PURE__*/React.createElement(Zaadinkoop, {
     gewassen: gewassen,
     zaadinkoop: zaadinkoop,
     setZaadinkoop: setZaadinkoop,

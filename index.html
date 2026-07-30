@@ -44046,8 +44046,15 @@ function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecte
         {!gekozenWeekA
           ? <div style={{color:subtekstA,fontSize:13}}>Kies links een week.</div>
           : (()=>{
-              // Interne "klanten" (naam begint met cijfer, bv. "6 cm pot Vollebregt") horen niet op de transportlijst — zelfde afspraak als bij de afdruk.
-              const weekOrdersA = (orders||[]).filter(o=>weekLabel(o.leverdatum)===gekozenWeekA && !/^\d/.test(klanten.find(k=>k.id===o.klantId)?.naam||""));
+              // Interne "klanten" (naam begint met cijfer, bv. "6 cm pot Vollebregt") staan er ook bij — geen transport nodig,
+              // maar wel pakbon/afleverbon/factuur (zie isIntern hieronder, verbergt alleen de transport-velden).
+              // Onderaan de lijst gezet, zodat ze niet tussen de echte klanten door staan.
+              const weekOrdersA = (orders||[]).filter(o=>weekLabel(o.leverdatum)===gekozenWeekA)
+                .sort((a,b)=>{
+                  const aIntern = /^\d/.test(klanten.find(k=>k.id===a.klantId)?.naam||"") ? 1 : 0;
+                  const bIntern = /^\d/.test(klanten.find(k=>k.id===b.klantId)?.naam||"") ? 1 : 0;
+                  return aIntern - bIntern;
+                });
               if(weekOrdersA.length===0) return <div style={{color:subtekstA,fontSize:13}}>Geen orders voor week {gekozenWeekA}.</div>;
               function updA(orderId, veld, waarde){
                 setOrders(prev=>prev.map(o=>o.id===orderId?{...o,[veld]:waarde}:o));
@@ -44071,9 +44078,10 @@ function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecte
                   </div>
                   {weekOrdersA.map(o=>{
                     const kl = klanten.find(k=>k.id===o.klantId)||{};
+                    const isIntern = /^\d/.test(kl.naam||"");
                     const traysA = (o.regels||[]).reduce((s,r)=>s+(r.aantal||0),0);
                     const verdA = _berekenKarrenGroot(traysA);
-                    const kanPakbon = o.bevestigingNr && o.transportDatum;
+                    const kanPakbon = isIntern ? o.bevestigingNr : (o.bevestigingNr && o.transportDatum);
                     const heeftPakbon = !!o.pakbonNr;
                     const kanAflever = !!o.pakbonNr;
                     const heeftAflever = !!o.afleverNr;
@@ -44091,33 +44099,37 @@ function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecte
                           {kl.naam||"—"}
                         </span>
 
-                        <input type="date" style={{fontSize:11,padding:"3px 6px",
-                            border:`1px solid ${o.transportDatum?"#0891b2":randA}`,
-                            color:o.transportDatum?"#111827":"#9ca3af",borderRadius:4}}
-                          name={"transportDatumA_"+o.id}
-                          autoComplete="off"
-                          value={o.transportDatum||""}
-                          onChange={e=>updA(o.id,"transportDatum",e.target.value)} />
-                        <input placeholder={kl.transporteur||"Transporteur..."} style={{fontSize:11,padding:"3px 4px",
-                            border:`1px solid ${o.transporteur?"#0891b2":randA}`,
-                            color:o.transporteur?"#111827":"#9ca3af",borderRadius:4,width:98}}
-                          name={"transporteurA_"+o.id} autoComplete="off"
-                          value={o.transporteur||""}
-                          onChange={e=>updA(o.id,"transporteur",e.target.value)} />
-                        <input placeholder={kl.klaartijd||"Tijd..."} style={{fontSize:11,padding:"3px 4px",border:`1px solid ${randA}`,borderRadius:4,width:58}}
-                          name={"klaartijdA_"+o.id} autoComplete="off"
-                          value={o.klaartijd||""}
-                          onChange={e=>updA(o.id,"klaartijd",e.target.value)} />
-
-                        <button title="Transportaanvraag als conceptmail in Gmail klaarzetten"
-                          style={{background:"#e0f2fe",color:"#0369a1",border:"1px solid #0369a1",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",justifyContent:"center",width:118,boxSizing:"border-box"}}
-                          onClick={()=>{
-                            if(!(transporteurs||[]).length){ alert("Nog geen transporteurs ingesteld. Ga naar ⚙️ Instellingen."); return; }
-                            setTransportFormOrder({o, kl, traysA, verdA});
-                          }}>Transportaanvraag<AfdrukStipA actief={!!o.transportMailGemaild}/></button>
+                        {isIntern
+                          ? <span style={{fontSize:11,color:subtekstA,fontStyle:"italic",whiteSpace:"nowrap"}}>interne levering — geen transport nodig</span>
+                          : <>
+                              <input type="date" style={{fontSize:11,padding:"3px 6px",
+                                  border:`1px solid ${o.transportDatum?"#0891b2":randA}`,
+                                  color:o.transportDatum?"#111827":"#9ca3af",borderRadius:4}}
+                                name={"transportDatumA_"+o.id}
+                                autoComplete="off"
+                                value={o.transportDatum||""}
+                                onChange={e=>updA(o.id,"transportDatum",e.target.value)} />
+                              <input placeholder={kl.transporteur||"Transporteur..."} style={{fontSize:11,padding:"3px 4px",
+                                  border:`1px solid ${o.transporteur?"#0891b2":randA}`,
+                                  color:o.transporteur?"#111827":"#9ca3af",borderRadius:4,width:98}}
+                                name={"transporteurA_"+o.id} autoComplete="off"
+                                value={o.transporteur||""}
+                                onChange={e=>updA(o.id,"transporteur",e.target.value)} />
+                              <input placeholder={kl.klaartijd||"Tijd..."} style={{fontSize:11,padding:"3px 4px",border:`1px solid ${randA}`,borderRadius:4,width:58}}
+                                name={"klaartijdA_"+o.id} autoComplete="off"
+                                value={o.klaartijd||""}
+                                onChange={e=>updA(o.id,"klaartijd",e.target.value)} />
+                              <button title="Transportaanvraag als conceptmail in Gmail klaarzetten"
+                                style={{background:"#e0f2fe",color:"#0369a1",border:"1px solid #0369a1",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",justifyContent:"center",width:118,boxSizing:"border-box"}}
+                                onClick={()=>{
+                                  if(!(transporteurs||[]).length){ alert("Nog geen transporteurs ingesteld. Ga naar ⚙️ Instellingen."); return; }
+                                  setTransportFormOrder({o, kl, traysA, verdA});
+                                }}>Transportaanvraag<AfdrukStipA actief={!!o.transportMailGemaild}/></button>
+                            </>
+                        }
 
                         {!heeftPakbon
-                          ? <button title={!o.bevestigingNr?"Eerst bevestigen":!o.transportDatum?"Eerst transportdatum invoeren":"Pakbon aanmaken"}
+                          ? <button title={!o.bevestigingNr?"Eerst bevestigen":(!isIntern&&!o.transportDatum)?"Eerst transportdatum invoeren":"Pakbon aanmaken"}
                               disabled={!kanPakbon}
                               style={{background:kanPakbon?"#0891b2":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:kanPakbon?"pointer":"not-allowed",whiteSpace:"nowrap",width:100,textAlign:"center",boxSizing:"border-box"}}
                               onClick={()=>{
@@ -44132,7 +44144,7 @@ function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecte
                               onClick={()=>window.dispatchEvent(new CustomEvent("ta-print-pakbon",{detail:o}))}>Pakbon #{o.pakbonNr}</button>
                         }
 
-                        {!heeftAflever
+                        {!isIntern && (!heeftAflever
                           ? <button title={!kanAflever?"Eerst pakbon aanmaken":"Afleverbon aanmaken en afdrukken"}
                               disabled={!kanAflever}
                               style={{background:kanAflever?"#1d4ed8":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:kanAflever?"pointer":"not-allowed",whiteSpace:"nowrap",width:112,textAlign:"center",boxSizing:"border-box"}}
@@ -44147,9 +44159,9 @@ function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecte
                               }}>Afleverbon aanmaken</button>
                           : <button style={{background:"#1d4ed8",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",width:112,textAlign:"center",boxSizing:"border-box"}}
                               onClick={()=>window.dispatchEvent(new CustomEvent("ta-print-afleverbon",{detail:o}))}>Afleverbon #{o.afleverNr}</button>
-                        }
+                        )}
 
-                        {!heeftFactuur
+                        {!isIntern && (!heeftFactuur
                           ? <button title={!kanFactuur?"Eerst afleverbon aanmaken":"Factuur aanmaken"}
                               disabled={!kanFactuur}
                               style={{background:kanFactuur?"#b45309":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:kanFactuur?"pointer":"not-allowed",whiteSpace:"nowrap",width:100,textAlign:"center",boxSizing:"border-box"}}
@@ -44164,14 +44176,14 @@ function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecte
                               }}>Factuur aanmaken</button>
                           : <button style={{background:"#b45309",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",width:100,textAlign:"center",boxSizing:"border-box"}}
                               onClick={()=>window.dispatchEvent(new CustomEvent("ta-print-factuur",{detail:o}))}>Factuur #{o.factuurNr}</button>
-                        }
+                        )}
 
-                        {heeftFactuur && kl.email &&
+                        {!isIntern && heeftFactuur && kl.email &&
                           <button style={{background:"#1d4ed8",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",width:96,textAlign:"center",boxSizing:"border-box"}}
                             onClick={()=>mailFactuur(o)}>Factuur mailen</button>
                         }
 
-                        {heeftFactuur && (
+                        {!isIntern && heeftFactuur && (
                           !o.betaaldOp
                             ? <button style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",width:104,textAlign:"center",boxSizing:"border-box"}}
                                 onClick={()=>{
@@ -44193,8 +44205,8 @@ function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecte
 
                         <div style={{display:"flex",alignItems:"center",gap:10,fontSize:11,color:groenA,whiteSpace:"nowrap",marginLeft:"auto"}}>
                           <span title="Aantal trays"><strong>{traysA}</strong> trays</span>
-                          <span title="Aantal karren"><strong>{verdA?verdA.k:"—"}</strong> {verdA&&verdA.k===1?"kar":"karren"}</span>
-                          <span title="Karindeling" style={{color:subtekstA,fontSize:14}}>{_karOmschrijvingGroot(verdA)}</span>
+                          {!isIntern && <span title="Aantal karren"><strong>{verdA?verdA.k:"—"}</strong> {verdA&&verdA.k===1?"kar":"karren"}</span>}
+                          {!isIntern && <span title="Karindeling" style={{color:subtekstA,fontSize:14}}>{_karOmschrijvingGroot(verdA)}</span>}
                         </div>
                       </div>
                     );

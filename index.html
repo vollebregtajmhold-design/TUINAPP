@@ -32160,6 +32160,15 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
   const [toonMatrix, setToonMatrix] = useState(false);
   const [tabletModus, setTabletModus] = useState(()=>{ try{ return localStorage.getItem("ta_werklijst_tabletmodus")==="1"; }catch(e){ return false; } });
   useEffect(()=>{ try{ localStorage.setItem("ta_werklijst_tabletmodus", tabletModus?"1":"0"); }catch(e){} }, [tabletModus]);
+  const [weekKolomOpen, setWeekKolomOpen] = useState(true); // in tabletmodus wegswipebaar, om ruimte te maken voor de kaarten
+  const swipeStartXRef = React.useRef(null);
+  function onWeekKolomTouchStart(e){ swipeStartXRef.current = e.touches[0].clientX; }
+  function onWeekKolomTouchEnd(e){
+    if(swipeStartXRef.current==null) return;
+    const dx = e.changedTouches[0].clientX - swipeStartXRef.current;
+    if(dx < -50) setWeekKolomOpen(false);
+    swipeStartXRef.current = null;
+  }
   useEffect(() => {
     function onKey(e){
       if(e.key==="Backspace" && toonMatrix){
@@ -33074,7 +33083,9 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
   return (
     <div style={{display:"flex", height:"calc(100vh - 50px)", background:wit}}>
       {/* Navigatie links: 5 lijsten + weken (net als klanten bij Orders) */}
-      <div style={{width:230, borderRight:"2px solid #b9c6bf", background:wit, flexShrink:0, display:"flex", flexDirection:"column", overflow:"hidden"}}>
+      <div style={{width:(tabletModus&&!weekKolomOpen)?0:230, transition:"width 0.2s ease", borderRight:(tabletModus&&!weekKolomOpen)?"none":"2px solid #b9c6bf", background:wit, flexShrink:0, display:"flex", flexDirection:"column", overflow:"hidden"}}
+        onTouchStart={tabletModus?onWeekKolomTouchStart:undefined}
+        onTouchEnd={tabletModus?onWeekKolomTouchEnd:undefined}>
         <div style={{padding:6, borderBottom:`1px solid ${rand}`, display:"flex", flexDirection:"column", gap:3}}>
           {LIJST_DEFS.filter(ld=>!werklijstKeuze || werklijstKeuze.includes(ld.id)).map(ld=>(
             <button key={ld.id}
@@ -33185,7 +33196,16 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
       </div>
 
       {/* Planning overzicht + matrix naast elkaar */}
-      <div style={{flex:1, display:"flex", flexDirection:"row", overflow:"hidden"}}>
+      <div style={{flex:1, display:"flex", flexDirection:"row", overflow:"hidden", position:"relative"}}>
+      {tabletModus &&
+        <button onClick={()=>setWeekKolomOpen(v=>!v)}
+          title={weekKolomOpen?"Weekkolom verbergen":"Weekkolom tonen"}
+          style={{position:"absolute",top:"50%",left:0,transform:"translateY(-50%)",zIndex:5,
+            width:22,height:56,borderRadius:"0 8px 8px 0",border:"1px solid #b9c6bf",borderLeft:"none",
+            background:"#e8f5ee",color:"#2d6a4f",fontSize:14,fontWeight:700,cursor:"pointer",padding:0}}>
+          {weekKolomOpen?"‹":"›"}
+        </button>
+      }
       <div style={{flex:1, overflowY:"auto", padding:0}}>
 
       {gekozenLijst && gekozenWeek ? (()=>{

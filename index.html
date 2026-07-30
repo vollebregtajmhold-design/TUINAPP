@@ -28262,7 +28262,7 @@ function WeekGroep({ wk, weekOrders, klanten, ges, verpDef, onOpen, onKopie, pla
         onBlur={e=>e.currentTarget.style.outline="none"}>
         <span style={{fontWeight:700,fontSize:12,color:"#1e3a2f",letterSpacing:0.5,display:"flex",alignItems:"center",gap:6}}>
           {alUitgezaaid&&
-            <span title="Let op, deze order is al uitgezaaid. Wijzigingen hebben sterke invloed op de planning" style={{width:8,height:8,borderRadius:"50%",background:"#dc2626",display:"inline-block",cursor:"help"}}/>}
+            <span title="Let op, deze order is al uitgezaaid. Wijzigingen hebben sterke invloed op de planning" style={{width:8,height:8,borderRadius:"50%",background:"#38bdf8",display:"inline-block",cursor:"help"}}/>}
           {wk}
           {weekOrders.length>0 && weekOrders.every(o=>o.bevestigingNr) &&
             <span title="Vastgezet" style={{width:8,height:8,borderRadius:"50%",background:"#16a34a",display:"inline-block"}}/>}
@@ -28883,7 +28883,6 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
   const [calcOpen,setCalcOpen]=useState(false);
   const [calcGewenst,setCalcGewenst]=useState("");
   const [nieuweRegelOpen,setNieuweRegelOpen]=useState(false);
-  const [aflevergegevensOpen,setAflevergegevensOpen]=useState(false);
   const [matrixWeergave,setMatrixWeergave]=useState("vast"); // vast | planten | verschil
   const [seizoenEenheid,setSeizoenEenheid]=useState("aantal"); // aantal | trays
   const [excelPreview,setExcelPreview]=useState(null); // null of array met rijen
@@ -30403,8 +30402,14 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
 
   // ── Focus terug naar klant-zoekveld als je terugkeert naar het Orders-tabblad ──
   // Stil (geen dropdown open): direct met de 1e letter verder kunnen, geen halve lijst in beeld.
+  // Uitzondering: als we hier komen omdat er een specifieke order geopend wordt (bv. vanuit Afleveren),
+  // dan NIET focussen — anders staat de cursor in het klantveld en knipt Backspace de klantnaam af
+  // in plaats van terug te navigeren.
+  const laatsteOrderOpenTriggerRef = React.useRef(orderOpenTrigger);
   useEffect(()=>{
-    if(huidigePagina==="orders"){
+    const orderWordtGeopend = !!orderOmTeOpenen && orderOpenTrigger!==laatsteOrderOpenTriggerRef.current;
+    laatsteOrderOpenTriggerRef.current = orderOpenTrigger;
+    if(huidigePagina==="orders" && !orderWordtGeopend){
       stilFocusRef.current = true;
       setTimeout(()=>refKlantZoek.current?.focus(),50);
     }
@@ -30992,31 +30997,6 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                   💰 Verkoopprijzen
                 </button>
               )}
-              {(()=>{
-                const eersteRegel=(data.regels||[])[0];
-                if(!eersteRegel) return null;
-                const td=teeltduur.find(t=>t.gewas?.toLowerCase()===eersteRegel.gewas?.toLowerCase()&&t.soort?.toLowerCase()===eersteRegel.soort?.toLowerCase()&&t.fust?.toLowerCase()===eersteRegel.verpakking?.toLowerCase());
-                const inboetWkn=td?.inboet;
-                if(inboetWkn==null) return null;
-                const leverLbl=weekLabel(data.leverdatum);
-                let lJaar=2000+Number(leverLbl.slice(0,2)), lWk=Number(leverLbl.slice(2));
-                let iWk=lWk-inboetWkn, iJaar=lJaar;
-                if(iWk<=0){iWk+=52;iJaar--;}
-                const inboetWeek=String(iJaar).slice(-2)+String(iWk).padStart(2,"0");
-                const fustNr=(eersteRegel.verpakking||"").replace(/\D/g,"");
-                const lijstId="inboet"+fustNr;
-                return (
-                  <button style={chip}
-                    onClick={()=>window.dispatchEvent(new CustomEvent("ta-naar-werklijst",{detail:{lijstId,week:inboetWeek}}))}>
-                    → Naar werklijst ({inboetWeek})
-                  </button>
-                );
-              })()}
-
-              <button style={chip}
-                onClick={()=>window.dispatchEvent(new CustomEvent("ta-naar-afleveren",{detail:{week:weekLabel(data.leverdatum),orderId:data.id}}))}>
-                → Naar afleveren
-              </button>
               </div>
 
               {scheiding}
@@ -31042,11 +31022,10 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
               }
               </div>
 
-              <button title="Aflevergegevens tonen/verbergen"
-                onClick={()=>setAflevergegevensOpen(v=>!v)}
-                style={{marginLeft:"auto",background:aflevergegevensOpen?"#16a34a":"#fff",color:aflevergegevensOpen?"#fff":"#16a34a",
-                  border:"1px solid #16a34a",borderRadius:6,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
-                {aflevergegevensOpen?"✕ Sluiten":"📦 Aflevergegevens"}
+              <button style={{marginLeft:"auto",background:"#fff",color:"#16a34a",
+                  border:"1px solid #16a34a",borderRadius:6,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}
+                onClick={()=>window.dispatchEvent(new CustomEvent("ta-naar-afleveren",{detail:{week:weekLabel(data.leverdatum),orderId:data.id}}))}>
+                → Naar afleveren
               </button>
               </div>
             </div>
@@ -31055,190 +31034,6 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
 
             <div style={{display:"flex",flexDirection:"row",gap:8,alignItems:"flex-start"}}>
 
-              {/* LINKER KOLOM — aflevergegevens, verbergen/tonen via knop in bovenbalk */}
-              {aflevergegevensOpen && (<div style={{display:"flex",gap:8,alignItems:"flex-start",flexShrink:0}}>
-              <div style={{flex:"0 0 230px",display:"flex",flexDirection:"column",gap:6}}>
-
-                {/* Documentenkaartje — linker kolom (pakbon/aflever/factuur/opslaan) */}
-                <div style={{background:wit,border:"1px solid #bbb",borderRadius:4,padding:"8px 10px",borderTop:`3px solid ${O_ORANJE}`}}>
-                  <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                    <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:2}}>
-
-                      {/* Pakbon — datum transport kiezen, dan aanmaken */}
-                      <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                        {/* Datum transport */}
-                        <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                          <input style={{...gs.input,padding:"3px 6px",fontSize:11,flex:1,
-                            borderColor:data.transportDatum?"#0891b2":rand}}
-                            type="date"
-                            name={"transportDatum_"+(data.id||"nieuw")}
-                            autoComplete="off"
-                            value={data.transportDatum||""}
-                            onChange={e=>{
-                              const d=e.target.value;
-                              const bijgewerkt={...data,transportDatum:d};
-                              setData(bijgewerkt);
-                              if(data.id) setOrders(orders.map(o=>o.id===data.id?bijgewerkt:o));
-                            }}
-                          />
-                          {data.transportDatum&&(()=>{
-                            const d=new Date(data.transportDatum);
-                            const dagen=["ZO","MA","DI","WO","DO","VR","ZA"];
-                            const wk=String(getJaar(data.transportDatum)).slice(-2)+String(getWeekNr(data.transportDatum)).padStart(2,"0");
-                            return <span style={{fontSize:10,color:"#0891b2",fontWeight:700,whiteSpace:"nowrap"}}>{wk} {dagen[d.getDay()]}</span>;
-                          })()}
-                        </div>
-                        {/* Transporteur + klaartijd naast elkaar */}
-                        {(()=>{
-                          const kl2 = klanten.find(k=>k.id===data.klantId)||{};
-                          return <div style={{display:"flex",gap:4}}>
-                            <input style={{...gs.input,padding:"3px 5px",fontSize:11,flex:2}}
-                              placeholder={kl2.transporteur||"Transporteur..."}
-                              value={data.transporteur||""}
-                              onChange={e=>setData(prev=>({...prev,transporteur:e.target.value}))}
-                            />
-                            <input style={{...gs.input,padding:"3px 5px",fontSize:11,flex:1}}
-                              placeholder={kl2.klaartijd||"Tijd..."}
-                              value={data.klaartijd||""}
-                              onChange={e=>setData(prev=>({...prev,klaartijd:e.target.value}))}
-                            />
-                          </div>
-                        })()}
-                        {/* Pakbon knop */}
-                        <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                          {(()=>{
-                            const kanPakbon = data.bevestigingNr && data.transportDatum;
-                            const heeftPakbon = !!data.pakbonNr;
-                            if(!heeftPakbon) return (
-                              <button
-                                style={{background:kanPakbon?"#0891b2":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:kanPakbon?"pointer":"not-allowed",flex:1}}
-                                title={!data.bevestigingNr?"Eerst bevestigen":!data.transportDatum?"Eerst transportdatum invoeren":"Pakbon aanmaken"}
-                                onClick={()=>{
-                                  if(!kanPakbon) return;
-                                  const bestaandeNrs=orders.filter(o=>o.pakbonNr).map(o=>Number(o.pakbonNr)||0);
-                                  const volgendNr=bestaandeNrs.length>0?Math.max(...bestaandeNrs)+1:1;
-                                  const bijgewerkt={...data,pakbonNr:String(volgendNr).padStart(4,"0")};
-                                  setOrders(orders.map(o=>o.id===data.id?bijgewerkt:o));
-                                  setData(bijgewerkt);
-                                  // Direct afdrukken
-                                  setTimeout(()=>drukPakbon(bijgewerkt),200);
-                                }}>
-                                📦 Pakbon aanmaken
-                              </button>
-                            );
-                            return (
-                              <button
-                                style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",flex:1}}
-                                onClick={()=>drukPakbon(data)}>
-                                🖨️ Herdruk pakbon
-                              </button>
-                            );
-                          })()}
-                          {data.pakbonNr&&<span style={{background:"#cffafe",color:"#0891b2",borderRadius:4,padding:"3px 6px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>#{data.pakbonNr}</span>}
-                        </div>
-                      </div>
-                      {/* Afleverbon — alleen na pakbon */}
-                      <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                        {(()=>{
-                          const kanAflever = !!data.pakbonNr;
-                          const heeftAflever = !!data.afleverNr;
-                          if(!heeftAflever) return (
-                            <button
-                              style={{background:kanAflever?"#1d4ed8":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:kanAflever?"pointer":"not-allowed",flex:1}}
-                              title={!kanAflever?"Eerst pakbon aanmaken":"Afleverbon aanmaken en afdrukken"}
-                              onClick={()=>{
-                                if(!kanAflever) return;
-                                if(!window.confirm("Afleverbon aanmaken voor "+klanten.find(k=>k.id===data.klantId)?.naam+"?")) return;
-                                const bestaandeNrs=orders.filter(o=>o.afleverNr).map(o=>Number(o.afleverNr)||0);
-                                const volgendNr=bestaandeNrs.length>0?Math.max(...bestaandeNrs)+1:1;
-                                const bijgewerkt={...data,afleverNr:String(volgendNr).padStart(4,"0"),status:"geleverd"};
-                                setOrders(orders.map(o=>o.id===data.id?bijgewerkt:o));
-                                setData(bijgewerkt);
-                                setTimeout(()=>drukAfleverbon(bijgewerkt),200);
-                              }}>
-                              🚚 Afleverbon aanmaken
-                            </button>
-                          );
-                          return (
-                            <button
-                              style={{background:"#1d4ed8",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",flex:1}}
-                              onClick={()=>drukAfleverbon(data)}>
-                              🖨️ Herdruk afleverbon
-                            </button>
-                          );
-                        })()}
-                        {data.afleverNr&&<span style={{background:"#dbeafe",color:"#1d4ed8",borderRadius:4,padding:"3px 6px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>#{data.afleverNr}</span>}
-                      </div>
-                      {/* Factuur */}
-                      <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                        {(()=>{
-                          const kanFactuur = !!data.afleverNr;
-                          const heeftFactuur = !!data.factuurNr;
-                          if(!heeftFactuur) return (
-                            <button
-                              style={{background:kanFactuur?"#b45309":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:kanFactuur?"pointer":"not-allowed",flex:1}}
-                              title={!kanFactuur?"Eerst afleverbon aanmaken":"Factuur aanmaken"}
-                              onClick={()=>{
-                                if(!kanFactuur) return;
-                                if(!window.confirm("Factuur aanmaken voor "+klanten.find(k=>k.id===data.klantId)?.naam+"?")) return;
-                                const bestaandeNrs=orders.filter(o=>o.factuurNr).map(o=>Number(o.factuurNr)||0);
-                                const volgendNr=bestaandeNrs.length>0?Math.max(...bestaandeNrs)+1:1;
-                                const bijgewerkt={...data,factuurNr:String(volgendNr).padStart(4,"0")};
-                                setOrders(orders.map(o=>o.id===data.id?bijgewerkt:o));
-                                setData(bijgewerkt);
-                                setTimeout(()=>drukFactuur(bijgewerkt),200);
-                              }}>
-                              🧾 Factuur aanmaken
-                            </button>
-                          );
-                          return (
-                            <button style={{background:"#b45309",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",flex:1}}
-                              onClick={()=>drukFactuur(data)}>
-                              🖨️ Herdruk factuur
-                            </button>
-                          );
-                        })()}
-                        {data.factuurNr&&<span style={{background:"#fef3c7",color:"#b45309",borderRadius:4,padding:"3px 6px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>#{data.factuurNr}</span>}
-                      </div>
-                      {/* Mail factuur + betaalstatus */}
-                      {data.factuurNr&&(
-                        <div style={{display:"flex",flexDirection:"column",gap:3,marginTop:2}}>
-                          {klanten.find(k=>k.id===data.klantId)?.email&&(
-                            <button style={{background:"#1d4ed8",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",width:"100%"}}
-                              onClick={()=>mailFactuur(data)}>
-                              📧 Factuur mailen
-                            </button>
-                          )}
-                          <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                            {!data.betaaldOp
-                              ? <button style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",flex:1}}
-                                  onClick={()=>{
-                                    const bijgewerkt={...data,betaaldOp:new Date().toISOString().slice(0,10)};
-                                    setOrders(orders.map(o=>o.id===data.id?bijgewerkt:o));
-                                    setData(bijgewerkt);
-                                  }}>✅ Markeer als betaald</button>
-                              : <div style={{display:"flex",gap:4,alignItems:"center",flex:1}}>
-                                  <span style={{background:"#dcfce7",color:"#16a34a",borderRadius:4,padding:"3px 8px",fontSize:11,fontWeight:600,flex:1,textAlign:"center"}}>
-                                    ✅ Betaald {new Date(data.betaaldOp).toLocaleDateString("nl-NL")}
-                                  </span>
-                                  <button style={{background:"transparent",color:"#9ca3af",border:"1px solid #e2e8e4",borderRadius:4,padding:"2px 6px",fontSize:10,cursor:"pointer"}}
-                                    onClick={()=>{
-                                      const bijgewerkt={...data,betaaldOp:null};
-                                      setOrders(orders.map(o=>o.id===data.id?bijgewerkt:o));
-                                      setData(bijgewerkt);
-                                    }}>✕</button>
-                                </div>
-                            }
-                          </div>
-                        </div>
-                      )}
-
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-              </div>)}{/* einde linker kolom + aflevergegevens-wrapper (apart van nieuwe-regel, zodat die altijd bereikbaar blijft) */}
               {nieuweRegelOpen && (<div style={{flex:"0 0 220px",display:"flex",flexDirection:"column",gap:6}}>
                 {/* Nieuwe regel kader — rechter kolom, onafhankelijk van aflevergegevens */}
                 <div style={{background:"#fffde7",border:`2px solid ${O_GEEL}`,borderRadius:4,padding:"8px 10px",borderTop:`3px solid ${O_ORANJE}`}}>
@@ -32363,6 +32158,8 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
   useEffect(()=>bewaar("ta_afgedrukt_werklijst", afgedrukt),[afgedrukt]);
   const [gedaan, setGedaan] = useState(()=>laad("ta_werklijst_gedaan", {}));
   const [toonMatrix, setToonMatrix] = useState(false);
+  const [tabletModus, setTabletModus] = useState(()=>{ try{ return localStorage.getItem("ta_werklijst_tabletmodus")==="1"; }catch(e){ return false; } });
+  useEffect(()=>{ try{ localStorage.setItem("ta_werklijst_tabletmodus", tabletModus?"1":"0"); }catch(e){} }, [tabletModus]);
   useEffect(() => {
     function onKey(e){
       if(e.key==="Backspace" && toonMatrix){
@@ -32649,6 +32446,11 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
               📈 Kiemoverzicht
             </button>
           }
+          <button onClick={()=>setTabletModus(v=>!v)}
+            title="Grote knoppen, handig als je met een tablet werkt"
+            style={{...knopOverzicht,background:tabletModus?"#93c5fd":knopOverzicht.background}}>
+            📱 {tabletModus?"Tabletmodus aan":"Tabletmodus"}
+          </button>
         </div>
           );
         })()}
@@ -32779,7 +32581,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
               onClick={()=>setNieuweHandmatigeRegel({blokKey})}>+ Regel</button>
             </div>
         </div>
-        {blokOpen&&<table style={{width:"auto",borderCollapse:"collapse"}}>
+        {blokOpen&&!tabletModus&&<table style={{width:"auto",borderCollapse:"collapse"}}>
           <thead>
             <tr>
               <th style={{...sTH,textAlign:"left",minWidth:85}}>Gewas</th>
@@ -33061,6 +32863,87 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
             </tr>
           </tfoot>
        </table>}
+
+       {/* ── Tabletmodus: grote kaarten i.p.v. de dichte tabel, zelfde data/opslag ── */}
+       {blokOpen && tabletModus && (
+         <div style={{display:"flex",flexDirection:"column",gap:4,padding:"6px 4px"}}>
+           {(()=>{
+             const gesorteerd = [...rijen].sort((a,b)=>a.gewas.localeCompare(b.gewas,"nl")||a.soort.localeCompare(b.soort,"nl"));
+             const groepen = {};
+             gesorteerd.forEach(r=>{ (groepen[r.gewas] = groepen[r.gewas]||[]).push(r); });
+             const isGedaanRij = r=>{
+               const v = gedaan[blokKey+"||"+r.gewas+"||"+r.soort];
+               return !!(typeof v==="object" ? v?.checked : v);
+             };
+             const gedaanAantal = gesorteerd.filter(isGedaanRij).length;
+             return (
+               <>
+                 <div style={{fontSize:13,fontWeight:700,color:"#2d6a4f",background:"#e8f5ee",borderRadius:6,padding:"6px 10px",alignSelf:"flex-start",marginBottom:2}}>
+                   {gedaanAantal} van {gesorteerd.length} gedaan
+                 </div>
+                 {Object.entries(groepen).map(([gewasNaam, soorten])=>(
+                   <div key={gewasNaam}>
+                     <div style={{fontSize:12,fontWeight:700,color:"#3a6b52",margin:"6px 2px 2px"}}>{gewasNaam}</div>
+                     {soorten.map((r,i)=>{
+                       const rijKey=r.gewas+"||"+r.soort+"||"+r.fust;
+                       const gepland=r[veld]||0;
+                       const opgeslagen=getReal(wk,actieType,rijKey);
+                       const heeftWaarde = opgeslagen!==''&&opgeslagen!==null&&opgeslagen!==undefined;
+                       const werkelijk = heeftWaarde ? Number(opgeslagen) : null;
+                       const verschil = heeftWaarde ? Math.round((werkelijk-gepland)*10)/10 : null;
+                       const gedaanKey = blokKey+"||"+r.gewas+"||"+r.soort;
+                       const isGedaan = isGedaanRij(r);
+                       const werklijstHlKey = blokKey+"||"+rijKey;
+                       const isWerklijstGemarkeerd = gemarkeerdeWerklijstRij===werklijstHlKey;
+                       return (
+                         <div key={rijKey} style={{display:"flex",alignItems:"center",gap:10,
+                             background:isWerklijstGemarkeerd?"#bfe3fa":(isGedaan?"#dcfce7":"#fff"),
+                             border:"1px solid "+(isWerklijstGemarkeerd?"#7cc4f0":"#d8ddd6"),
+                             borderRadius:10,padding:"8px 10px",marginBottom:4}}>
+                           <button title="Gedaan"
+                             onClick={()=>{
+                               if(medewerkerNaam){
+                                 setGedaan(prev=>({...prev,[gedaanKey]: !isGedaan ? {checked:true, door:medewerkerNaam, tijdstip:new Date().toISOString()} : false}));
+                               } else {
+                                 setGedaan(prev=>({...prev,[gedaanKey]: !isGedaan}));
+                               }
+                             }}
+                             style={{width:40,height:40,minWidth:40,borderRadius:"50%",border:isGedaan?"none":"1px solid #b9c6bf",
+                               background:isGedaan?"#16a34a":"#f3efe6",color:isGedaan?"#fff":"#9ca3af",
+                               fontSize:18,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                             ✓
+                           </button>
+                           <div style={{flex:1,minWidth:0}}>
+                             <div style={{fontSize:14,fontWeight:600,color:"#1e3a2f",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.soort}</div>
+                             <div style={{fontSize:11,color:"#6b7d74"}}>nodig {gepland}</div>
+                           </div>
+                           {heeftWaarde &&
+                             <span style={{fontSize:11,fontWeight:700,padding:"3px 8px",borderRadius:20,
+                                 background:verschil===0?"#dcfce7":(verschil>0?"#dbeafe":"#fee2e2"),
+                                 color:verschil===0?"#16a34a":(verschil>0?"#1d4ed8":"#dc2626")}}>
+                               {verschil===0?"klopt":(verschil>0?"+":"")+verschil}
+                             </span>
+                           }
+                           <div style={{display:"flex",alignItems:"center",gap:4}}>
+                             <button onClick={()=>{const b=heeftWaarde?Number(opgeslagen):gepland;setReal(wk,actieType,rijKey,String(Math.max(0,Math.round((b-0.25)*100)/100)));}}
+                               style={{width:40,height:40,border:"none",borderRadius:"8px 0 0 8px",
+                                 background:heeftWaarde?"#f59e0b":"#e5e7eb",color:heeftWaarde?"#fff":"#6b7280",fontSize:18,fontWeight:700,cursor:"pointer"}}>−</button>
+                             <div style={{width:50,textAlign:"center",fontSize:17,fontWeight:700,
+                                 color:heeftWaarde?"#854d0e":"#9ca3af"}}>{heeftWaarde?opgeslagen:"—"}</div>
+                             <button onClick={()=>{const b=heeftWaarde?Number(opgeslagen):gepland;setReal(wk,actieType,rijKey,String(Math.round((b+0.25)*100)/100));}}
+                               style={{width:40,height:40,border:"none",borderRadius:"0 8px 8px 0",
+                                 background:heeftWaarde?"#f59e0b":"#e5e7eb",color:heeftWaarde?"#fff":"#6b7280",fontSize:18,fontWeight:700,cursor:"pointer"}}>+</button>
+                           </div>
+                         </div>
+                       );
+                     })}
+                   </div>
+                 ))}
+               </>
+             );
+           })()}
+         </div>
+       )}
 
        {/* ── Klantenoverzicht met tafelnummers (ook op het scherm, niet alleen bij printen) ── */}
        {!isZaai && rijen.length>0 && (()=>{
@@ -43804,7 +43687,7 @@ function maakKarStickersGroot(wk, alleOrders, klanten) {
 }
 
 // ── Transportaanvraag: concept-mail (met tabel + logo) klaarzetten in Gmail via het bestaande mail-script ──
-function TransportaanvraagModal({ opdracht, transporteurs, bedrijf, onSluit }) {
+function TransportaanvraagModal({ opdracht, transporteurs, bedrijf, onSluit, onGemaild }) {
   const { o, kl, traysA, verdA } = opdracht;
 
   function fmtDatumKort(d){
@@ -43819,25 +43702,35 @@ function TransportaanvraagModal({ opdracht, transporteurs, bedrijf, onSluit }) {
   }
   function fmtTijd(t){
     if(!t) return "";
-    return t.replace(":",".")+" uur";
+    let s = t.replace(":",".").trim();
+    if(/uur\s*$/i.test(s)) return s; // "uur" staat er al achter
+    s = s.replace(/u\s*$/i,""); // bv. "14.00u" -> "14.00", voorkomt "14.00u uur"
+    return s+" uur";
   }
 
   const standaard = (()=>{ try{ return JSON.parse(localStorage.getItem("ta_transport_form_defaults")||"{}"); }catch(e){ return {}; } })();
 
-  const [transporteurId, setTransporteurId] = useState(transporteurs[0]?.id || "");
-  const [datum, setDatum] = useState(o.transportDatum ? fmtDatumKort(o.transportDatum) : "");
+  // Transporteur uit kolom 3 (o.transporteur is vrije tekst) proberen te matchen met de transporteurslijst
+  const gevondenTransporteur = (o.transporteur||"").trim()
+    ? transporteurs.find(t=>(t.naam||"").toLowerCase().trim()===o.transporteur.toLowerCase().trim())
+      || transporteurs.find(t=>(t.naam||"").toLowerCase().includes(o.transporteur.toLowerCase().trim()))
+    : null;
+  const klAdres = [kl.adres, kl.postcode, kl.plaats].filter(Boolean).join(" ");
+
+  const [transporteurId, setTransporteurId] = useState((gevondenTransporteur||transporteurs[0])?.id || "");
+  const [datum, setDatum] = useState(o.transportDatum ? fmtDatumKort(o.transportDatum) : ""); // kolom 2 bij Afleveren
   const [weeknr, setWeeknr] = useState(o.leverdatum ? String(getWeekNr(o.leverdatum)) : "");
   const [dag, setDag] = useState(o.transportDatum ? dagNaam(o.transportDatum) : "");
-  const [tijd, setTijd] = useState(o.klaartijd ? fmtTijd(o.klaartijd) : "");
+  const tijdBron = o.klaartijd || kl.klaartijd || ""; // order-tijd, anders de standaard-klaartijd van de klant (zelfde als de placeholder bij Afleveren)
+  const [tijd, setTijd] = useState(tijdBron ? fmtTijd(tijdBron) : ""); // kolom 4 bij Afleveren
   const [aantalCc, setAantalCc] = useState(verdA?String(verdA.k):"");
   const [klantVeld, setKlantVeld] = useState(kl.naam||"");
-  const [afleverAdres, setAfleverAdres] = useState(standaard.afleverAdres||"");
+  const [afleverAdres, setAfleverAdres] = useState(klAdres || ""); // altijd het adres van déze klant — nooit het onthouden adres van een vorige order
   const [transportkosten, setTransportkosten] = useState(standaard.transportkosten||"");
   const [ophaalAdres, setOphaalAdres] = useState(standaard.ophaalAdres || [bedrijf?.adres,bedrijf?.postcode,bedrijf?.plaats].filter(Boolean).join(" "));
-  const [afzenderNaam, setAfzenderNaam] = useState(standaard.afzenderNaam||"");
-  const [whatsapp, setWhatsapp] = useState(standaard.whatsapp||"");
+  const [afzenderNaam, setAfzenderNaam] = useState("Arie");
+  const [whatsapp, setWhatsapp] = useState("+31 6 82228069");
   const [status, setStatus] = useState("");
-  const [bezig, setBezig] = useState(false);
 
   const transporteur = transporteurs.find(t=>t.id===transporteurId);
   const veld = (lbl, val, setVal, breedte) => (
@@ -43849,51 +43742,41 @@ function TransportaanvraagModal({ opdracht, transporteurs, bedrijf, onSluit }) {
 
   function maakConcept(){
     if(!transporteur || !transporteur.email){ alert("Kies een transporteur met een e-mailadres."); return; }
-    const scriptUrl = localStorage.getItem("ta_transport_scripturl")||"";
-    if(!scriptUrl){ alert("Nog geen Apps Script URL ingesteld voor transportaanvragen. Ga naar ⚙️ Instellingen → Transporteurs."); return; }
 
-    localStorage.setItem("ta_transport_form_defaults", JSON.stringify({afleverAdres, transportkosten, ophaalAdres, afzenderNaam, whatsapp}));
+    localStorage.setItem("ta_transport_form_defaults", JSON.stringify({transportkosten, ophaalAdres}));
 
-    const th = "border:1px solid #999;padding:5px 8px;color:#7c2d12;font-style:italic;text-align:left;background:#faf5f0";
-    const td = "border:1px solid #999;padding:5px 8px";
-    const legeRij = "<tr>"+Array(8).fill("<td style='"+td+"'>&nbsp;</td>").join("")+"</tr>";
-    const html =
-      "<div style='font-family:Arial,sans-serif;font-size:13px;color:#222'>"
-      +"<p>Goedemorgen Mijnheer, Mevrouw.</p>"
-      +"<p>Graag willen wij het volgende transport aanvragen:</p>"
-      +"<table style='border-collapse:collapse;width:100%;font-size:12px;margin-bottom:14px'>"
-        +"<tr>"
-          +"<th style='"+th+"'>Datum:</th><th style='"+th+"'>Weeknr:</th><th style='"+th+"'>Dag:</th><th style='"+th+"'>Tijd:</th>"
-          +"<th style='"+th+"'>Aantal cc:</th><th style='"+th+"'>Klant:</th><th style='"+th+"'>Afleveradres:</th><th style='"+th+"'>Transportkosten:</th>"
-        +"</tr>"
-        +"<tr>"
-          +"<td style='"+td+"'>"+datum+"</td><td style='"+td+"'>"+weeknr+"</td><td style='"+td+"'>"+dag+"</td><td style='"+td+"'>"+tijd+"</td>"
-          +"<td style='"+td+"'>"+aantalCc+"</td><td style='"+td+"'>"+klantVeld+"</td><td style='"+td+"'>"+afleverAdres+"</td><td style='"+td+"'>"+transportkosten+"</td>"
-        +"</tr>"
-        +legeRij+legeRij+legeRij
-      +"</table>"
-      +(ophaalAdres?"<p>Op te halen op "+ophaalAdres+"</p>":"")
-      +"<p>Graag een bevestiging.</p>"
-      +"<p>Met vriendelijke groet,</p>"
-      +(afzenderNaam?"<p>"+afzenderNaam+"</p>":"")
-      +"<p>"+(bedrijf?.email?"<a href='mailto:"+bedrijf.email+"'>"+bedrijf.email+"</a><br/>":"")
-        +(whatsapp?"<strong style='color:#dc2626'>Whatsapp: "+whatsapp+"</strong>":"")+"</p>"
-      +(bedrijf?.logo?"<img src='"+bedrijf.logo+"' style='max-width:220px;margin-top:8px'/>":"")
-      +"</div>";
+    const regels = [
+      "Goedemorgen Mijnheer, Mevrouw,",
+      "",
+      "Graag willen wij het volgende transport aanvragen:",
+      "",
+      "Datum: "+datum,
+      "Weeknummer: "+weeknr,
+      "Dag: "+dag,
+      tijd ? "Tijd: "+tijd : null,
+      "Aantal cc: "+aantalCc,
+      "Klant: "+klantVeld,
+      afleverAdres ? "Afleveradres: "+afleverAdres : null,
+      transportkosten ? "Transportkosten: "+transportkosten : null,
+      "",
+      ophaalAdres ? "Op te halen op: "+ophaalAdres : null,
+      "",
+      "Graag een bevestiging.",
+      "",
+      "Met vriendelijke groet,",
+      afzenderNaam || null,
+      bedrijf?.email || null,
+      whatsapp ? "Whatsapp: "+whatsapp : null,
+    ].filter(r=>r!==null).join("\n");
 
-    const onderwerp = "Transportaanvraag "+(klantVeld||"")+" — week "+weeknr;
-
-    setBezig(true);
-    setStatus("📧 Concept aanmaken...");
-    fetch(scriptUrl, {method:"POST", mode:"no-cors", headers:{"Content-Type":"text/plain;charset=utf-8"},
-      body: JSON.stringify({to_email: transporteur.email, onderwerp, html})
-    }).then(()=>{
-      setStatus("✅ Concept klaargezet in Gmail (map Concepten)");
-      setTimeout(()=>onSluit(),1200);
-    }).catch(err=>{
-      setBezig(false);
-      setStatus("⚠️ Fout: "+err.message);
-    });
+    const onderwerp = "Transportaanvraag: "+(klantVeld||"")+", op "+dag+", "+datum+": "+aantalCc+" cc-karren";
+    let url = "https://mail.google.com/mail/?view=cm&fs=1&to="+encodeURIComponent(transporteur.email)
+      +"&su="+encodeURIComponent(onderwerp)+"&body="+encodeURIComponent(regels);
+    if(bedrijf?.email) url += "&cc="+encodeURIComponent(bedrijf.email);
+    window.open(url, "_blank");
+    if(onGemaild) onGemaild();
+    setStatus("✅ Gmail-concept geopend — controleer en verstuur");
+    setTimeout(()=>onSluit(),1200);
   }
 
   return (
@@ -43901,7 +43784,7 @@ function TransportaanvraagModal({ opdracht, transporteurs, bedrijf, onSluit }) {
       <div style={{...gs.modal, width:540, maxHeight:"88vh", overflowY:"auto"}}>
         <div style={gs.modalTitel}>📧 Transportaanvraag</div>
         <div style={{fontSize:11,color:subtekst,marginBottom:10}}>
-          Wordt als concept (draft) klaargezet in Gmail — je controleert en verstuurt 'm zelf.
+          Opent als concept-mail in Gmail (platte tekst) — je controleert en verstuurt 'm zelf. Alle velden zijn vooringevuld maar aanpasbaar.
         </div>
 
         <div style={gs.veldGroep}>
@@ -43932,7 +43815,7 @@ function TransportaanvraagModal({ opdracht, transporteurs, bedrijf, onSluit }) {
         </div>
 
         <div style={{display:"flex",gap:8,marginTop:14}}>
-          <button style={gs.knopPrimair} disabled={bezig} onClick={maakConcept}>📧 Concept maken in Gmail</button>
+          <button style={gs.knopPrimair} onClick={maakConcept}>📧 Concept openen in Gmail</button>
           <button style={gs.knopSecundair} onClick={onSluit}>Annuleren</button>
         </div>
         {status && <div style={{fontSize:12,marginTop:8,fontWeight:600,color: status.startsWith("⚠️")?"#dc2626":groenTekst}}>{status}</div>}
@@ -43989,6 +43872,87 @@ function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecte
       opties.push(<option key={lbl} value={lbl}>wk {String(wk).padStart(2,"0")}</option>);
     }
     return opties;
+  }
+
+  // ── Factuur mailen (zelfde opzet als voorheen bij Orders) ──
+  function mailFactuur(order) {
+    const kl = klanten.find(k=>k.id===order.klantId)||{};
+    const bd = bedrijf||{};
+    const mailUrl = localStorage.getItem("ta_mailUrl")||"";
+    if(!kl.email){ alert("Geen e-mailadres bekend voor "+kl.naam); return; }
+    if(!mailUrl){ alert("Geen mail URL ingesteld. Ga naar Instellingen."); return; }
+    const btwVerlegd = kl.btwPlichtig===false;
+    const btwPct = btwVerlegd ? 0 : (bd.btwPct??21);
+    const termijn = kl.betalingstermijn||bd.betalingstermijn||30;
+    const vervalDatum = new Date();
+    vervalDatum.setDate(vervalDatum.getDate()+termijn);
+    const vervalStr = vervalDatum.toLocaleDateString("nl-NL",{day:"2-digit",month:"long",year:"numeric"});
+    const vandaag = new Date().toLocaleDateString("nl-NL",{day:"2-digit",month:"long",year:"numeric"});
+    const regels = order.regels.map(function(r,i){
+      const vd = verpDef.find(v=>v.naam===r.verpakking);
+      const pl = (vd?.aantal||0)*r.aantal;
+      const prijs = r.prijs?Number(r.prijs):0;
+      const bedrag = pl*prijs;
+      const bg = i%2===0?witA:"#cfe6d8";
+      return "<tr style='background:"+bg+"'>"
+        +"<td style='padding:6px 8px;border:2px solid #b0cfc0'>"+r.soort+"</td>"
+        +"<td style='padding:6px 8px;border:2px solid #b0cfc0'>"+r.verpakking+"</td>"
+        +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right'>"+r.aantal+"</td>"
+        +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right'>"+pl.toLocaleString("nl-NL")+"</td>"
+        +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right'>"+(prijs?"€"+prijs.toFixed(3):"—")+"</td>"
+        +"<td style='padding:6px 8px;border:1px solid #eee;text-align:right;font-weight:600;color:#2d6a4f'>"+(bedrag?"€"+bedrag.toLocaleString("nl-NL",{minimumFractionDigits:2}):"—")+"</td>"
+        +"</tr>";
+    }).join("");
+    const subTotaal = order.regels.reduce(function(s,r){const vd=verpDef.find(v=>v.naam===r.verpakking);const pl=(vd?.aantal||0)*r.aantal;return s+(r.prijs?pl*Number(r.prijs):0);},0);
+    const btwBedrag = subTotaal*(btwPct/100);
+    const totaal = subTotaal+btwBedrag;
+    const berichtHtml = "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
+      +"<style>body{font-family:Arial,sans-serif;font-size:11px;color:#222;padding:20px;max-width:680px;margin:0 auto} table{border-collapse:collapse;width:100%}</style></head><body>"
+      +"<div style='background:#2d6a4f;color:#fff;padding:12px 18px;margin:-20px -20px 20px;display:flex;justify-content:space-between'>"
+        +"<div><div style='font-size:14px;font-weight:700'>VOLLEBREGT CYCLAMEN</div>"
+        +"<div style='font-size:8px;opacity:0.85'>"+(bd.adres||"")+" &middot; "+(bd.postcode||"")+" "+(bd.plaats||"")+"</div></div>"
+        +"<div style='text-align:right;font-size:8px;opacity:0.85'><div>"+(bd.telefoon||"")+"</div><div>"+(bd.email||"")+"</div></div>"
+      +"</div>"
+      +"<div style='display:flex;justify-content:space-between;margin-bottom:16px'>"
+        +"<div><div style='font-size:12px;font-weight:700'>"+kl.naam+"</div>"
+        +(kl.adres?"<div style='font-size:10px;color:#555'>"+kl.adres+"</div>":"")
+        +((kl.postcode||kl.plaats)?"<div style='font-size:10px;color:#555'>"+(kl.postcode||"")+" "+(kl.plaats||"")+"</div>":"")+"</div>"
+        +"<div style='text-align:right'><div style='font-size:18px;font-weight:700;color:#2d6a4f'>FACTUUR</div>"
+        +"<div style='font-size:10px;color:#555'>Nr: <strong>#"+(order.factuurNr||"")+"</strong></div>"
+        +"<div style='font-size:10px;color:#555'>Datum: "+vandaag+"</div>"
+        +"<div style='font-size:10px;color:#dc2626;font-weight:700'>Vervaldatum: "+vervalStr+"</div></div>"
+      +"</div>"
+      +"<table style='margin-bottom:12px'><thead><tr>"
+        +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left'>Soort</th>"
+        +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:left'>Fust</th>"
+        +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>Trays</th>"
+        +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>Planten</th>"
+        +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>€/st</th>"
+        +"<th style='padding:6px 8px;background:#b8ddc8;color:#0f3320;border:2px solid #8cbfac;text-align:right'>Bedrag</th>"
+      +"</tr></thead><tbody>"+regels+"</tbody></table>"
+      +"<div style='display:flex;justify-content:flex-end;margin-bottom:16px'><table style='width:240px'>"
+        +"<tr><td style='padding:4px 8px;color:#555'>Subtotaal</td><td style='padding:4px 8px;text-align:right'>€"+subTotaal.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</td></tr>"
+        +(btwVerlegd
+          ? "<tr><td style='padding:4px 8px;color:#555'>BTW verlegd (art. 194 Wet OB)</td><td style='padding:4px 8px;text-align:right'>€0,00</td></tr>"
+          : "<tr><td style='padding:4px 8px;color:#555'>BTW "+btwPct+"%</td><td style='padding:4px 8px;text-align:right'>€"+btwBedrag.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</td></tr>")
+        +"<tr style='background:#a8d5b5;font-weight:700'><td style='padding:6px 8px;color:#2d6a4f;border-top:3px solid #0f3320'>Totaal</td>"
+        +"<td style='padding:6px 8px;text-align:right;color:#2d6a4f;border-top:3px solid #0f3320'>€"+totaal.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</td></tr>"
+      +"</table></div>"
+      +"<div style='padding:10px 14px;background:#cfe6d8;border-radius:4px;font-size:10px;color:#444'>"
+        +"Gelieve <strong>€"+totaal.toLocaleString("nl-NL",{minimumFractionDigits:2})+"</strong> binnen <strong>"+termijn+" dagen</strong> over te maken op "
+        +"IBAN <strong>"+(bd.iban||"")+"</strong> t.n.v. <strong>"+(bd.naam||"Vollebregt Cyclamen")+"</strong>, "
+        +"o.v.v. <strong>#"+(order.factuurNr||"")+"</strong>."
+      +"</div>"
+      +"</body></html>";
+    const onderwerp = "Factuur #"+(order.factuurNr||"")+" - Vollebregt Cyclamen";
+    fetch(mailUrl,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify({to_email:kl.email,onderwerp:onderwerp,bericht:"",html:berichtHtml})
+    }).then(function(){
+      const logEntry={datum:new Date().toLocaleString("nl-NL"),klant:kl.naam,email:kl.email,onderwerp:onderwerp,week:weekLabel(order.leverdatum)};
+      const log=JSON.parse(localStorage.getItem("ta_maillog")||"[]");
+      localStorage.setItem("ta_maillog",JSON.stringify([logEntry,...log].slice(0,50)));
+      alert("✅ Factuur verstuurd naar "+kl.email);
+    }).catch(function(){alert("⚠️ Versturen mislukt");});
   }
 
   // ── Pijltjes omhoog/omlaag = vorige/volgende week ──
@@ -44087,6 +44051,8 @@ function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecte
                   </div>
                   {weekOrdersA.map(o=>{
                     const kl = klanten.find(k=>k.id===o.klantId)||{};
+                    const traysA = (o.regels||[]).reduce((s,r)=>s+(r.aantal||0),0);
+                    const verdA = _berekenKarrenGroot(traysA);
                     const kanPakbon = o.bevestigingNr && o.transportDatum;
                     const heeftPakbon = !!o.pakbonNr;
                     const kanAflever = !!o.pakbonNr;
@@ -44095,9 +44061,9 @@ function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecte
                     const heeftFactuur = !!o.factuurNr;
                     const isGemarkeerdA = gemarkeerdOrderId===o.id;
                     return (
-                      <div key={o.id} style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",
+                      <div key={o.id} style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",
                         background:isGemarkeerdA?"#bfe3fa":witA,
-                        border:isGemarkeerdA?"1px solid #7cc4f0":`1px solid ${randA}`,borderRadius:6,padding:"8px 12px"}}>
+                        border:isGemarkeerdA?"1px solid #7cc4f0":`1px solid ${randA}`,borderRadius:6,padding:"7px 10px"}}>
                         <span style={{fontWeight:700,fontSize:13,color:groenA,cursor:"pointer",
                             textDecoration:"underline",textDecorationStyle:"dotted",textDecorationColor:"#9ca3af",minWidth:130}}
                           title="Klik om order te openen"
@@ -44105,24 +44071,35 @@ function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecte
                           {kl.naam||"—"}
                         </span>
 
-                        <input type="date" style={{fontSize:11,padding:"3px 6px",border:`1px solid ${o.transportDatum?"#0891b2":randA}`,borderRadius:4}}
+                        <input type="date" style={{fontSize:11,padding:"3px 6px",
+                            border:`1px solid ${o.transportDatum?"#0891b2":randA}`,
+                            color:o.transportDatum?"#111827":"#9ca3af",borderRadius:4}}
                           name={"transportDatumA_"+o.id}
                           autoComplete="off"
                           value={o.transportDatum||""}
                           onChange={e=>updA(o.id,"transportDatum",e.target.value)} />
-                        <input placeholder={kl.transporteur||"Transporteur..."} style={{fontSize:11,padding:"3px 6px",border:`1px solid ${randA}`,borderRadius:4,width:120}}
+                        <input placeholder={kl.transporteur||"Transporteur..."} style={{fontSize:11,padding:"3px 4px",
+                            border:`1px solid ${o.transporteur?"#0891b2":randA}`,
+                            color:o.transporteur?"#111827":"#9ca3af",borderRadius:4,width:98}}
                           name={"transporteurA_"+o.id} autoComplete="off"
                           value={o.transporteur||""}
                           onChange={e=>updA(o.id,"transporteur",e.target.value)} />
-                        <input placeholder={kl.klaartijd||"Tijd..."} style={{fontSize:11,padding:"3px 6px",border:`1px solid ${randA}`,borderRadius:4,width:70}}
+                        <input placeholder={kl.klaartijd||"Tijd..."} style={{fontSize:11,padding:"3px 4px",border:`1px solid ${randA}`,borderRadius:4,width:58}}
                           name={"klaartijdA_"+o.id} autoComplete="off"
                           value={o.klaartijd||""}
                           onChange={e=>updA(o.id,"klaartijd",e.target.value)} />
 
+                        <button title="Transportaanvraag als conceptmail in Gmail klaarzetten"
+                          style={{background:"#e0f2fe",color:"#0369a1",border:"1px solid #0369a1",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",justifyContent:"center",width:118,boxSizing:"border-box"}}
+                          onClick={()=>{
+                            if(!(transporteurs||[]).length){ alert("Nog geen transporteurs ingesteld. Ga naar ⚙️ Instellingen."); return; }
+                            setTransportFormOrder({o, kl, traysA, verdA});
+                          }}>Transportaanvraag<AfdrukStipA actief={!!o.transportMailGemaild}/></button>
+
                         {!heeftPakbon
                           ? <button title={!o.bevestigingNr?"Eerst bevestigen":!o.transportDatum?"Eerst transportdatum invoeren":"Pakbon aanmaken"}
                               disabled={!kanPakbon}
-                              style={{background:kanPakbon?"#0891b2":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"5px 8px",fontSize:11,fontWeight:600,cursor:kanPakbon?"pointer":"not-allowed",whiteSpace:"nowrap"}}
+                              style={{background:kanPakbon?"#0891b2":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:kanPakbon?"pointer":"not-allowed",whiteSpace:"nowrap",width:100,textAlign:"center",boxSizing:"border-box"}}
                               onClick={()=>{
                                 if(!kanPakbon) return;
                                 const bestaandeNrs=(orders||[]).filter(x=>x.pakbonNr).map(x=>Number(x.pakbonNr)||0);
@@ -44130,15 +44107,15 @@ function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecte
                                 const bijgewerkt={...o,pakbonNr:String(volgendNr).padStart(4,"0")};
                                 setOrders(prev=>prev.map(x=>x.id===o.id?bijgewerkt:x));
                                 setTimeout(()=>window.dispatchEvent(new CustomEvent("ta-print-pakbon",{detail:bijgewerkt})),200);
-                              }}>📦 Pakbon aanmaken</button>
-                          : <button style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:5,padding:"5px 8px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}
-                              onClick={()=>window.dispatchEvent(new CustomEvent("ta-print-pakbon",{detail:o}))}>🖨️ Pakbon #{o.pakbonNr}</button>
+                              }}>Pakbon aanmaken</button>
+                          : <button style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",width:100,textAlign:"center",boxSizing:"border-box"}}
+                              onClick={()=>window.dispatchEvent(new CustomEvent("ta-print-pakbon",{detail:o}))}>Pakbon #{o.pakbonNr}</button>
                         }
 
                         {!heeftAflever
                           ? <button title={!kanAflever?"Eerst pakbon aanmaken":"Afleverbon aanmaken en afdrukken"}
                               disabled={!kanAflever}
-                              style={{background:kanAflever?"#1d4ed8":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"5px 8px",fontSize:11,fontWeight:600,cursor:kanAflever?"pointer":"not-allowed",whiteSpace:"nowrap"}}
+                              style={{background:kanAflever?"#1d4ed8":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:kanAflever?"pointer":"not-allowed",whiteSpace:"nowrap",width:112,textAlign:"center",boxSizing:"border-box"}}
                               onClick={()=>{
                                 if(!kanAflever) return;
                                 if(!window.confirm("Afleverbon aanmaken voor "+(kl.naam||"")+"?")) return;
@@ -44147,15 +44124,15 @@ function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecte
                                 const bijgewerkt={...o,afleverNr:String(volgendNr).padStart(4,"0"),status:"geleverd"};
                                 setOrders(prev=>prev.map(x=>x.id===o.id?bijgewerkt:x));
                                 setTimeout(()=>window.dispatchEvent(new CustomEvent("ta-print-afleverbon",{detail:bijgewerkt})),200);
-                              }}>🚚 Afleverbon aanmaken</button>
-                          : <button style={{background:"#1d4ed8",color:"#fff",border:"none",borderRadius:5,padding:"5px 8px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}
-                              onClick={()=>window.dispatchEvent(new CustomEvent("ta-print-afleverbon",{detail:o}))}>🖨️ Afleverbon #{o.afleverNr}</button>
+                              }}>Afleverbon aanmaken</button>
+                          : <button style={{background:"#1d4ed8",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",width:112,textAlign:"center",boxSizing:"border-box"}}
+                              onClick={()=>window.dispatchEvent(new CustomEvent("ta-print-afleverbon",{detail:o}))}>Afleverbon #{o.afleverNr}</button>
                         }
 
                         {!heeftFactuur
                           ? <button title={!kanFactuur?"Eerst afleverbon aanmaken":"Factuur aanmaken"}
                               disabled={!kanFactuur}
-                              style={{background:kanFactuur?"#b45309":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"5px 8px",fontSize:11,fontWeight:600,cursor:kanFactuur?"pointer":"not-allowed",whiteSpace:"nowrap"}}
+                              style={{background:kanFactuur?"#b45309":"#9ca3af",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:kanFactuur?"pointer":"not-allowed",whiteSpace:"nowrap",width:100,textAlign:"center",boxSizing:"border-box"}}
                               onClick={()=>{
                                 if(!kanFactuur) return;
                                 if(!window.confirm("Factuur aanmaken voor "+(kl.naam||"")+"?")) return;
@@ -44164,28 +44141,41 @@ function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecte
                                 const bijgewerkt={...o,factuurNr:String(volgendNr).padStart(4,"0")};
                                 setOrders(prev=>prev.map(x=>x.id===o.id?bijgewerkt:x));
                                 setTimeout(()=>window.dispatchEvent(new CustomEvent("ta-print-factuur",{detail:bijgewerkt})),200);
-                              }}>🧾 Factuur aanmaken</button>
-                          : <button style={{background:"#b45309",color:"#fff",border:"none",borderRadius:5,padding:"5px 8px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}
-                              onClick={()=>window.dispatchEvent(new CustomEvent("ta-print-factuur",{detail:o}))}>🖨️ Factuur #{o.factuurNr}</button>
+                              }}>Factuur aanmaken</button>
+                          : <button style={{background:"#b45309",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",width:100,textAlign:"center",boxSizing:"border-box"}}
+                              onClick={()=>window.dispatchEvent(new CustomEvent("ta-print-factuur",{detail:o}))}>Factuur #{o.factuurNr}</button>
                         }
 
-                        {(()=>{
-                          const traysA = (o.regels||[]).reduce((s,r)=>s+(r.aantal||0),0);
-                          const verdA = _berekenKarrenGroot(traysA);
-                          return (<>
-                            <button title="Transportaanvraag als conceptmail in Gmail klaarzetten"
-                              style={{background:"#e0f2fe",color:"#0369a1",border:"1px solid #0369a1",borderRadius:5,padding:"5px 8px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}
-                              onClick={()=>{
-                                if(!(transporteurs||[]).length){ alert("Nog geen transporteurs ingesteld. Ga naar ⚙️ Instellingen."); return; }
-                                setTransportFormOrder({o, kl, traysA, verdA});
-                              }}>📧 Transportaanvraag</button>
-                            <div style={{display:"flex",alignItems:"center",gap:10,fontSize:11,color:groenA,whiteSpace:"nowrap",marginLeft:"auto"}}>
-                              <span title="Aantal trays"><strong>{traysA}</strong> trays</span>
-                              <span title="Aantal karren"><strong>{verdA?verdA.k:"—"}</strong> {verdA&&verdA.k===1?"kar":"karren"}</span>
-                              <span title="Karindeling" style={{color:subtekstA}}>{_karOmschrijvingGroot(verdA)}</span>
-                            </div>
-                          </>);
-                        })()}
+                        {heeftFactuur && kl.email &&
+                          <button style={{background:"#1d4ed8",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",width:96,textAlign:"center",boxSizing:"border-box"}}
+                            onClick={()=>mailFactuur(o)}>Factuur mailen</button>
+                        }
+
+                        {heeftFactuur && (
+                          !o.betaaldOp
+                            ? <button style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:5,padding:"4px 6px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",width:104,textAlign:"center",boxSizing:"border-box"}}
+                                onClick={()=>{
+                                  const bijgewerkt={...o,betaaldOp:new Date().toISOString().slice(0,10)};
+                                  setOrders(prev=>prev.map(x=>x.id===o.id?bijgewerkt:x));
+                                }}>Betaald markeren</button>
+                            : <div style={{display:"flex",alignItems:"center",gap:3,width:104,boxSizing:"border-box"}}>
+                                <span style={{background:"#dcfce7",color:"#16a34a",borderRadius:5,padding:"4px 5px",fontSize:11,fontWeight:600,flex:1,textAlign:"center",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                                  Betaald {new Date(o.betaaldOp).toLocaleDateString("nl-NL",{day:"2-digit",month:"2-digit"})}
+                                </span>
+                                <button title="Betaald-markering ongedaan maken"
+                                  style={{background:"transparent",color:"#9ca3af",border:`1px solid ${randA}`,borderRadius:4,padding:"3px 5px",fontSize:10,cursor:"pointer"}}
+                                  onClick={()=>{
+                                    const bijgewerkt={...o,betaaldOp:null};
+                                    setOrders(prev=>prev.map(x=>x.id===o.id?bijgewerkt:x));
+                                  }}>✕</button>
+                              </div>
+                        )}
+
+                        <div style={{display:"flex",alignItems:"center",gap:10,fontSize:11,color:groenA,whiteSpace:"nowrap",marginLeft:"auto"}}>
+                          <span title="Aantal trays"><strong>{traysA}</strong> trays</span>
+                          <span title="Aantal karren"><strong>{verdA?verdA.k:"—"}</strong> {verdA&&verdA.k===1?"kar":"karren"}</span>
+                          <span title="Karindeling" style={{color:subtekstA,fontSize:14}}>{_karOmschrijvingGroot(verdA)}</span>
+                        </div>
                       </div>
                     );
                   })}
@@ -44196,7 +44186,8 @@ function Afleveren({ orders, setOrders, klanten, bedrijf, verpDef, voorgeselecte
       </div>
       {transportFormOrder &&
         <TransportaanvraagModal opdracht={transportFormOrder} transporteurs={transporteurs||[]} bedrijf={bedrijf}
-          onSluit={()=>setTransportFormOrder(null)} />
+          onSluit={()=>setTransportFormOrder(null)}
+          onGemaild={()=>setOrders(prev=>prev.map(x=>x.id===transportFormOrder.o.id?{...x, transportMailGemaild:true}:x))} />
       }
     </div>
   );

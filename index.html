@@ -26845,7 +26845,7 @@ function sorteerRegels(regels) {
 
 // Versienummer van deze uitgave — bij elke nieuwe versie hier de datum+tijd van vrijgave invullen (DD-MM-JJJJ UU:MM).
 // Is de exacte tijd niet bekend? Dan datum + oplopend volgnummer, bijv. "30-07-2026 #2".
-const TUINAPP_VERSIE = "30-07-2026 #8";
+const TUINAPP_VERSIE = "30-07-2026 #9";
 
 function laad(k, def) { try { const v=localStorage.getItem(k); return v?JSON.parse(v):def; } catch { return def; } }
 function bewaar(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) { alert("⚠️ Opslaan is mislukt voor '"+k+"'!\n\nJe wijzigingen gaan mogelijk verloren bij herladen.\n\nOorzaak: "+(e&&e.message?e.message:e)+"\n\nTip: maak een backup via Instellingen en maak ruimte vrij (bv. verwijder oude data of grote logo-afbeelding)."); } }
@@ -32462,8 +32462,8 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
       <div key={blokKey} style={{marginBottom:2}}>
       <div>
 
-        {/* Over/tekort — vaste plek, boven de printknoppen */}
-        {(()=>{
+        {/* Over/tekort — vaste plek, boven de printknoppen (op de telefoon weggelaten, kost te veel ruimte) */}
+        {!telefoonModus && (()=>{
           const knopOverzicht = {background:"#dbeafe",color:"#111",border:"2px solid #2563eb",borderRadius:5,padding:"3px 10px",fontSize:12,fontWeight:700,cursor:"pointer"};
           return (
         <div style={{display:"flex",gap:6,marginBottom:4}}>

@@ -26845,7 +26845,7 @@ function sorteerRegels(regels) {
 
 // Versienummer van deze uitgave — bij elke nieuwe versie hier de datum+tijd van vrijgave invullen (DD-MM-JJJJ UU:MM).
 // Is de exacte tijd niet bekend? Dan datum + oplopend volgnummer, bijv. "30-07-2026 #2".
-const TUINAPP_VERSIE = "31-07-2026 #17";
+const TUINAPP_VERSIE = "31-07-2026 #23";
 
 
 function laad(k, def) { try { const v=localStorage.getItem(k); return v?JSON.parse(v):def; } catch { return def; } }
@@ -27823,11 +27823,12 @@ function Prijzen({ klanten, gewassen, prijzen, setPrijzen, verpDef, kiemkracht, 
 // ════════════════════════════════════════════════════════
 // ORDER DETAIL + BEWERKEN — gedeelde compacte layout
 // ════════════════════════════════════════════════════════
-function PrijsVeldRegel({ waarde, onSave, stijl, type="number", min="0", step="0.001", resetKey=0 }) {
+function PrijsVeldRegel({ waarde, onSave, stijl, type="number", min="0", step="0.001", resetKey=0, geenPijltjes=false }) {
   const [val, setVal] = useState(waarde??'');
   useEffect(()=>setVal(waarde??''), [waarde, resetKey]);
   return (
     <input style={{...stijl,background:val!==''&&val!==undefined?"#f3efe6":"#fff"}}
+      className={geenPijltjes?"geen-eigen-pijltjes":undefined}
       type={type} step={step} min={min} placeholder="—"
       value={val}
       onFocus={e=>e.target.select()}
@@ -27845,6 +27846,21 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
   const [tijdelijkNr, setTijdelijkNr] = useState("");
   const [notitieOpen, setNotitieOpen] = useState(false);
   const [notitieHover, setNotitieHover] = useState(false);
+  // Afgehandeld — alleen voor de beheerder zelf, niet onderdeel van de order (niet gesynct/geprint/zichtbaar voor de klant)
+  const [afgehandeld, setAfgehandeld] = useState(()=>{
+    try{ return !!JSON.parse(localStorage.getItem("ta_orderregel_afgehandeld")||"{}")[r.id]; }catch(e){ return false; }
+  });
+  function toggleAfgehandeld(){
+    setAfgehandeld(v=>{
+      const nieuw = !v;
+      try{
+        const alles = JSON.parse(localStorage.getItem("ta_orderregel_afgehandeld")||"{}");
+        alles[r.id] = nieuw;
+        localStorage.setItem("ta_orderregel_afgehandeld", JSON.stringify(alles));
+      }catch(e){}
+      return nieuw;
+    });
+  }
   // Bouw internNr lookup
   const nrLookup = {};
   const nrVanSoort = {};
@@ -27925,7 +27941,7 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
   return (
     <>
     {waarschuwing&&(
-      <tr><td colSpan={heeftNummers?12:11} style={{padding:0}}>
+      <tr><td colSpan={heeftNummers?13:12} style={{padding:0}}>
         <div style={{background:"#fff8e1",border:"1px solid #f59e0b",borderRadius:4,padding:"6px 10px",margin:"2px 0",fontSize:11,display:"flex",gap:10,alignItems:"center"}}>
           <span>{waarschuwing.veld==="__verwijder__" ? <>⚠️ <strong>Regel verwijderen?</strong> <em>{waarschuwing.oud}</em></> : <>⚠️ <strong>Let op:</strong> order is al <em>{status}</em>. Wijzig <strong>{veldLabel[waarschuwing.veld]||waarschuwing.veld}</strong> van <strong>{String(waarschuwing.oud)||"—"}</strong> naar <strong>{String(waarschuwing.nieuw)}</strong>?</>}</span>
           <button style={{background:groen,color:"#fff",border:"none",borderRadius:3,padding:"2px 8px",cursor:"pointer",fontSize:11}} onClick={()=>{if(waarschuwing.veld==="__verwijder__")onVerwijder();else onUpdate({...r,[waarschuwing.veld]:waarschuwing.nieuw,...(waarschuwing.extraUpdate||{})});setWaarschuwing(null);}}>{waarschuwing.veld==="__verwijder__"?"Ja, verwijderen":"Ja, wijzigen"}</button>
@@ -27933,7 +27949,7 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
         </div>
       </td></tr>
     )}
-    <tr style={{lineHeight:1.3,whiteSpace:"nowrap",fontFamily:"Arial, sans-serif",background:gemarkeerd?"#bfe3fa":(i==null?"transparent":"#f3efe6"),transition:"background 0.6s"}} onMouseEnter={e=>{e.currentTarget.style.background="#ffe082";onActief&&onActief();}} onMouseLeave={e=>e.currentTarget.style.background=gemarkeerd?"#bfe3fa":(i==null?"transparent":"#f3efe6")}>
+    <tr style={{lineHeight:1.3,whiteSpace:"nowrap",fontFamily:"Arial, sans-serif",background:gemarkeerd?"#bfe3fa":(afgehandeld?"#dcfce7":(i==null?"transparent":"#f3efe6")),transition:"background 0.6s"}} onMouseEnter={e=>{e.currentTarget.style.background="#ffe082";onActief&&onActief();}} onMouseLeave={e=>e.currentTarget.style.background=gemarkeerd?"#bfe3fa":(afgehandeld?"#dcfce7":(i==null?"transparent":"#f3efe6"))}>
       {/* Gewas */}
       <td style={cel}>{bewerkbaar
         ? <select style={inp(110)} value={r.gewas} onChange={e=>{
@@ -27956,7 +27972,7 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
             {soorten.map(s=><option key={s}>{s}</option>)}
           </select>
         : r.soort}
-        {orders && <span title={werklijstTooltip} style={{marginLeft:5,fontSize:11,cursor:"help",color:werklijstKleur,fontWeight:600}}>📋{werklijstInfo?" "+(werklijstInfo.verschil>0?"+":"")+werklijstInfo.verschil:""}</span>}
+        {orders && <span title={werklijstTooltip} style={{marginLeft:5,fontSize:16,cursor:"help",color:werklijstKleur,fontWeight:700}}>📋{werklijstInfo?" "+(werklijstInfo.verschil>0?"+":"")+werklijstInfo.verschil:""}</span>}
         {orders && ookAnderenAantal>0 && <span title={"Ook besteld door andere klanten: "+ookAnderenAantal+" trays (zelfde week)"} style={{marginLeft:4,fontSize:10,color:subtekst}}>({ookAnderenAantal})</span>}
       </td>
       {/* Intern nr */}
@@ -28006,6 +28022,12 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
           </select>
         : <span style={{background:lichtGroen,color:groenTekst,borderRadius:20,padding:"1px 6px",fontSize:11,fontWeight:600}}>{r.verpakking}</span>}
       </td>
+      {/* Afgehandeld — alleen voor jezelf, wordt niet opgeslagen bij de order en niet getoond aan de klant */}
+      <td style={{...cel,textAlign:"center",padding:"5px 4px"}}>
+        <input type="checkbox" checked={afgehandeld} onChange={toggleAfgehandeld}
+          title="Alleen voor jezelf: markeer of deze regel al is afgehandeld. Wordt niet bij de order opgeslagen en is niet zichtbaar voor de klant."
+          style={{cursor:"pointer"}}/>
+      </td>
       {/* Trays */}
       <td style={celR}>{bewerkbaar
         ? <PrijsVeldRegel waarde={r.aantal} onSave={v=>updMet("aantal",Number(v))} resetKey={resetTeller}
@@ -28027,7 +28049,7 @@ function RegelRij({ r, verpDef, gewassen, bewerkbaar, status, onVerwijder, onKop
       {/* €/st */}
       <td style={celR}>{bewerkbaar
         ? <PrijsVeldRegel waarde={r.prijs} onSave={v=>updMet("prijs",v)} resetKey={resetTeller}
-              stijl={{...inp(55),textAlign:"right",borderColor:r.prijs===""?"#f59e0b":rand}} />
+              stijl={{...inp(70),textAlign:"right",paddingRight:2,borderColor:r.prijs===""?"#f59e0b":rand}} />
         : (r.prijs!==""?"€"+Number(r.prijs).toFixed(3):<span style={{color:"#f59e0b"}}>—</span>)}
       </td>
 
@@ -28213,12 +28235,12 @@ function OrderDetail({ ges, kl, klanten, verpDef, gewassen, setSt, setTab, setDa
           <thead>
             <tr>
 {[
-                  ["Gewas",110],["Soort",150],["Nr",48],["Fust",80],
+                  ["Gewas",110],["Soort",150],["Nr",48],["Fust",80],["✓",26],
                   ["Trays",50],["Levering",65],["€/st",55],["Vast",65],["Verschil",55],
                   ["Datum",90],["BK",24],["",32]
                 ].map(([h,w],i)=>(
                   <th key={h+i} style={{...TH,padding:"3px 5px",fontSize:11,
-                    textAlign:i>=4&&i<=8?"right":"left",
+                    textAlign:h==="✓"?"center":(i>=5&&i<=9?"right":"left"),
                     minWidth:w,width:w,title:h==="BK"?"Behandelkosten meerekenen":undefined}}>{h}</th>
                 ))}
             </tr>
@@ -31166,7 +31188,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                                 onKeyDown={e=>{if(e.key==="Enter")e.target.blur();}} />
                             </div>
                           </div>
-                          <input style={{...gs.input,padding:"3px 6px",fontSize:12,borderColor:regel.prijs===""?"#f59e0b":rand}} type="number" step="0.001" min="0" placeholder="€/st" value={regel.prijs} onChange={e=>setRegel({...regel,prijs:e.target.value})}
+                          <input style={{...gs.input,padding:"3px 6px",paddingRight:2,fontSize:12,borderColor:regel.prijs===""?"#f59e0b":rand}} type="number" step="0.001" min="0" placeholder="€/st" value={regel.prijs} onChange={e=>setRegel({...regel,prijs:e.target.value})}
                             onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();regelAdd();}}} />
                           {regel.prijs!==""
                             ? <div style={{fontSize:10,color:groenTekst}}>✓ {berekendePlanten.toLocaleString()} pl. · {regel.aantal} trays</div>
@@ -31489,6 +31511,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                               return <span style={{fontSize:9,fontWeight:700,color:"#ea580c",whiteSpace:"nowrap"}} title={"Op basis van "+meestGekozenFust}>🧮 {meestGekozenFust}</span>;
                             })()}
                           </td>
+                          <td></td>
                           <td style={{padding:"2px 4px",textAlign:"right"}}>
                             {(()=>{
                               const telling={};
@@ -31509,7 +31532,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                         </tr>
                       </thead>
                       <thead>
-                        {[["Gewas",110],["Soort",190],["Nr",55],["Fust",100],["Trays",50],["Levering",65],["€/st",55],["Vast",65],["Verschil",55],["Datum",90],["BK",24],["",32]].map(([h,w],i)=>{
+                        {[["Gewas",110],["Soort",190],["Nr",55],["Fust",100],["✓",30],["Trays",50],["Levering",65],["€/st",55],["Vast",65],["Verschil",55],["Datum",90],["BK",24],["",32]].map(([h,w],i)=>{
                           const sorteerbaar = !!sorteerFn[h];
                           const actief = regelSort?.kolom===h;
                           return <th key={h+i}
@@ -31517,7 +31540,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                             style={{padding:"6px 8px",fontSize:15,fontFamily:"Arial, sans-serif",
                               background:"#e0e0e0",border:"1.5px solid #888",color:"#1a1a1a",fontWeight:700,
                               textTransform:"none",letterSpacing:0,whiteSpace:"nowrap",
-                              textAlign:i>=4&&i<=8?"right":"left",
+                              textAlign:h==="✓"?"center":(i>=5&&i<=9?"right":"left"),
                               minWidth:w,width:w,
                               cursor:sorteerbaar?"pointer":"default",
                               userSelect:"none",
@@ -31561,6 +31584,7 @@ function Orders({ klanten, gewassen, setGewassen, prijzen, orders, setOrders, ve
                           const bS={padding:"6px 8px",fontSize:15,fontFamily:"Arial, sans-serif",fontWeight:700,border:"1.5px solid #888"};
                           return <tr style={{background:"#e0e0e0"}}>
                             <td style={{...bS,color:"#1a1a1a"}} colSpan={3}>Totaal</td>
+                            <td style={bS}></td>
                             <td style={bS}></td>
                             <td style={{...bS,color:"#1a1a1a",textAlign:"right"}}>{data.regels.reduce((s,x)=>s+x.aantal,0)}</td>
                             <td style={{...bS,color:"#1a1a1a",textAlign:"right"}}>{plantenTotaal(data.regels).toLocaleString()}</td>
@@ -33036,7 +33060,10 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                            </button>
                            <div style={{flex:1,minWidth:0,paddingRight:10}}>
                              <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:7,flexWrap:"wrap"}}>
-                               <div style={{fontSize:17,fontWeight:600,color:"#1e3a2f",wordBreak:"break-word",lineHeight:1.15}}>{r.soort}</div>
+                               <div style={{fontSize:17,fontWeight:600,color:"#1e3a2f",wordBreak:"break-word",lineHeight:1.15}}>
+                                 {r.internNr && <span style={{fontSize:13,fontWeight:600,color:"#5b7566",marginRight:4}}>{r.internNr}</span>}
+                                 {r.soort}
+                               </div>
                                {klantMatches.length>0 && !weekKolomOpen &&
                                  <span style={{fontSize:14,color:"#5b7566",fontWeight:500,marginLeft:"auto",textAlign:"right"}}>{klantMatches.map(m=>m.klantNaam).join(", ")}</span>
                                }

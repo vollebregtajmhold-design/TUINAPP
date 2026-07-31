@@ -26845,7 +26845,7 @@ function sorteerRegels(regels) {
 
 // Versienummer van deze uitgave — bij elke nieuwe versie hier de datum+tijd van vrijgave invullen (DD-MM-JJJJ UU:MM).
 // Is de exacte tijd niet bekend? Dan datum + oplopend volgnummer, bijv. "30-07-2026 #2".
-const TUINAPP_VERSIE = "31-07-2026 #6";
+const TUINAPP_VERSIE = "31-07-2026 #7";
 
 function laad(k, def) { try { const v=localStorage.getItem(k); return v?JSON.parse(v):def; } catch { return def; } }
 function bewaar(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) { alert("⚠️ Opslaan is mislukt voor '"+k+"'!\n\nJe wijzigingen gaan mogelijk verloren bij herladen.\n\nOorzaak: "+(e&&e.message?e.message:e)+"\n\nTip: maak een backup via Instellingen en maak ruimte vrij (bv. verwijder oude data of grote logo-afbeelding)."); } }
@@ -38626,7 +38626,7 @@ function HerstelBackup() {
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           <label style={{...gs.knopPrimair,background:"#7c3aed",cursor:"pointer",display:"inline-block"}}>
             📂 Backup bestand kiezen
-            <input type="file" accept=".json" style={{display:"none"}} onChange={e=>{
+            <input type="file" accept=".json,application/json,text/plain,text/json,*/*" style={{display:"none"}} onChange={e=>{
               const file = e.target.files[0];
               if(!file) return;
               const reader = new FileReader();

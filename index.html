@@ -26845,7 +26845,7 @@ function sorteerRegels(regels) {
 
 // Versienummer van deze uitgave — bij elke nieuwe versie hier de datum+tijd van vrijgave invullen (DD-MM-JJJJ UU:MM).
 // Is de exacte tijd niet bekend? Dan datum + oplopend volgnummer, bijv. "30-07-2026 #2".
-const TUINAPP_VERSIE = "31-07-2026 #5";
+const TUINAPP_VERSIE = "31-07-2026 #6";
 
 function laad(k, def) { try { const v=localStorage.getItem(k); return v?JSON.parse(v):def; } catch { return def; } }
 function bewaar(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) { alert("⚠️ Opslaan is mislukt voor '"+k+"'!\n\nJe wijzigingen gaan mogelijk verloren bij herladen.\n\nOorzaak: "+(e&&e.message?e.message:e)+"\n\nTip: maak een backup via Instellingen en maak ruimte vrij (bv. verwijder oude data of grote logo-afbeelding)."); } }
@@ -45708,7 +45708,7 @@ function App() {
     gedaan2: gedaan2,
     setGedaan2: setGedaan2
   })), pagina === "mobielvoorbeeld" && /*#__PURE__*/React.createElement("div", {
-    style: {padding:24, display:"flex", justifyContent:"center", background:"#e5e7eb", minHeight:"calc(100vh - 50px)"}
+    style: {padding:24, display:"flex", justifyContent:"flex-start", background:"#e5e7eb", minHeight:"calc(100vh - 50px)"}
   }, /*#__PURE__*/React.createElement("div", {
     style: {textAlign:"center"}
   }, /*#__PURE__*/React.createElement("div", {
@@ -45716,7 +45716,7 @@ function App() {
   }, "📱 Zo ziet de werklijst eruit op een telefoon — hier direct te ontwikkelen/bekijken, zonder naar een telefoon te hoeven pushen"),
   /*#__PURE__*/React.createElement("div", {
     style: {width:390, height:"calc(100vh - 140px)", background:"#fff", border:"10px solid #1f2937", borderRadius:36,
-      overflow:"hidden", boxShadow:"0 10px 40px rgba(0,0,0,0.35)", margin:"0 auto", textAlign:"left"}
+      overflow:"hidden", boxShadow:"0 10px 40px rgba(0,0,0,0.35)", margin:"0", textAlign:"left"}
   }, /*#__PURE__*/React.createElement(Teeltplanning, {
     klanten: klanten,
     gewassen: gewassen,

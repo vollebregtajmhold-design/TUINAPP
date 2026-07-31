@@ -26845,7 +26845,8 @@ function sorteerRegels(regels) {
 
 // Versienummer van deze uitgave — bij elke nieuwe versie hier de datum+tijd van vrijgave invullen (DD-MM-JJJJ UU:MM).
 // Is de exacte tijd niet bekend? Dan datum + oplopend volgnummer, bijv. "30-07-2026 #2".
-const TUINAPP_VERSIE = "31-07-2026 #7";
+const TUINAPP_VERSIE = "31-07-2026 #17";
+
 
 function laad(k, def) { try { const v=localStorage.getItem(k); return v?JSON.parse(v):def; } catch { return def; } }
 function bewaar(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) { alert("⚠️ Opslaan is mislukt voor '"+k+"'!\n\nJe wijzigingen gaan mogelijk verloren bij herladen.\n\nOorzaak: "+(e&&e.message?e.message:e)+"\n\nTip: maak een backup via Instellingen en maak ruimte vrij (bv. verwijder oude data of grote logo-afbeelding)."); } }
@@ -32157,7 +32158,7 @@ function Teeltduur({ gewassen, verpDef, teeltduur, setTeeltduur }) {
 // ════════════════════════════════════════════════════════
 // MODULE — TEELTPLANNING
 // ════════════════════════════════════════════════════════
-function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkracht, setKiemkracht, bedrijf, realisatie: realisatieProp, setRealisatie: setRealisatieProp, werklijstVoorkeuze, setWerklijstVoorkeuze, medewerkerModus, medewerkerNaam, werklijstKeuze, huidigePagina, forceTelefoonModus, gedaan: gedaanProp, setGedaan: setGedaanProp, gedaan2: gedaan2Prop, setGedaan2: setGedaan2Prop }) {
+function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkracht, setKiemkracht, bedrijf, realisatie: realisatieProp, setRealisatie: setRealisatieProp, werklijstVoorkeuze, setWerklijstVoorkeuze, medewerkerModus, medewerkerNaam, werklijstKeuze, huidigePagina, forceTelefoonModus, forceTabletModus, gedaan: gedaanProp, setGedaan: setGedaanProp, gedaan2: gedaan2Prop, setGedaan2: setGedaan2Prop }) {
   const wit = "#f3efe6"; // gebroken wit, alleen in dit scherm
   const nu2 = new Date();
   let volWk = getWeekNr(nu2)+1, volJr = getJaar(nu2);
@@ -32192,8 +32193,10 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
   const gedaan = gedaanProp !== undefined ? gedaanProp : _gedaanLocal;
   const setGedaan = setGedaanProp !== undefined ? setGedaanProp : _setGedaanLocal;
   const [toonMatrix, setToonMatrix] = useState(false);
-  const [tabletModus, setTabletModus] = useState(()=>{ try{ return localStorage.getItem("ta_werklijst_tabletmodus")==="1"; }catch(e){ return false; } });
-  useEffect(()=>{ try{ localStorage.setItem("ta_werklijst_tabletmodus", tabletModus?"1":"0"); }catch(e){} }, [tabletModus]);
+  const [tabletModusToggle, setTabletModusToggle] = useState(()=>{ try{ return localStorage.getItem("ta_werklijst_tabletmodus")==="1"; }catch(e){ return false; } });
+  useEffect(()=>{ try{ localStorage.setItem("ta_werklijst_tabletmodus", tabletModusToggle?"1":"0"); }catch(e){} }, [tabletModusToggle]);
+  // forceTabletModus (via het "Tablet voorbeeld"-scherm bij Statistieken) zet 'm altijd aan, net als forceTelefoonModus hieronder.
+  const tabletModus = !!forceTabletModus || tabletModusToggle;
   // Telefoonmodus: automatisch actief bij een smal scherm (geen aparte knop nodig) — zelfde kaarten als
   // tabletmodus, maar de zijbalk gaat standaard dicht en de kaarten stapelen smaller (zie CSS hieronder).
   // forceTelefoonModus (via het "Mobiel voorbeeld"-scherm bij Statistieken) zet 'm altijd aan, ook op een breed scherm —
@@ -32229,7 +32232,6 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
 
   const [printOverzicht, setPrintOverzicht] = useState(null);
   const [orderKeuzeRij, setOrderKeuzeRij] = useState(null); // key van rij waarvoor het order-keuzemenu open staat
-  const [kaartUitgeklapt, setKaartUitgeklapt] = useState({}); // per-klant uitklap op de tablet/telefoon-kaarten, key: rijKey
   const [gemarkeerdeWerklijstRij, setGemarkeerdeWerklijstRij] = useState(null); // rij die na doorklikken naar Dashboard 4 sec. oplicht
   const laatsteWerklijstKlikRef = React.useRef(null); // onthoudt welke rij het laatst is aangeklikt, voor de highlight bij terugkeer via Backspace
   useEffect(()=>{
@@ -32473,8 +32475,8 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
       <div key={blokKey} style={{marginBottom:2}}>
       <div>
 
-        {/* Over/tekort — vaste plek, boven de printknoppen (op de telefoon weggelaten, kost te veel ruimte) */}
-        {!telefoonModus && (()=>{
+        {/* Over/tekort — vaste plek, boven de printknoppen (op tablet/telefoon weggelaten, kost te veel ruimte) */}
+        {!telefoonModus && !tabletModus && (()=>{
           const knopOverzicht = {background:"#dbeafe",color:"#111",border:"2px solid #2563eb",borderRadius:5,padding:"3px 10px",fontSize:12,fontWeight:700,cursor:"pointer"};
           return (
         <div style={{display:"flex",gap:6,marginBottom:4}}>
@@ -32507,14 +32509,11 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
               📈 Kiemoverzicht
             </button>
           }
-          {telefoonModus
-            ? <span style={{...knopOverzicht,background:"#93c5fd",cursor:"default"}}>📱 Telefoonmodus (automatisch)</span>
-            : <button onClick={()=>setTabletModus(v=>!v)}
-                title="Grote knoppen, handig als je met een tablet werkt"
-                style={{...knopOverzicht,background:tabletModus?"#93c5fd":knopOverzicht.background}}>
-                📱 {tabletModus?"Tabletmodus aan":"Tabletmodus"}
-              </button>
-          }
+          <button onClick={()=>setTabletModusToggle(v=>!v)}
+            title="Grote knoppen, handig als je met een tablet werkt"
+            style={{...knopOverzicht,background:tabletModus?"#93c5fd":knopOverzicht.background}}>
+            📱 {tabletModus?"Tabletmodus aan":"Tabletmodus"}
+          </button>
         </div>
           );
         })()}
@@ -32538,7 +32537,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
           {/* Knoppen: eigen onClick, geen propagation nodig */}
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
             {/* Printknoppen — op de telefoon weggelaten, niet nodig tijdens het lopen door de kas */}
-            {!telefoonModus && <>
+            {!telefoonModus && !tabletModus && <>
             <button style={{background:"#d1fae5",color:"#065f46",border:"1px solid #065f46",borderRadius:5,padding:"5px 11px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center"}}
               onClick={()=>{
                 const rijenMetWerkelijk = rijen.map(r=>({...r, werkelijk:getReal(wk,actieType,r.gewas+"||"+r.soort+"||"+r.fust)}));
@@ -32639,13 +32638,20 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                     }
                   }}><span>Week</span><span>vastzetten</span></button>
             }
-            {!isZaai&&!telefoonModus&&
+            {!isZaai&&!telefoonModus&&!tabletModus&&
               <button style={{background:"#d1fae5",color:"#065f46",border:"1px solid #065f46",borderRadius:5,padding:"5px 11px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center"}}
                 onClick={()=>setPrintWegzetlijst({wk,orders,klanten,gewassen,verpDef,teeltduur,kiemkracht,fustFilter:blokSuffix,realisatie,blokKey,afdrukType:"controlelijst"})}>Controlelijst<AfdrukStip actief={afgedrukt[blokKey]?.controlelijst}/></button>
             }
             <button style={{background:"#fef3c7",color:"#92400e",border:"1px solid #92400e",borderRadius:5,padding:"5px 11px",cursor:"pointer",fontSize:13,fontWeight:600}}
               title="Handmatige regel toevoegen (niet gekoppeld aan een order)"
               onClick={()=>setNieuweHandmatigeRegel({blokKey})}>+ Regel</button>
+            {tabletModus && !forceTabletModus &&
+              <button onClick={()=>setTabletModusToggle(false)}
+                title="Tabletmodus uitzetten"
+                style={{background:"#93c5fd",color:"#111",border:"1px solid #2563eb",borderRadius:5,padding:"5px 8px",cursor:"pointer",fontSize:13,fontWeight:700}}>
+                📱 uit
+              </button>
+            }
             </div>
         </div>
         {blokOpen&&!tabletModus&&!telefoonModus&&<table style={{width:"auto",borderCollapse:"collapse"}}>
@@ -32953,15 +32959,21 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
              const gesorteerd = [...rijen].sort((a,b)=>a.gewas.localeCompare(b.gewas,"nl")||a.soort.localeCompare(b.soort,"nl"));
              const groepen = {};
              gesorteerd.forEach(r=>{ (groepen[r.gewas] = groepen[r.gewas]||[]).push(r); });
+             // Tabletmodus = 1e ronde (gewone "gedaan"), telefoonmodus = 2e ronde/nacontrole (gedaan2) —
+             // zo kun je met een tablet de 1e telling doen en later met de telefoon de nacontrole.
+             const kaartIs1eRonde = tabletModus;
+             const kaartGedaanState = kaartIs1eRonde ? gedaan : gedaan2;
+             const kaartSetGedaan = kaartIs1eRonde ? setGedaan : setGedaan2;
+             const kaartSleutel = r => blokKey+"||"+r.gewas+"||"+r.soort+(kaartIs1eRonde?"":"||nacontrole");
              const isGedaanRij = r=>{
-               const v = gedaan2[blokKey+"||"+r.gewas+"||"+r.soort+"||nacontrole"];
+               const v = kaartGedaanState[kaartSleutel(r)];
                return !!(typeof v==="object" ? v?.checked : v);
              };
              const gedaanAantal = gesorteerd.filter(isGedaanRij).length;
              return (
                <>
-                 <div style={{fontSize:13,fontWeight:700,color:"#1d4ed8",background:"#dbeafe",borderRadius:6,padding:"6px 10px",alignSelf:"flex-start",marginBottom:2}}>
-                   {gedaanAantal} van {gesorteerd.length} nacontrole gedaan
+                 <div style={{fontSize:13,fontWeight:700,color:kaartIs1eRonde?"#2d6a4f":"#1d4ed8",background:kaartIs1eRonde?"#e8f5ee":"#dbeafe",borderRadius:6,padding:"6px 10px",alignSelf:"flex-start",marginBottom:2}}>
+                   {gedaanAantal} van {gesorteerd.length} {kaartIs1eRonde?"gedaan":"nacontrole gedaan"}
                  </div>
                  {Object.entries(groepen).map(([gewasNaam, soorten])=>(
                    <div key={gewasNaam}>
@@ -32973,7 +32985,22 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                        const heeftWaarde = opgeslagen!==''&&opgeslagen!==null&&opgeslagen!==undefined;
                        const werkelijk = heeftWaarde ? Number(opgeslagen) : null;
                        const verschil = heeftWaarde ? Math.round((werkelijk-gepland)*10)/10 : null;
-                       const gedaanKey = blokKey+"||"+r.gewas+"||"+r.soort+"||nacontrole";
+                       const opgeslagenS2 = !isZaai ? getSort2(wk,actieType,rijKey) : '';
+                       const heeftS2 = opgeslagenS2!==''&&opgeslagenS2!==null&&opgeslagenS2!==undefined;
+                       const basisS2 = heeftS2?Number(opgeslagenS2):0;
+                       let kaartOrgGezaaid = null;
+                       if(!isZaai){
+                         const kiemWaarde = kiemPctVoorInboet(r.gewas,r.soort,r.fust,wk);
+                         const kiemPctFrac = kiemWaarde!=null?Number(kiemWaarde)/100:null;
+                         if(kiemPctFrac){
+                           const fustL=(r.fust||"").toLowerCase();
+                           const factor65=(fustL.includes("65")||fustL.includes("66"))?4:1;
+                           kaartOrgGezaaid = gepland/kiemPctFrac/factor65;
+                         }
+                       }
+                       // Cijfergrootte: 3-cijferige aantallen iets kleiner, zodat ze niet buiten hun vakje vallen
+                       const kaartCijferSize = (waarde, groot, klein) => (String(Math.round(Math.abs(Number(waarde)||0))).length>=3 ? klein : groot);
+                       const gedaanKey = kaartSleutel(r);
                        const isGedaan = isGedaanRij(r);
                        const werklijstHlKey = blokKey+"||"+rijKey;
                        const isWerklijstGemarkeerd = gemarkeerdeWerklijstRij===werklijstHlKey;
@@ -32988,62 +33015,69 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                            }
                          });
                        });
-                       const isUitgeklapt = !!kaartUitgeklapt[rijKey];
                        return (
                          <div key={rijKey} style={{marginBottom:4}}>
                          <div className="ta-kaart-rij" style={{display:"flex",alignItems:"center",gap:8,
-                             background:isWerklijstGemarkeerd?"#bfe3fa":(isGedaan?"#dbeafe":"#fff"),
+                             background:isWerklijstGemarkeerd?"#bfe3fa":(isGedaan?(kaartIs1eRonde?"#dcfce7":"#dbeafe"):"#fff"),
                              border:"1px solid "+(isWerklijstGemarkeerd?"#7cc4f0":"#d8ddd6"),
                              borderRadius:8,padding:"4px 6px",marginBottom:3}}>
-                           <button title="Nacontrole"
+                           <button title={kaartIs1eRonde?"Gedaan":"Nacontrole"}
                              onClick={()=>{
                                if(medewerkerNaam){
-                                 setGedaan2(prev=>({...prev,[gedaanKey]: !isGedaan ? {checked:true, door:medewerkerNaam, tijdstip:new Date().toISOString()} : false}));
+                                 kaartSetGedaan(prev=>({...prev,[gedaanKey]: !isGedaan ? {checked:true, door:medewerkerNaam, tijdstip:new Date().toISOString()} : false}));
                                } else {
-                                 setGedaan2(prev=>({...prev,[gedaanKey]: !isGedaan}));
+                                 kaartSetGedaan(prev=>({...prev,[gedaanKey]: !isGedaan}));
                                }
                              }}
-                             style={{width:32,height:32,minWidth:32,borderRadius:"50%",border:isGedaan?"none":"1px solid #b9c6bf",
-                               background:isGedaan?"#1d4ed8":"#f3efe6",color:isGedaan?"#fff":"#4b5f56",
-                               fontSize:isGedaan?14:(String(gepland).length>=4?10:12),fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                             {isGedaan?"✓":gepland}
+                             style={{width:36,height:36,minWidth:36,borderRadius:"50%",border:isGedaan?"none":"1px solid #b9c6bf",
+                               background:isGedaan?(kaartIs1eRonde?"#16a34a":"#1d4ed8"):"#f3efe6",color:isGedaan?"#fff":"#4b5f56",
+                               fontSize:isGedaan?16:kaartCijferSize((tabletModus&&!isZaai&&kaartOrgGezaaid!=null?kaartOrgGezaaid:gepland),15,12),fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                             {isGedaan?"✓":(tabletModus&&!isZaai&&kaartOrgGezaaid!=null?Math.round(kaartOrgGezaaid):gepland)}
                            </button>
-                           <div style={{flex:1,minWidth:0}}>
-                             <div style={{fontSize:13,fontWeight:600,color:"#1e3a2f",whiteSpace:"normal",wordBreak:"break-word",lineHeight:1.15}}>{r.soort}</div>
-                             {klantMatches.length===1 &&
-                               <span style={{fontSize:10,color:"#6b7d74"}}>{klantMatches[0].klantNaam}</span>
-                             }
-                             {klantMatches.length>1 &&
-                               <span style={{fontSize:10,color:"#6b7d74",cursor:"pointer",textDecoration:"underline",textDecorationStyle:"dotted"}}
-                                 onClick={()=>setKaartUitgeklapt(prev=>({...prev,[rijKey]:!prev[rijKey]}))}>
-                                 {isUitgeklapt?"▾":"▸"} {klantMatches.length} klanten
-                               </span>
+                           <div style={{flex:1,minWidth:0,paddingRight:10}}>
+                             <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:7,flexWrap:"wrap"}}>
+                               <div style={{fontSize:17,fontWeight:600,color:"#1e3a2f",wordBreak:"break-word",lineHeight:1.15}}>{r.soort}</div>
+                               {klantMatches.length>0 && !weekKolomOpen &&
+                                 <span style={{fontSize:14,color:"#5b7566",fontWeight:500,marginLeft:"auto",textAlign:"right"}}>{klantMatches.map(m=>m.klantNaam).join(", ")}</span>
+                               }
+                             </div>
+                             {klantMatches.length>0 && weekKolomOpen &&
+                               <span style={{fontSize:11,color:"#6b7d74"}}>{klantMatches.map(m=>m.klantNaam).join(", ")}</span>
                              }
                            </div>
                            <div className="ta-kaart-stappers" style={{display:"flex",alignItems:"stretch",flexShrink:0,
                                border:"1px solid #d1d5db",borderRadius:16,overflow:"hidden"}}>
                              <button onClick={()=>{const b=heeftWaarde?Number(opgeslagen):gepland;setReal(wk,actieType,rijKey,String(Math.max(0,Math.round((b-0.25)*100)/100)));}}
-                               style={{width:38,height:38,border:"none",display:"flex",alignItems:"center",justifyContent:"center",
+                               style={{width:46,height:46,border:"none",display:"flex",alignItems:"center",justifyContent:"center",
                                  background:(heeftWaarde&&verschil<0)?"#fee2e2":"#f59e0b",color:(heeftWaarde&&verschil<0)?"#dc2626":"#fff",
-                                 fontSize:(heeftWaarde&&verschil<0)?11:18,fontWeight:700,cursor:"pointer"}}>{(heeftWaarde&&verschil<0)?verschil.toFixed(1).replace(".",","):"−"}</button>
-                             <div style={{width:38,textAlign:"center",fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",
+                                 fontSize:(heeftWaarde&&verschil<0)?kaartCijferSize(verschil,16,13):24,fontWeight:700,cursor:"pointer"}}>{(heeftWaarde&&verschil<0)?verschil.toFixed(1).replace(".",","):"−"}</button>
+                             <div style={{width:52,textAlign:"center",fontSize:kaartCijferSize(heeftWaarde?opgeslagen:gepland,19,16),fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",
                                  background:(heeftWaarde&&verschil===0)?"#dcfce7":"#fff",color:!heeftWaarde?"#9ca3af":(verschil===0?"#16a34a":"#854d0e")}}>{heeftWaarde?opgeslagen:"—"}</div>
                              <button onClick={()=>{const b=heeftWaarde?Number(opgeslagen):gepland;setReal(wk,actieType,rijKey,String(Math.round((b+0.25)*100)/100));}}
-                               style={{width:38,height:38,border:"none",display:"flex",alignItems:"center",justifyContent:"center",
+                               style={{width:46,height:46,border:"none",display:"flex",alignItems:"center",justifyContent:"center",
                                  background:(heeftWaarde&&verschil>0)?"#dbeafe":"#f59e0b",color:(heeftWaarde&&verschil>0)?"#1d4ed8":"#fff",
-                                 fontSize:(heeftWaarde&&verschil>0)?11:18,fontWeight:700,cursor:"pointer"}}>{(heeftWaarde&&verschil>0)?("+"+verschil.toFixed(1).replace(".",",")):"+"}</button>
+                                 fontSize:(heeftWaarde&&verschil>0)?kaartCijferSize(verschil,16,13):24,fontWeight:700,cursor:"pointer"}}>{(heeftWaarde&&verschil>0)?("+"+verschil.toFixed(1).replace(".",",")):"+"}</button>
                            </div>
+                           {tabletModus && !isZaai &&
+                             <div title="Nodig (tussen haakjes: intern)" style={{minWidth:34,textAlign:"center",fontSize:kaartCijferSize(gepland,15,13),fontWeight:600,color:"#6b7280",flexShrink:0}}>
+                               {gepland}
+                               {r.inboetInternTrays>0 &&
+                                 <span style={{fontSize:10,fontWeight:400,color:"#9ca3af"}}> ({r.inboetInternTrays})</span>
+                               }
+                             </div>
+                           }
+                           {tabletModus && !isZaai &&
+                             <div title="2e sortering" style={{display:"flex",alignItems:"stretch",flexShrink:0,border:"1px solid #d1d5db",borderRadius:12,overflow:"hidden"}}>
+                               <button onClick={()=>setSort2(wk,actieType,rijKey,String(Math.max(0,Math.round((basisS2-0.25)*100)/100)))}
+                                 style={{width:28,height:40,border:"none",background:heeftS2?"#f59e0b":"#e5e7eb",color:heeftS2?"#fff":"#6b7280",fontSize:16,fontWeight:700,cursor:"pointer"}}>−</button>
+                               <div style={{width:32,textAlign:"center",fontSize:kaartCijferSize(heeftS2?opgeslagenS2:0,16,14),fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",
+                                   background:"#fff",color:heeftS2?"#854d0e":"#9ca3af"}}>{heeftS2?opgeslagenS2:"0"}</div>
+                               <button onClick={()=>setSort2(wk,actieType,rijKey,String(Math.round((basisS2+0.25)*100)/100))}
+                                 style={{width:28,height:40,border:"none",background:heeftS2?"#f59e0b":"#e5e7eb",color:heeftS2?"#fff":"#6b7280",fontSize:16,fontWeight:700,cursor:"pointer"}}>+</button>
+                             </div>
+                           }
                          </div>
-                         {isUitgeklapt && klantMatches.length>1 &&
-                           <div style={{background:"#f3efe6",border:"1px solid #d8ddd6",borderTop:"none",borderRadius:"0 0 10px 10px",padding:"4px 10px 6px",marginTop:-4,marginBottom:4,fontSize:12,color:"#4b5f56"}}>
-                             {klantMatches.map((m,mi)=>(
-                               <div key={mi} style={{display:"flex",justifyContent:"space-between",padding:"2px 0"}}>
-                                 <span>{m.klantNaam}</span><span style={{fontWeight:700}}>{m.aantal}</span>
-                               </div>
-                             ))}
-                           </div>
-                         }
-                         </div>
+                       </div>
                        );
                      })}
                    </div>
@@ -45190,7 +45224,7 @@ function App() {
       fontWeight: pagina === m.id ? 700 : 400
     }
   }, m.label)), (() => {
-    const statOpen = ["overzichten", "margeoverzicht", "afwijkendeprijzen", "dashboard", "mobielvoorbeeld"].includes(pagina);
+    const statOpen = ["overzichten", "margeoverzicht", "afwijkendeprijzen", "dashboard", "mobielvoorbeeld", "tabletvoorbeeld"].includes(pagina);
     return /*#__PURE__*/React.createElement("div", {
       style: {
         position: "relative"
@@ -45248,6 +45282,9 @@ function App() {
     }, {
       id: "mobielvoorbeeld",
       label: "📱 Mobiel voorbeeld"
+    }, {
+      id: "tabletvoorbeeld",
+      label: "📱 Tablet voorbeeld"
     }].map(m => /*#__PURE__*/React.createElement("button", {
       key: m.id,
       onClick: () => {
@@ -45735,6 +45772,38 @@ function App() {
     werklijstKeuze: werklijstKeuze,
     huidigePagina: pagina,
     forceTelefoonModus: true,
+    gedaan: gedaan,
+    setGedaan: setGedaan,
+    gedaan2: gedaan2,
+    setGedaan2: setGedaan2
+  })))), pagina === "tabletvoorbeeld" && /*#__PURE__*/React.createElement("div", {
+    style: {padding:24, display:"flex", justifyContent:"flex-start", background:"#e5e7eb", minHeight:"calc(100vh - 50px)"}
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {textAlign:"center"}
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {fontSize:12, color:"#6b7280", marginBottom:10, fontWeight:600}
+  }, "📱 Zo ziet de werklijst eruit op een tablet — hier direct te ontwikkelen/bekijken, zonder naar een tablet te hoeven pushen. Vinkje = 1e ronde (gewone \"gedaan\")."),
+  /*#__PURE__*/React.createElement("div", {
+    style: {width:820, height:"calc(100vh - 140px)", background:"#fff", border:"10px solid #1f2937", borderRadius:24,
+      overflow:"hidden", boxShadow:"0 10px 40px rgba(0,0,0,0.35)", margin:"0", textAlign:"left"}
+  }, /*#__PURE__*/React.createElement(Teeltplanning, {
+    klanten: klanten,
+    gewassen: gewassen,
+    verpDef: verpDef,
+    orders: orders,
+    teeltduur: teeltduur,
+    kiemkracht: kiemkracht,
+    setKiemkracht: setKiemkracht,
+    bedrijf: bedrijf,
+    realisatie: realisatie,
+    setRealisatie: setRealisatie,
+    werklijstVoorkeuze: werklijstVoorkeuze,
+    setWerklijstVoorkeuze: setWerklijstVoorkeuze,
+    medewerkerModus: medewerkerModus,
+    medewerkerNaam: medewerkerNaam,
+    werklijstKeuze: werklijstKeuze,
+    huidigePagina: pagina,
+    forceTabletModus: true,
     gedaan: gedaan,
     setGedaan: setGedaan,
     gedaan2: gedaan2,

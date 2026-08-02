@@ -26845,7 +26845,7 @@ function sorteerRegels(regels) {
 
 // Versienummer van deze uitgave — bij elke nieuwe versie hier de datum+tijd van vrijgave invullen (DD-MM-JJJJ UU:MM).
 // Is de exacte tijd niet bekend? Dan datum + oplopend volgnummer, bijv. "30-07-2026 #2".
-const TUINAPP_VERSIE = "31-07-2026 #23";
+const TUINAPP_VERSIE = "01-08-2026 #6";
 
 
 function laad(k, def) { try { const v=localStorage.getItem(k); return v?JSON.parse(v):def; } catch { return def; } }
@@ -32234,6 +32234,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
   const telefoonModus = !!forceTelefoonModus || telefoonModusAuto;
   const [weekKolomOpen, setWeekKolomOpen] = useState(()=>{ try{ return window.innerWidth>480; }catch(e){ return true; } }); // in tablet-/telefoonmodus wegswipebaar, om ruimte te maken voor de kaarten
   useEffect(()=>{ if(telefoonModus) setWeekKolomOpen(false); }, [telefoonModus]);
+  const [kaartKlantFilter, setKaartKlantFilter] = useState(""); // tablet-/telefoonmodus: filter kaarten op 1 klant
   const swipeStartXRef = React.useRef(null);
   function onWeekKolomTouchStart(e){ swipeStartXRef.current = e.touches[0].clientX; }
   function onWeekKolomTouchEnd(e){
@@ -32495,6 +32496,21 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
       return op!==''&&op!==null&&op!==undefined;
     });
     const leverWeken = [...new Set(rijen.map(r=>r.leverWeek).filter(Boolean))].sort();
+    // Klanten die een regel (gewas+soort+fust) hebben besteld voor de leverweek van deze rij
+    function berekenKlantMatches(r){
+      const doelWk = r.leverWeek||wk;
+      const matches=[];
+      orders.forEach(o=>{
+        if(weekLabel(o.leverdatum)!==doelWk) return;
+        (o.regels||[]).forEach(reg=>{
+          if(reg.gewas===r.gewas && reg.soort===r.soort && reg.verpakking===r.fust){
+            const kl2=klanten.find(k=>k.id===o.klantId);
+            matches.push({klantNaam:kl2?.naam||"?", aantal:reg.aantal||0});
+          }
+        });
+      });
+      return matches;
+    }
     return (
       <div key={blokKey} style={{marginBottom:2}}>
       <div>
@@ -32630,7 +32646,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                 }}>Stickers<AfdrukStip actief={afgedrukt[blokKey]?.stickers}/></button>
             </>}
             </>}
-            {allesVastgezet
+            {!telefoonModus && !tabletModus && (allesVastgezet
               ? <span style={{background:"#fef3c7",color:"#92400e",border:"2px solid #dc2626",borderRadius:8,
                     padding:"10px 12px",fontSize:12,fontWeight:700,lineHeight:1.25,
                     display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
@@ -32661,7 +32677,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                       });
                     }
                   }}><span>Week</span><span>vastzetten</span></button>
-            }
+            )}
             {!isZaai&&!telefoonModus&&!tabletModus&&
               <button style={{background:"#d1fae5",color:"#065f46",border:"1px solid #065f46",borderRadius:5,padding:"5px 11px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center"}}
                 onClick={()=>setPrintWegzetlijst({wk,orders,klanten,gewassen,verpDef,teeltduur,kiemkracht,fustFilter:blokSuffix,realisatie,blokKey,afdrukType:"controlelijst"})}>Controlelijst<AfdrukStip actief={afgedrukt[blokKey]?.controlelijst}/></button>
@@ -32980,7 +32996,10 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
        {blokOpen && (tabletModus||telefoonModus) && (
          <div style={{display:"flex",flexDirection:"column",gap:4,padding:"6px 4px"}}>
            {(()=>{
-             const gesorteerd = [...rijen].sort((a,b)=>a.gewas.localeCompare(b.gewas,"nl")||a.soort.localeCompare(b.soort,"nl"));
+             let gesorteerd = [...rijen].sort((a,b)=>a.gewas.localeCompare(b.gewas,"nl")||a.soort.localeCompare(b.soort,"nl"));
+             if(kaartKlantFilter){
+               gesorteerd = gesorteerd.filter(r=>berekenKlantMatches(r).some(m=>m.klantNaam===kaartKlantFilter));
+             }
              const groepen = {};
              gesorteerd.forEach(r=>{ (groepen[r.gewas] = groepen[r.gewas]||[]).push(r); });
              // Tabletmodus = 1e ronde (gewone "gedaan"), telefoonmodus = 2e ronde/nacontrole (gedaan2) —
@@ -33028,17 +33047,7 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                        const isGedaan = isGedaanRij(r);
                        const werklijstHlKey = blokKey+"||"+rijKey;
                        const isWerklijstGemarkeerd = gemarkeerdeWerklijstRij===werklijstHlKey;
-                       const doelWk = r.leverWeek||wk;
-                       const klantMatches=[];
-                       orders.forEach(o=>{
-                         if(weekLabel(o.leverdatum)!==doelWk) return;
-                         (o.regels||[]).forEach(reg=>{
-                           if(reg.gewas===r.gewas && reg.soort===r.soort && reg.verpakking===r.fust){
-                             const kl2=klanten.find(k=>k.id===o.klantId);
-                             klantMatches.push({klantNaam:kl2?.naam||"?", aantal:reg.aantal||0});
-                           }
-                         });
-                       });
+                       const klantMatches = berekenKlantMatches(r);
                        return (
                          <div key={rijKey} style={{marginBottom:4}}>
                          <div className="ta-kaart-rij" style={{display:"flex",alignItems:"center",gap:8,
@@ -33064,11 +33073,11 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                                  {r.internNr && <span style={{fontSize:13,fontWeight:600,color:"#5b7566",marginRight:4}}>{r.internNr}</span>}
                                  {r.soort}
                                </div>
-                               {klantMatches.length>0 && !weekKolomOpen &&
+                               {klantMatches.length>0 && !weekKolomOpen && !kaartKlantFilter &&
                                  <span style={{fontSize:14,color:"#5b7566",fontWeight:500,marginLeft:"auto",textAlign:"right"}}>{klantMatches.map(m=>m.klantNaam).join(", ")}</span>
                                }
                              </div>
-                             {klantMatches.length>0 && weekKolomOpen &&
+                             {klantMatches.length>0 && weekKolomOpen && !kaartKlantFilter &&
                                <span style={{fontSize:11,color:"#6b7d74"}}>{klantMatches.map(m=>m.klantNaam).join(", ")}</span>
                              }
                            </div>
@@ -33354,6 +33363,38 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
             });
           })()}
         </div>
+        {kaartKlantFilter && gekozenLijst && gekozenWeek && (()=>{
+          const def = LIJST_DEFS.find(l=>l.id===gekozenLijst);
+          const actieType = def.isZaai?"zaai":"inboet";
+          const lijsten = berekenLijsten(planning[gekozenWeek]);
+          const rijen = lijsten[gekozenLijst]||[];
+          let totNodig=0, totWerkelijk=0;
+          rijen.forEach(r=>{
+            const doelWk = r.leverWeek||gekozenWeek;
+            const heeftKlant = orders.some(o=>{
+              if(weekLabel(o.leverdatum)!==doelWk) return false;
+              const kl2=klanten.find(k=>k.id===o.klantId);
+              if(kl2?.naam!==kaartKlantFilter) return false;
+              return (o.regels||[]).some(reg=>reg.gewas===r.gewas&&reg.soort===r.soort&&reg.verpakking===r.fust);
+            });
+            if(!heeftKlant) return;
+            totNodig += r[def.veld]||0;
+            const opgeslagen = getReal(gekozenWeek, actieType, r.gewas+"||"+r.soort+"||"+r.fust);
+            const heeftWaarde = opgeslagen!==''&&opgeslagen!==null&&opgeslagen!==undefined;
+            totWerkelijk += heeftWaarde ? Number(opgeslagen) : (r[def.veld]||0);
+          });
+          return (
+            <div style={{padding:"8px 10px",borderTop:`2px solid ${rand}`,background:"#f0f7f3",flexShrink:0}}>
+              <div style={{fontSize:10,fontWeight:700,color:groenTekst,marginBottom:3,textTransform:"uppercase",letterSpacing:0.3}}>{kaartKlantFilter}</div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:12,fontWeight:600,color:"#1e3a2f"}}>
+                <span>Nodig</span><span>{totNodig.toLocaleString("nl-NL")}</span>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:12,fontWeight:600,color:"#854d0e"}}>
+                <span>Werkelijk</span><span>{totWerkelijk.toLocaleString("nl-NL")}</span>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Planning overzicht + matrix naast elkaar */}
@@ -33373,9 +33414,64 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
         const def = LIJST_DEFS.find(l=>l.id===gekozenLijst);
         const lijsten = berekenLijsten(planning[gekozenWeek]);
         const rijen = lijsten[gekozenLijst]||[];
+        // Klanten die in deze lijst/week voorkomen — voor het klantfilter op tablet/telefoon
+        const alleKlantenInLijst = (tabletModus||telefoonModus) ? [...new Set(
+          rijen.flatMap(r=>{
+            const doelWk = r.leverWeek||gekozenWeek;
+            const namen=[];
+            orders.forEach(o=>{
+              if(weekLabel(o.leverdatum)!==doelWk) return;
+              (o.regels||[]).forEach(reg=>{
+                if(reg.gewas===r.gewas && reg.soort===r.soort && reg.verpakking===r.fust){
+                  const kl2=klanten.find(k=>k.id===o.klantId);
+                  if(kl2?.naam) namen.push(kl2.naam);
+                }
+              });
+            });
+            return namen;
+          })
+        )].sort((a,b)=>a.localeCompare(b,"nl")) : [];
+        // Totaal nodig/werkelijk voor de geselecteerde klant, in deze lijst/week
+        let klantTotNodig=0, klantTotWerkelijk=0;
+        if(kaartKlantFilter && (tabletModus||telefoonModus)){
+          const actieType = def.isZaai?"zaai":"inboet";
+          rijen.forEach(r=>{
+            const doelWk = r.leverWeek||gekozenWeek;
+            const heeftKlant = orders.some(o=>{
+              if(weekLabel(o.leverdatum)!==doelWk) return false;
+              const kl2=klanten.find(k=>k.id===o.klantId);
+              if(kl2?.naam!==kaartKlantFilter) return false;
+              return (o.regels||[]).some(reg=>reg.gewas===r.gewas&&reg.soort===r.soort&&reg.verpakking===r.fust);
+            });
+            if(!heeftKlant) return;
+            klantTotNodig += r[def.veld]||0;
+            const opgeslagen = getReal(gekozenWeek, actieType, r.gewas+"||"+r.soort+"||"+r.fust);
+            const heeftWaarde = opgeslagen!==''&&opgeslagen!==null&&opgeslagen!==undefined;
+            klantTotWerkelijk += heeftWaarde ? Number(opgeslagen) : (r[def.veld]||0);
+          });
+        }
         return (
           <div style={{padding:10}}>
-            <div style={{fontWeight:700,fontSize:14,color:groenTekst,marginBottom:8}}>{def.label} — week {gekozenWeek}</div>
+            <div style={{display:"flex",flexDirection:"column",gap:4,
+                ...((tabletModus||telefoonModus) ? {position:"sticky",top:0,zIndex:20,background:wit,paddingTop:4,paddingBottom:8} : {marginBottom:8})}}>
+              <div style={{fontWeight:700,fontSize:14,color:groenTekst,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                <span>{def.label} — week {gekozenWeek}</span>
+                {(tabletModus||telefoonModus) && alleKlantenInLijst.length>0 && (
+                  <select value={kaartKlantFilter} onChange={e=>setKaartKlantFilter(e.target.value)}
+                    style={{fontSize:17,fontWeight:600,padding:"8px 10px",borderRadius:8,border:`1px solid ${rand}`,
+                      color: kaartKlantFilter ? "#fff" : "#333", background: kaartKlantFilter ? "#2d6a4f" : "#fff"}}>
+                    <option value="" style={{fontSize:17,padding:"8px 10px"}}>Alle klanten</option>
+                    {alleKlantenInLijst.map(naam=><option key={naam} value={naam} style={{fontSize:17,padding:"8px 10px"}}>{naam}</option>)}
+                  </select>
+                )}
+              </div>
+              {kaartKlantFilter && (tabletModus||telefoonModus) &&
+                <div style={{display:"flex",gap:14,fontSize:12,fontWeight:700,background:"#f0f7f3",border:`1px solid ${rand}`,borderRadius:6,padding:"4px 10px",alignSelf:"flex-start"}}>
+                  <span style={{color:"#1e3a2f"}}>Nodig: {klantTotNodig.toLocaleString("nl-NL")}</span>
+                  <span style={{color:"#854d0e"}}>Werkelijk: {klantTotWerkelijk.toLocaleString("nl-NL")}</span>
+                </div>
+              }
+            </div>
             {rijen.length===0
               ? <div style={{color:subtekst,fontSize:12}}>Geen regels voor deze week.</div>
               : renderTabel(gekozenWeek, rijen, def.isZaai, def.veld, def.label, gekozenLijst)}
@@ -44453,6 +44549,40 @@ function App() {
       el.style.cssText = "position:fixed;left:10px;bottom:8px;z-index:99999;background:rgba(45,106,79,0.9);color:#fff;font-size:11px;font-weight:600;font-family:Arial,sans-serif;padding:4px 10px;border-radius:5px;pointer-events:none;letter-spacing:0.3px;box-shadow:0 1px 4px rgba(0,0,0,0.25)";
       document.body.appendChild(el);
     } catch (e) {}
+  }, []);
+
+  // Klein bolletje linksonder: status van de lokale server-verbinding.
+  // Grijs = geen server ingesteld, groen = bereikbaar, rood = niet bereikbaar (bijv. buiten de wifi).
+  ue(() => {
+    let gestopt = false;
+    let dot;
+    try {
+      dot = document.getElementById("ta-server-dot");
+      if (!dot) {
+        dot = document.createElement("div");
+        dot.id = "ta-server-dot";
+        dot.style.cssText = "position:fixed;left:12px;bottom:36px;z-index:99999;width:11px;height:11px;border-radius:50%;background:#9ca3af;border:1.5px solid rgba(255,255,255,0.85);box-shadow:0 1px 3px rgba(0,0,0,0.3);transition:background 0.3s;cursor:default;";
+        document.body.appendChild(dot);
+      }
+    } catch (e) { return; }
+    async function verversStatus() {
+      if (gestopt || !dot) return;
+      try {
+        const url = getServerUrl();
+        if (!url) {
+          dot.style.background = "#9ca3af";
+          dot.title = "Geen lokale server ingesteld (Instellingen → Koppelingen)";
+          return;
+        }
+        const ok = await checkServer();
+        if (gestopt) return;
+        dot.style.background = ok ? "#16a34a" : "#dc2626";
+        dot.title = ok ? "Server verbonden" : "Server niet bereikbaar — check je wifi-verbinding";
+      } catch (e) {}
+    }
+    verversStatus();
+    const interval = setInterval(verversStatus, 15000);
+    return () => { gestopt = true; clearInterval(interval); };
   }, []);
 
   // ── PINCODE BEVEILIGING ──

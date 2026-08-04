@@ -26845,7 +26845,7 @@ function sorteerRegels(regels) {
 
 // Versienummer van deze uitgave — bij elke nieuwe versie hier de datum+tijd van vrijgave invullen (DD-MM-JJJJ UU:MM).
 // Is de exacte tijd niet bekend? Dan datum + oplopend volgnummer, bijv. "30-07-2026 #2".
-const TUINAPP_VERSIE = "01-08-2026 #6";
+const TUINAPP_VERSIE = "01-08-2026 #10";
 
 
 function laad(k, def) { try { const v=localStorage.getItem(k); return v?JSON.parse(v):def; } catch { return def; } }
@@ -26869,7 +26869,15 @@ function bewaar(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catc
 const LS_SERVER_URL = "ta_server_url";
 
 function getServerUrl() {
-  return localStorage.getItem(LS_SERVER_URL) || "";
+  const ingesteld = localStorage.getItem(LS_SERVER_URL);
+  if (ingesteld) return ingesteld;
+  // Geen expliciete server ingesteld (bijv. op een medewerker-apparaat, die geen toegang
+  // heeft tot Instellingen) — als deze pagina zelf al via http(s) vanaf een server geladen is
+  // (de lokale server serveert dan dit bestand meteen ook zelf), gebruik automatisch dat adres.
+  try {
+    if (location.protocol.startsWith("http")) return location.origin;
+  } catch (e) {}
+  return "";
 }
 
 let _serverBereikbaar = false;
@@ -32182,7 +32190,7 @@ function Teeltduur({ gewassen, verpDef, teeltduur, setTeeltduur }) {
 // ════════════════════════════════════════════════════════
 // MODULE — TEELTPLANNING
 // ════════════════════════════════════════════════════════
-function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkracht, setKiemkracht, bedrijf, realisatie: realisatieProp, setRealisatie: setRealisatieProp, werklijstVoorkeuze, setWerklijstVoorkeuze, medewerkerModus, medewerkerNaam, werklijstKeuze, huidigePagina, forceTelefoonModus, forceTabletModus, gedaan: gedaanProp, setGedaan: setGedaanProp, gedaan2: gedaan2Prop, setGedaan2: setGedaan2Prop }) {
+function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkracht, setKiemkracht, bedrijf, realisatie: realisatieProp, setRealisatie: setRealisatieProp, werklijstVoorkeuze, setWerklijstVoorkeuze, medewerkerModus, medewerkerNaam, werklijstKeuze, huidigePagina, forceTelefoonModus, forceTabletModus, gedaan: gedaanProp, setGedaan: setGedaanProp, gedaan2: gedaan2Prop, setGedaan2: setGedaan2Prop, werklijstNotities: werklijstNotitiesProp, setWerklijstNotities: setWerklijstNotitiesProp }) {
   const wit = "#f3efe6"; // gebroken wit, alleen in dit scherm
   const nu2 = new Date();
   let volWk = getWeekNr(nu2)+1, volJr = getJaar(nu2);
@@ -32286,6 +32294,12 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
   const [_gedaan2Local, _setGedaan2Local] = useState(()=>laad("ta_werklijst_gedaan2", {}));
   const gedaan2 = gedaan2Prop !== undefined ? gedaan2Prop : _gedaan2Local;
   const setGedaan2 = setGedaan2Prop !== undefined ? setGedaan2Prop : _setGedaan2Local;
+  // Korte notities per werklijst-regel (week+soort) — zichtbaar als klein icoontje op de kaart, kost geen ruimte.
+  const [_werklijstNotitiesLocal, _setWerklijstNotitiesLocal] = useState(()=>laad("ta_werklijst_notities", {}));
+  const werklijstNotities = werklijstNotitiesProp !== undefined ? werklijstNotitiesProp : _werklijstNotitiesLocal;
+  const setWerklijstNotities = setWerklijstNotitiesProp !== undefined ? setWerklijstNotitiesProp : _setWerklijstNotitiesLocal;
+  const [notitieOpenKey, setNotitieOpenKey] = useState(null); // welke kaart-regel heeft het notitie-veldje open staan
+  const [notitieHoverKey, setNotitieHoverKey] = useState(null); // hover-voorbeeld van een notitie (desktop-tabel)
   useEffect(()=>bewaar("ta_werklijst_gedaan2", gedaan2),[gedaan2]);
   function markeerAfgedrukt(blokKey, type) {
     setAfgedrukt(prev=>({...prev,[blokKey]:{...(prev[blokKey]||{}),[type]:true}}));
@@ -32854,6 +32868,42 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                             ))}
                           </div>
                         }
+                        {(()=>{
+                          const notitieKey = blokKey+"||"+r.gewas+"||"+r.soort+"||"+r.fust;
+                          const huidigeNotitie = werklijstNotities[notitieKey] || "";
+                          const heeftNotitie = !!huidigeNotitie;
+                          return <span style={{position:"relative",marginLeft:5}}
+                            onMouseEnter={()=>heeftNotitie&&setNotitieHoverKey(notitieKey)}
+                            onMouseLeave={()=>setNotitieHoverKey(k=>k===notitieKey?null:k)}>
+                            <button title={heeftNotitie?"Notitie bekijken/bewerken":"Notitie toevoegen"}
+                              onClick={()=>setNotitieOpenKey(v=>v===notitieKey?null:notitieKey)}
+                              style={{border:heeftNotitie?"2px solid #dc2626":"none",background:heeftNotitie?"#fef3c7":"#f3f4f6",
+                                color:heeftNotitie?"#92400e":"#9ca3af",borderRadius:heeftNotitie?"50%":3,
+                                padding:"1px 5px",cursor:"pointer",fontSize:11,verticalAlign:"middle"}}>📝</button>
+                            {notitieHoverKey===notitieKey && heeftNotitie && notitieOpenKey!==notitieKey &&
+                              <div style={{position:"absolute",top:"100%",left:0,marginTop:4,zIndex:350,background:"#fff8e1",border:"2px solid #dc2626",borderRadius:8,padding:"8px 12px",boxShadow:"0 6px 24px rgba(0,0,0,0.25)",width:220,fontSize:13,lineHeight:1.4,color:"#1b1b1b",whiteSpace:"pre-wrap"}}>
+                                {huidigeNotitie}
+                              </div>
+                            }
+                            {notitieOpenKey===notitieKey &&
+                              <div style={{position:"absolute",top:"100%",left:0,zIndex:360,background:wit,border:`1px solid ${rand}`,borderRadius:6,padding:6,boxShadow:"0 4px 16px rgba(0,0,0,0.2)",width:220}}>
+                                <textarea autoFocus rows={2}
+                                  style={{width:"100%",fontSize:12,padding:4,border:`1px solid ${rand}`,borderRadius:4,resize:"vertical",boxSizing:"border-box"}}
+                                  defaultValue={huidigeNotitie}
+                                  placeholder="Korte notitie..."
+                                  onBlur={e=>{
+                                    const tekst = e.target.value.trim();
+                                    setWerklijstNotities(prev=>{
+                                      const nieuw={...prev};
+                                      if(tekst) nieuw[notitieKey]=tekst; else delete nieuw[notitieKey];
+                                      return nieuw;
+                                    });
+                                    setNotitieOpenKey(null);
+                                  }}/>
+                              </div>
+                            }
+                          </span>;
+                        })()}
                       </>;
                     })()}
                   </td>
@@ -33048,9 +33098,12 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                        const werklijstHlKey = blokKey+"||"+rijKey;
                        const isWerklijstGemarkeerd = gemarkeerdeWerklijstRij===werklijstHlKey;
                        const klantMatches = berekenKlantMatches(r);
+                       const notitieKey = blokKey+"||"+r.gewas+"||"+r.soort+"||"+r.fust;
+                       const huidigeNotitie = werklijstNotities[notitieKey] || "";
+                       const heeftNotitie = !!huidigeNotitie;
                        return (
                          <div key={rijKey} style={{marginBottom:4}}>
-                         <div className="ta-kaart-rij" style={{display:"flex",alignItems:"center",gap:8,
+                         <div className="ta-kaart-rij" style={{display:"flex",alignItems:"center",gap:8,position:"relative",
                              background:isWerklijstGemarkeerd?"#bfe3fa":(isGedaan?(kaartIs1eRonde?"#dcfce7":"#dbeafe"):"#fff"),
                              border:"1px solid "+(isWerklijstGemarkeerd?"#7cc4f0":"#d8ddd6"),
                              borderRadius:8,padding:"4px 6px",marginBottom:3}}>
@@ -33110,6 +33163,39 @@ function Teeltplanning({ klanten, gewassen, verpDef, orders, teeltduur, kiemkrac
                                    background:"#fff",color:heeftS2?"#854d0e":"#9ca3af"}}>{heeftS2?opgeslagenS2:"0"}</div>
                                <button onClick={()=>setSort2(wk,actieType,rijKey,String(Math.round((basisS2+0.25)*100)/100))}
                                  style={{width:28,height:40,border:"none",background:heeftS2?"#f59e0b":"#e5e7eb",color:heeftS2?"#fff":"#6b7280",fontSize:16,fontWeight:700,cursor:"pointer"}}>+</button>
+                             </div>
+                           }
+                           {/* Notitie — klein icoontje dat over de rand van de kaart hangt, kost geen ruimte in de rij zelf */}
+                           <button
+                             onClick={e=>{e.stopPropagation(); setNotitieOpenKey(v=>v===notitieKey?null:notitieKey);}}
+                             title={heeftNotitie?"Notitie bekijken/bewerken":"Notitie toevoegen"}
+                             style={{position:"absolute",top:-7,right:-6,zIndex:6,padding:0,cursor:"pointer",
+                               width:heeftNotitie?20:14,height:heeftNotitie?20:14,borderRadius:"50%",
+                               background:heeftNotitie?"#fef3c7":"#e5e7eb",
+                               border:heeftNotitie?"2px solid #dc2626":"1px solid #b9c6bf",
+                               color:heeftNotitie?"#92400e":"#9ca3af",fontSize:heeftNotitie?11:8,
+                               display:"flex",alignItems:"center",justifyContent:"center",
+                               boxShadow:"0 1px 3px rgba(0,0,0,0.3)",lineHeight:1}}>
+                             {heeftNotitie?"📝":""}
+                           </button>
+                           {notitieOpenKey===notitieKey &&
+                             <div onClick={e=>e.stopPropagation()}
+                               style={{position:"absolute",top:-7,right:-6,transform:"translateY(-100%)",zIndex:60,
+                                 background:wit,border:`1px solid ${rand}`,borderRadius:6,padding:6,
+                                 boxShadow:"0 4px 16px rgba(0,0,0,0.25)",width:220}}>
+                               <textarea autoFocus rows={2}
+                                 style={{width:"100%",fontSize:12,padding:4,border:`1px solid ${rand}`,borderRadius:4,resize:"vertical",boxSizing:"border-box"}}
+                                 defaultValue={huidigeNotitie}
+                                 placeholder="Korte notitie..."
+                                 onBlur={e=>{
+                                   const tekst = e.target.value.trim();
+                                   setWerklijstNotities(prev=>{
+                                     const nieuw = {...prev};
+                                     if(tekst) nieuw[notitieKey]=tekst; else delete nieuw[notitieKey];
+                                     return nieuw;
+                                   });
+                                   setNotitieOpenKey(null);
+                                 }}/>
                              </div>
                            }
                          </div>
@@ -42623,7 +42709,7 @@ function Samenvatting({ orders, klanten }) {
     { key:"transport", label: "🚛 Transportlijst printen — week " + weekX1,
       klaar: heeftActieVoorWeek(weekX1,"transportlijst"),
       info: ordersX1.length===0?"Geen orders deze week":(heeftActieVoorWeek(weekX1,"transportlijst")?"Al afgedrukt":"Nog niet afgedrukt"),
-      naar:"transport" },
+      naar:"afleveren" },
     { key:"afleverbon", label: "🚚 Afleverbonnen — week " + weekX,
       klaar: ordersX.length>0 && ordersX.every(o=>o.afleverNr),
       info: ordersX.length===0?"Geen orders deze week":(ordersX.length-ordersX.filter(o=>o.afleverNr).length)+" van "+ordersX.length+" nog te doen",
@@ -44846,6 +44932,57 @@ function App() {
   React.useEffect(() => bewaar("ta_werklijst_gedaan", gedaan), [gedaan]);
   const [gedaan2, setGedaan2] = useState(() => laad("ta_werklijst_gedaan2", {}));
   React.useEffect(() => bewaar("ta_werklijst_gedaan2", gedaan2), [gedaan2]);
+  const [werklijstNotities, setWerklijstNotities] = useState(() => laad("ta_werklijst_notities", {}));
+  React.useEffect(() => bewaar("ta_werklijst_notities", werklijstNotities), [werklijstNotities]);
+
+  // ── Automatische achtergrond-sync tussen apparaten (via de lokale server) ──
+  // Alleen de "samenwerk"-velden van de werklijst (afgevinkt/nacontrole + werkelijke aantallen)
+  // worden automatisch samengevoegd tussen apparaten — dit zijn de dingen die mensen tegelijk
+  // op verschillende tablets/telefoons invullen. Orders/klanten/prijzen e.d. blijven bewust
+  // alleen via de handmatige knoppen bij Instellingen, zodat daar nooit per ongeluk iets
+  // wordt overschreven met een verouderd lokaal exemplaar.
+  useEffect(() => {
+    let gestopt = false;
+    async function syncCyclus() {
+      if (gestopt) return;
+      try {
+        const url = getServerUrl();
+        if (!url) return;
+        const bereikbaar = await checkServer();
+        if (!bereikbaar || gestopt) return;
+        const serverData = await serverLaad();
+        if (!serverData || gestopt) return;
+        const serverGedaan = serverData.ta_werklijst_gedaan || {};
+        const serverGedaan2 = serverData.ta_werklijst_gedaan2 || {};
+        const serverRealisatie = serverData.ta_realisatie || {};
+        const serverNotities = serverData.ta_werklijst_notities || {};
+        let mergedGedaan, mergedGedaan2, mergedRealisatie, mergedNotities;
+        // Lokaal wint bij een botsing op dezelfde regel (net ingetikt op dit apparaat),
+        // maar nieuwe regels die alleen op de server staan (van een ander apparaat) komen erbij.
+        setGedaan(huidig => (mergedGedaan = { ...serverGedaan, ...huidig }));
+        setGedaan2(huidig => (mergedGedaan2 = { ...serverGedaan2, ...huidig }));
+        setRealisatie(huidig => (mergedRealisatie = { ...serverRealisatie, ...huidig }));
+        setWerklijstNotities(huidig => (mergedNotities = { ...serverNotities, ...huidig }));
+        if (gestopt) return;
+        // De rest van de server-data (orders, klanten, prijzen, ...) blijft precies zoals hij was —
+        // we sturen 'm ongewijzigd terug, plus alleen onze 4 samengevoegde velden.
+        const nieuweData = {
+          ...serverData,
+          versie: "TuinApp-server-v1",
+          datum: new Date().toISOString(),
+          ta_werklijst_gedaan: mergedGedaan,
+          ta_werklijst_gedaan2: mergedGedaan2,
+          ta_realisatie: mergedRealisatie,
+          ta_werklijst_notities: mergedNotities,
+        };
+        await serverSla(nieuweData);
+      } catch (e) {}
+    }
+    const eersteRun = setTimeout(syncCyclus, 3000);
+    const interval = setInterval(syncCyclus, 20000);
+    return () => { gestopt = true; clearTimeout(eersteRun); clearInterval(interval); };
+  }, []);
+
   const [matrixDirect, setMatrixDirect] = useState(null);
   useEffect(() => {
     function handler(e) {
@@ -45900,7 +46037,9 @@ function App() {
     gedaan: gedaan,
     setGedaan: setGedaan,
     gedaan2: gedaan2,
-    setGedaan2: setGedaan2
+    setGedaan2: setGedaan2,
+    werklijstNotities: werklijstNotities,
+    setWerklijstNotities: setWerklijstNotities
   })), pagina === "mobielvoorbeeld" && /*#__PURE__*/React.createElement("div", {
     style: {padding:24, display:"flex", justifyContent:"flex-start", background:"#e5e7eb", minHeight:"calc(100vh - 50px)"}
   }, /*#__PURE__*/React.createElement("div", {
@@ -45932,7 +46071,9 @@ function App() {
     gedaan: gedaan,
     setGedaan: setGedaan,
     gedaan2: gedaan2,
-    setGedaan2: setGedaan2
+    setGedaan2: setGedaan2,
+    werklijstNotities: werklijstNotities,
+    setWerklijstNotities: setWerklijstNotities
   })))), pagina === "tabletvoorbeeld" && /*#__PURE__*/React.createElement("div", {
     style: {padding:24, display:"flex", justifyContent:"flex-start", background:"#e5e7eb", minHeight:"calc(100vh - 50px)"}
   }, /*#__PURE__*/React.createElement("div", {
@@ -45964,7 +46105,9 @@ function App() {
     gedaan: gedaan,
     setGedaan: setGedaan,
     gedaan2: gedaan2,
-    setGedaan2: setGedaan2
+    setGedaan2: setGedaan2,
+    werklijstNotities: werklijstNotities,
+    setWerklijstNotities: setWerklijstNotities
   })))), pagina === "afleveren" && /*#__PURE__*/React.createElement(Afleveren, {
     orders: orders,
     setOrders: setOrders,
